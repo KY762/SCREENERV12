@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-16
 **Status:** DRAFT — awaiting operator approval. No hypotheses will be written and no code built until approved.
-**Evidence base:** operator interview (2026-08-16) + Notion "FINANCE JOURNAL" export covering 2025-12-09 → 2026-03-20.
+**Evidence base:** operator interviews (2026-08-16) + Notion "FINANCE JOURNAL" export covering 2025-12-09 → 2026-03-20.
 
 ---
 
@@ -99,8 +99,12 @@ should be verified before it anchors any allocation decision.
 | Primary research track | US equities and ETFs, ~2,000–3,000 liquid names |
 | Data granularity | End-of-day daily bars |
 | Options | **Wanted**, deferred as a separate track (see §7) |
-| Futures (funded, Tradify) | **Separate system.** Tracked for rule compliance, not blended into swing research |
+| Futures | **Out of scope.** No funded account currently held; the Tradify account is not active. Phase 14 removed. |
 | Long-horizon value screener | Separate track, lower priority |
+
+**Universe caveat:** the equity/ETF split is contingent on the employer personal-trading policy in §12.
+If individual securities are restricted but broad-based ETFs are exempt (the common pattern), the
+universe becomes ~50–150 liquid sector and index ETFs instead.
 
 ## 3. Time Horizon
 
@@ -154,8 +158,8 @@ order-flow half of the operator's expertise is intraday-futures tooling. It does
 end-of-day equity screener, and no amount of engineering changes that — it's a data availability
 constraint, not a software one.
 
-**Terminology to confirm:** "TVOP" is not a standard term. Assumed to mean **TPO** (Time Price
-Opportunity, the Market Profile construct). Please confirm.
+**Terminology:** "TVOP" confirmed by the operator as **TPO** (Time Price Opportunity, the Market Profile
+construct). Like volume profile, it requires intraday data and is not available in an EOD screener.
 
 ### Structural conflict: session times vs. employment
 
@@ -172,13 +176,41 @@ for the swing track being the right primary focus.
 
 | Constraint | Value |
 | --- | --- |
-| Swing capital | Under $25,000 |
-| Weekday time | 30–60 minutes |
-| Weekend time | To be confirmed (journal shows a Sat review / Sun screen routine planned) |
-| Employment | Full-time job — daytime hours unavailable |
-| Concurrent positions | 4–6 realistic at this capital |
+| Swing capital | **$10,000**, side funds, not yet deployed |
+| Employment | **Branch banker.** Mon–Fri 09:00–17:00, Sat 08:00–12:00 |
+| Weekday time | 30–60 min, evenings only |
+| Weekend time | Saturday afternoon + Sunday |
+| Concurrent positions | 4–5 realistic at $10k |
 | PDT rule | Applies under $25k on margin, but **does not affect 2–5 day holds** |
-| Costs | Commissions ~$0 at major brokers; **slippage on less-liquid names is the real cost** and must be modeled |
+| Costs | Commissions ~$0 at major brokers. Market impact ~zero at this size — a genuine advantage. |
+| **Compliance** | **See §12 — potentially binding on holding period and universe** |
+
+### 6.1 Schedule fit
+
+The EOD design aligns cleanly with the work schedule: market closes 16:00 ET, screens run ~16:30,
+results are ready for an evening review, orders are placed pre-open. **No decision is ever required
+during working hours** — which removes the most frequently cited cause of poor execution in §1.2.
+
+### 6.2 Capital sizing at $10,000
+
+| Metric | Value |
+| --- | --- |
+| Risk per trade @ 1% | $100 |
+| Position value @ 5% stop | ~$2,000 (20% of account) |
+| Position value @ 8% stop | ~$1,250 (12.5% of account) |
+| Slippage / market impact | Negligible |
+
+**Assessment: $10,000 is appropriate for the objective**, which is generating a validated process and a
+real track record, not income. Returns at this size are not financially material (20% = $2,000), and
+that is expected rather than a problem.
+
+**The specific hazard at this capital is oversizing to make results feel meaningful** — the exact
+pattern documented in §1.2. Small capital does not remove that instinct; it only changes the number
+attached to it. Position size is therefore computed by the system with no manual override.
+
+**Deployment recommendation: hold the $10,000 uninvested until a strategy clears validation Stage E.**
+Forward-test (Stage F) on paper. Nothing is lost by waiting — no validated strategy will exist for
+months regardless.
 
 ## 7. Risk Profile
 
@@ -265,27 +297,78 @@ The requested **option-contract selection feature** (choosing strike/expiry/liqu
 is a well-defined, genuinely useful deterministic tool, and is planned — after a share-based signal
 clears validation Stage E.
 
-### Futures — compliance module only
+### Futures — removed from scope
 
-The Tradify funded account remains separate. The platform's role is **rule-violation detection**: daily
-loss limits, trailing drawdown, position limits, and — most importantly given §1.2 — flagging trades
-entered without a logged stop or thesis. Exact provider rules required before building (Phase 14); they
-will not be assumed.
+No funded account is currently held. **Phase 14 is deleted.** The journal's futures content is retained
+as behavioral evidence (§1.2), not as a system to support.
 
----
-
-## 10. Open items before hypothesis writing
-
-1. Confirm "TVOP" = TPO (Time Price Opportunity)?
-2. Weekend time available for research and review?
-3. Is the under-$25k swing capital **existing and funded**, or planned separately from the funded
-   futures account?
-4. Broker for the swing account, and does it have an API?
-5. Does the funded futures account continue running in parallel during this project?
+Secondary benefit: this project becomes the operator's *only* trading activity, so there is no parallel
+account in which the quota-chasing and size-escalation patterns of §1.2 can operate unchecked during
+development.
 
 ---
 
-## 11. Approval
+## 10. Broker selection
+
+Contingent on §12 — an employer approved-broker list overrides everything below.
+
+**Recommended: Alpaca.** The reasoning is integration-specific rather than generic. Alpaca is already
+the chosen market-data provider; its paper-trading environment exposes an **identical API** to live
+trading; and portfolio position import uses the same client again. One adapter therefore serves data,
+Stage F forward testing, and execution. At $10k, **fractional shares** (a $400 stock remains tradeable)
+and $0 commissions (a $1,250 position isn't eaten by fees) matter more than platform polish.
+
+*Caveats:* developer-first, so no advanced charting UI and limited support. **Options availability is
+unclear from current sources** — some 2026 reviews describe stock *and* options API trading, others
+state options are unsupported. Verify directly before relying on it; not urgent, since options are a
+deferred track.
+
+**Upgrade path: Interactive Brokers**, if capital exceeds ~$50k or options become central. Superior
+execution, margin rates, and options coverage; meaningfully more complex API; market data costs extra.
+
+**Ruled out:** Fidelity (no retail API), Robinhood (no official API). Schwab has an API but a rocky
+post-TD-Ameritrade migration.
+
+**Do not open an account before checking §12.**
+
+---
+
+## 11. Open items before hypothesis writing
+
+1. **Employer personal-trading policy** (§12) — blocking. Determines holding period and universe.
+2. Approved-broker list, if one exists — determines broker choice.
+
+---
+
+## 12. Employer compliance constraint (BLOCKING)
+
+The operator is a **branch banker**. Financial institutions routinely impose personal securities trading
+policies on employees. Provisions to verify before hypothesis design, since several would invalidate the
+current specification:
+
+| Provision | Impact if applicable |
+| --- | --- |
+| **Minimum holding period** (30 days is common) | **Fatal to the 2–5 day design.** Forces a multi-week horizon and a different strategy family. |
+| **Pre-clearance requirement** | Survivable — inserts a compliance step between screen output and order entry. The platform can generate the request. |
+| **Approved broker list** | Overrides §10 entirely. |
+| **Duplicate statements / account disclosure** | Administrative only; no design impact. |
+| **Restricted list** (employer's own securities, client companies) | Implemented as a universe exclusion filter. |
+
+**Likely mitigation.** Broad-based ETFs are commonly exempt from pre-clearance and holding-period
+requirements, since index instruments cannot be front-run. If individual securities are restricted but
+ETFs are exempt, the universe becomes ~50–150 liquid sector and index ETFs.
+
+This is **not a downgrade for swing trading**: deeper liquidity, no single-name earnings-gap risk,
+cleaner sector-rotation signals, and a smaller universe permits faster research iteration. Several of
+the operator's SMC concepts port at least as well — SMT divergence is natively an index-pair construct
+(§5), and liquidity sweeps on index ETFs are well defined.
+
+**No policy outcome identified so far kills the project.** The outcome determines universe and holding
+period, both of which are inputs to hypothesis design, which is why it is resolved first.
+
+---
+
+## 13. Approval
 
 This profile is a draft. Correct anything that doesn't read like you — particularly §1.2, which is
 built from your own words but is still an interpretation of them. Nothing proceeds to hypothesis design
