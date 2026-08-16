@@ -1,7 +1,7 @@
 # Indicator Evaluation — Pre-Test Screening
 
 **Date:** 2026-08-16
-**Status:** DRAFT — proposed amendments to [`03-HYPOTHESES.md`](03-HYPOTHESES.md), awaiting approval.
+**Status:** APPROVED 2026-08-16. Amendments folded into [`03-HYPOTHESES.md`](03-HYPOTHESES.md) rev. 2. Variant budget in §6 superseded.
 **Question:** Are there indicators that improve the hypotheses **without adding complexity**?
 
 ---
@@ -208,23 +208,27 @@ That is the only question that matters when the budget is finite.
 
 ---
 
-## 6. Variant budget — declared before testing
+## 6. Variant budget — SUPERSEDED by hypotheses rev. 2
 
-To prevent the multiple-comparisons problem described in §1:
+The flat twelve-variant cap originally specified here was replaced during operator review. It solved
+the multiple-comparisons problem by forbidding exploration — which also forbade testing the assumptions
+embedded in the specification, and those assumptions were themselves unexamined.
 
-| Hypothesis | Baseline | Pre-declared variants | Total |
-| --- | --- | --- | --- |
-| H1 | 1 | 3 (RS lookback 21/63/126d) | 4 |
-| H2 | 1 | 3 (displacement 1.25/1.5/2.0× ATR) | 4 |
-| H3 | 1 | 3 (RVOL filter off/1.3×/1.5×) | 4 |
-| **Total Round 1** | | | **12** |
+The replacement is a **per-split budget** ([`03-HYPOTHESES.md`](03-HYPOTHESES.md) §0.4, §0.8):
 
-**Any variant beyond these twelve requires an explicit decision to spend budget, recorded in this file
-with its justification.** Sensitivity testing (§0.6 of the hypotheses doc) is *not* variant testing — it
-measures stability of a chosen configuration rather than searching for a better one.
+| Split | Budget |
+| --- | --- |
+| Development (2010–2015) | Unlimited — carries no evidential weight |
+| Validation (2016–2019) | 3 configurations per hypothesis |
+| Test (2020–2026) | 1 configuration per hypothesis, once |
 
-At twelve variants, roughly one should look good by chance at conventional significance. **This is why
-the out-of-sample gate exists and why it is only opened once.**
+This permits exhaustive exploration where results prove nothing and enforces strict discipline where
+they do — resolving the conflict between "test every assumption" and "don't data-mine" rather than
+trading one failure for the other.
+
+Parameter selection now follows the **stability-surface** method in `03-HYPOTHESES.md` §0.7: choose the
+centre of a plateau, never the peak, and treat the absence of a plateau as evidence against the
+hypothesis.
 
 ## 7. Empirical redundancy check — cheap, and runs before any backtest
 
