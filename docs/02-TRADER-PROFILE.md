@@ -1,7 +1,7 @@
 # Trader Profile & Initial Research Direction
 
 **Date:** 2026-08-16
-**Status:** DRAFT — awaiting operator approval. No hypotheses will be written and no code built until approved.
+**Status:** APPROVED 2026-08-16. Amendable at any time — this file is version-controlled.
 **Evidence base:** operator interviews (2026-08-16) + Notion "FINANCE JOURNAL" export covering 2025-12-09 → 2026-03-20.
 
 ---
