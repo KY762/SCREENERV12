@@ -1,0 +1,506 @@
+<title>SCREENERV12 Charter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#FBFBFC; --surface:#FFFFFF; --sunk:#F2F4F7;
+  --ink:#15181D; --ink-soft:#3D444F; --muted:#6B7480;
+  --rule:#E1E5EA; --rule-strong:#C6CDD6;
+  --accent:#0F6D6B; --accent-ink:#0B5250; --accent-soft:#E4F0EF;
+  --caution:#8A580A; --caution-soft:#F9F0DC;
+  --critical:#8F2729; --critical-soft:#FAEAEA;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1216; --surface:#161A20; --sunk:#1C2128;
+    --ink:#E7EAEE; --ink-soft:#BEC5CD; --muted:#8A95A1;
+    --rule:#262C34; --rule-strong:#3A424C;
+    --accent:#48B5B1; --accent-ink:#6ECFCB; --accent-soft:#11302F;
+    --caution:#D6A343; --caution-soft:#2A2313;
+    --critical:#D9776F; --critical-soft:#2C1918;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1216; --surface:#161A20; --sunk:#1C2128;
+  --ink:#E7EAEE; --ink-soft:#BEC5CD; --muted:#8A95A1;
+  --rule:#262C34; --rule-strong:#3A424C;
+  --accent:#48B5B1; --accent-ink:#6ECFCB; --accent-soft:#11302F;
+  --caution:#D6A343; --caution-soft:#2A2313;
+  --critical:#D9776F; --critical-soft:#2C1918;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16.5px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 1.5rem 6rem;}
+
+/* ---------- masthead ---------- */
+.mast{padding:4.5rem 0 2.25rem;border-bottom:1px solid var(--rule-strong);}
+.eyebrow{
+  font-family:var(--mono); font-size:.72rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 1.1rem;
+}
+h1{
+  font-family:var(--serif); font-weight:600;
+  font-size:clamp(2.3rem,5.4vw,3.4rem); line-height:1.08;
+  letter-spacing:-.015em; margin:0 0 .9rem; text-wrap:balance; max-width:19ch;
+}
+.standfirst{
+  font-family:var(--serif); font-size:clamp(1.08rem,2.1vw,1.3rem);
+  line-height:1.55; color:var(--ink-soft); max-width:62ch; margin:0 0 2rem;
+}
+.metarow{display:flex;flex-wrap:wrap;gap:.55rem 2.25rem;font-family:var(--mono);font-size:.76rem;}
+.metarow div{display:flex;gap:.5rem;align-items:baseline;}
+.metarow span:first-child{color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-size:.68rem;}
+.metarow span:last-child{color:var(--ink);}
+
+/* ---------- section grid ---------- */
+section{
+  display:grid; grid-template-columns:1fr; gap:0;
+  padding:3.25rem 0 0; border-top:1px solid var(--rule);
+}
+section:first-of-type{border-top:none;}
+.snum{
+  font-family:var(--mono); font-size:.76rem; color:var(--muted);
+  letter-spacing:.06em; padding-top:.35rem; margin-bottom:.5rem;
+}
+.sbody{min-width:0;max-width:68ch;}
+@media(min-width:900px){
+  section{grid-template-columns:4.5rem minmax(0,1fr);gap:0 2rem;}
+  .snum{margin-bottom:0;}
+}
+h2{
+  font-family:var(--serif); font-weight:600; font-size:clamp(1.4rem,2.6vw,1.85rem);
+  line-height:1.2; letter-spacing:-.01em; margin:0 0 1.1rem; text-wrap:balance;
+}
+h3{
+  font-family:var(--sans); font-weight:600; font-size:1rem;
+  letter-spacing:-.005em; margin:2rem 0 .6rem; color:var(--ink);
+}
+p{margin:0 0 1.05rem;}
+.sbody > p:last-child{margin-bottom:0;}
+strong{font-weight:600;color:var(--ink);}
+em{font-style:italic;}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px;}
+code{
+  font-family:var(--mono); font-size:.855em; background:var(--sunk);
+  padding:.1em .34em; border-radius:3px; color:var(--ink-soft);
+}
+
+/* ---------- lead ---------- */
+.lead{
+  font-family:var(--serif); font-size:1.16rem; line-height:1.6; color:var(--ink);
+}
+
+/* ---------- journal quotes ---------- */
+.journal{
+  margin:1.5rem 0; padding:1.35rem 1.5rem;
+  background:var(--surface); border:1px solid var(--rule);
+  border-left:2px solid var(--critical); border-radius:2px;
+}
+.journal p{
+  font-family:var(--serif); font-style:italic; font-size:1.02rem;
+  line-height:1.5; margin:0 0 .7rem; color:var(--ink-soft);
+}
+.journal p:last-child{margin-bottom:0;}
+.journal-src{
+  font-family:var(--mono)!important; font-style:normal!important;
+  font-size:.7rem!important; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted)!important; margin-top:1rem!important;
+}
+
+/* ---------- principle pullout ---------- */
+.principle{
+  margin:1.6rem 0; padding:1.6rem 1.75rem;
+  background:var(--accent-soft); border:1px solid var(--accent);
+  border-radius:2px;
+}
+.principle p{
+  font-family:var(--serif); font-size:1.14rem; line-height:1.5;
+  margin:0; color:var(--ink); font-weight:500;
+}
+
+/* ---------- findings ---------- */
+.finding{
+  margin:1.6rem 0; padding-left:1.1rem; border-left:2px solid var(--rule-strong);
+}
+.finding-tag{
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 .35rem;
+}
+.finding h3{margin:0 0 .55rem;font-size:1.02rem;}
+.finding p:last-child{margin-bottom:0;}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:1.4rem 0;border:1px solid var(--rule);border-radius:2px;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:30rem;}
+th{
+  font-family:var(--mono); font-weight:500; font-size:.68rem;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  text-align:left; padding:.75rem .95rem; border-bottom:1px solid var(--rule-strong);
+  white-space:nowrap; background:var(--sunk);
+}
+td{
+  padding:.72rem .95rem; border-bottom:1px solid var(--rule);
+  vertical-align:top; color:var(--ink-soft); font-variant-numeric:tabular-nums;
+}
+tr:last-child td{border-bottom:none;}
+td strong{color:var(--ink);}
+td.k{font-family:var(--mono);font-size:.82rem;color:var(--ink);white-space:nowrap;}
+
+/* ---------- validation ladder ---------- */
+.ladder{margin:1.6rem 0;border:1px solid var(--rule);border-radius:2px;overflow:hidden;background:var(--surface);}
+.rung{
+  display:grid; grid-template-columns:2.6rem 1fr auto; gap:1rem;
+  align-items:baseline; padding:.8rem 1rem;
+  border-bottom:1px solid var(--rule);
+}
+.rung:last-child{border-bottom:none;}
+.rung-code{
+  font-family:var(--mono); font-weight:500; font-size:.9rem; color:var(--muted);
+}
+.rung-name{font-weight:500;font-size:.93rem;color:var(--ink);}
+.rung-desc{display:block;font-weight:400;font-size:.85rem;color:var(--muted);margin-top:.1rem;}
+.rung-state{
+  font-family:var(--mono); font-size:.68rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); white-space:nowrap;
+}
+.rung.done .rung-code{color:var(--accent);}
+.rung.done .rung-state{color:var(--accent);}
+.rung.here{background:var(--accent-soft);}
+.rung.here .rung-code{color:var(--accent-ink);font-weight:500;}
+.rung.here .rung-name{color:var(--ink);font-weight:600;}
+.rung.here .rung-state{color:var(--accent-ink);font-weight:500;}
+.capital-line{
+  display:flex; align-items:center; gap:.85rem;
+  padding:.6rem 1rem; background:var(--caution-soft);
+  border-bottom:1px solid var(--rule);
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--caution);
+}
+.capital-line::before,.capital-line::after{content:"";flex:1;height:1px;background:var(--caution);opacity:.35;}
+
+/* ---------- callout ---------- */
+.note{
+  margin:1.4rem 0; padding:1.1rem 1.3rem; border-radius:2px;
+  background:var(--sunk); border:1px solid var(--rule);
+  font-size:.94rem;
+}
+.note.warn{background:var(--caution-soft);border-color:var(--caution);}
+.note p{margin:0 0 .7rem;}
+.note p:last-child{margin-bottom:0;}
+.note-label{
+  font-family:var(--mono); font-size:.68rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 .5rem!important;
+}
+.note.warn .note-label{color:var(--caution);}
+
+/* ---------- lists ---------- */
+ol,ul{margin:1.05rem 0;padding-left:1.35rem;}
+li{margin-bottom:.6rem;}
+li:last-child{margin-bottom:0;}
+ol.defences{list-style:none;padding-left:0;counter-reset:d;}
+ol.defences li{
+  counter-increment:d; position:relative; padding-left:2.4rem; margin-bottom:1rem;
+}
+ol.defences li::before{
+  content:counter(d); position:absolute; left:0; top:.05rem;
+  font-family:var(--mono); font-size:.78rem; color:var(--accent);
+  border:1px solid var(--rule-strong); border-radius:2px;
+  width:1.6rem; height:1.6rem; display:grid; place-items:center;
+}
+
+/* ---------- footer ---------- */
+.foot{
+  margin-top:4rem; padding-top:1.5rem; border-top:1px solid var(--rule-strong);
+  font-family:var(--mono); font-size:.74rem; color:var(--muted);
+  display:flex; flex-wrap:wrap; gap:.5rem 2rem;
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">Project Charter &middot; SCREENERV12</p>
+  <h1>Building an evidence machine, not a strategy</h1>
+  <p class="standfirst">A personal market intelligence and trading operations platform for one operator. Its primary product over the next two years is a validated process and an honest track record &mdash; not income.</p>
+  <div class="metarow">
+    <div><span>Date</span><span>2026-08-17</span></div>
+    <div><span>Stage</span><span>B &mdash; Objective Specification</span></div>
+    <div><span>Capital</span><span>$10,000, undeployed</span></div>
+    <div><span>Next</span><span>Phase 1 &mdash; data foundation</span></div>
+  </div>
+</header>
+
+<section>
+  <div class="snum">&sect;&nbsp;1</div>
+  <div class="sbody">
+    <h2>The one-paragraph version</h2>
+    <p class="lead">We are building a market intelligence and trading operations platform for a single operator: a full-time branch banker with $10,000 in side capital, 30&ndash;60 minutes on a weekday evening, a background in ICT / Smart Money Concepts and order flow, and no validated trading strategy. The platform computes every number deterministically, enforces risk rules that cannot be overridden in the moment, tests whether the operator's existing trading concepts carry real signal, and produces evidence rather than opinion.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;2</div>
+  <div class="sbody">
+    <h2>The mistake this project is designed to avoid</h2>
+    <p>Nearly everyone in this position believes the binding constraint is <em>&ldquo;I need a profitable strategy.&rdquo;</em> So they buy a course, learn a framework, and start trading. The strategy is treated as the missing piece.</p>
+    <p><strong>The evidence says otherwise.</strong> The operator's own trading journal &mdash; roughly six documented trades on a funded futures account &mdash; contains a written plan specifying 0.25&ndash;0.5% risk per trade and a 0.5&ndash;1% daily loss limit. Those are disciplined, well-chosen numbers. The journal then documents, in his own words:</p>
+    <blockquote class="journal">
+      <p>&ldquo;KYLER, START PUTTING STOP LOSSES! &hellip; I'm stupid and don't want to use a SL&rdquo;</p>
+      <p>&ldquo;I decided I needed to get it back so I could make my $100 profit for the day&rdquo;</p>
+      <p>&ldquo;This is where I started gambling to reclaim my lost profits &mdash; and luckily it worked&rdquo;</p>
+      <p>&ldquo;I switched to NQ &mdash; fuck micros &mdash; and started balling&rdquo;</p>
+      <p>&ldquo;Was at work trying to multi-task and manage the trade&rdquo;</p>
+      <p class="journal-src">Finance Journal &middot; 2025-12-09 &rarr; 2026-03-20</p>
+    </blockquote>
+    <p><strong>Every documented loss traces to one of four causes:</strong> no predefined stop, a self-imposed daily profit quota, divided attention during the session, or size escalation after a loss. None are strategy problems. A profitable strategy executed this way still loses money; an unprofitable one loses it faster.</p>
+    <p>The rules were not wrong. <strong>Nothing enforced them.</strong> That is a software problem, and it is why this project is a platform rather than a spreadsheet.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;3</div>
+  <div class="sbody">
+    <h2>Three findings that shaped everything</h2>
+
+    <div class="finding">
+      <p class="finding-tag">Finding 01</p>
+      <h3>The failure mode is execution, and it is fixable by design</h3>
+      <p>The system computes position size with no manual override, requires a stop simultaneous with entry, never displays a &ldquo;profit needed today&rdquo; figure anywhere, and logs a rule violation regardless of whether the trade made money. A profitable rule-break is still a rule-break &mdash; arguably worse, since chance rewards the behaviour.</p>
+      <p><strong>The encouraging half:</strong> the operator diagnosed all of this himself, accurately, in writing, within days of it happening. Most traders cannot see this pattern in their own behaviour for years. That is the single most useful trait for quantitative work.</p>
+    </div>
+
+    <div class="finding">
+      <p class="finding-tag">Finding 02</p>
+      <h3>There is no strategy yet, and that is a clean starting point</h3>
+      <p>Entry criteria still require research. The journal corroborates it: the ICT model is written down in detail, and the documented trades were entered on <em>&ldquo;intuition and market experience.&rdquo;</em> This is better than a false starting point &mdash; we design from hypotheses instead of reverse-engineering a process that was never consistently applied.</p>
+    </div>
+
+    <div class="finding">
+      <p class="finding-tag">Finding 03</p>
+      <h3>The expertise is real but timeframe-mismatched</h3>
+      <p>The operator's knowledge is intraday-futures order flow: footprint, DOM, heat maps, volume profile, TPO, NY-open kill zones. Two independent problems:</p>
+      <p><strong>Structural.</strong> Trading the 09:30&ndash;11:00 session requires attention a 9&ndash;5 job does not permit, and the journal attributes specific losses to exactly that conflict.</p>
+      <p><strong>Evidential.</strong> The microstructure literature finds order-flow imbalance effects strongest <em>within tens of seconds</em>, dissipating almost entirely <em>within one second</em>, informative for <em>at most several minutes</em>, and decaying rapidly <em>beyond one day</em>. The target hold is 2&ndash;5 days.</p>
+      <div class="note">
+        <p class="note-label">The reframe</p>
+        <p>Even with an institutional data feed and unlimited budget, order-flow signal would have decayed before the hold begins. The constraint is not cost. Order flow is a genuinely powerful discipline operating on a timescale that does not reach swing positioning &mdash; so this is a matter of matching tools to timeframe, not settling for inferior ones.</p>
+      </div>
+      <p><strong>What does transfer:</strong> Fair Value Gaps, Inverse FVGs, liquidity sweeps, break of structure, and SMT divergence all have crisp <em>geometric</em> definitions and port cleanly to daily bars. Most discretionary traders arrive with concepts that resist formalization. These largely don't.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;4</div>
+  <div class="sbody">
+    <h2>What we are therefore building</h2>
+
+    <h3>Job 1 &mdash; Externalize the decisions that get made worst under pressure</h3>
+    <p>Screens run after the close. Candidates arrive ranked, with entry, stop, and size already computed. Portfolio risk, sector concentration, and correlated exposure are visible before the order is placed. <strong>No decision is ever required during working hours</strong> &mdash; which removes the most frequently cited cause of loss in the operator's own record.</p>
+
+    <h3>Job 2 &mdash; Find out whether his concepts carry signal</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th>ID</th><th>Hypothesis</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td class="k">H1</td><td>Volatility-adjusted relative-strength continuation</td><td><strong>Control &mdash; built to be beaten</strong></td></tr>
+          <tr><td class="k">H2</td><td>Daily-bar Fair Value Gap continuation</td><td>His framework, mechanized</td></tr>
+          <tr><td class="k">H3</td><td>Liquidity sweep and reclaim</td><td>His framework, mechanized</td></tr>
+          <tr><td class="k">H4</td><td>Inverse Fair Value Gap</td><td>Pending signal-overlap check vs H3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>H1 is the most important and it is not his. It is the simplest thing that could plausibly work, built from the most replicated factor in the literature. Without it a positive H2 result is uninterpretable &mdash; we would not know whether the Fair Value Gap did the work, or whether we merely bought strong stocks in a bull market.</p>
+
+    <h3>Job 3 &mdash; Build the evidence machine</h3>
+    <p>Every future question &mdash; a new indicator, a different holding period, an options overlay &mdash; gets answered with data instead of opinion. This is the part that compounds. A one-off backtest answers one question; infrastructure answers them repeatedly, at declining marginal cost.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;5</div>
+  <div class="sbody">
+    <h2>The governing principle</h2>
+    <p>Adopted after the operator identified that an earlier draft had hard-coded <code>1.5 &times; ATR</code> and a <code>10</code>-day lookback as though they were derived, when they were assumed:</p>
+    <div class="principle">
+      <p>Every constant is either derived from evidence, conventional and declared as such, or itself a hypothesis under test. No third category exists.</p>
+    </div>
+    <p>This is the difference between a quantitative system and a system that merely <em>looks</em> quantitative. Attaching arbitrary numbers to ICT terminology produces the latter, and it rests on exactly the same unexamined folklore as the win-rate tables we rejected.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;6</div>
+  <div class="sbody">
+    <h2>Division of labour: code versus AI</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Deterministic code owns</th><th>AI owns</th></tr></thead>
+        <tbody>
+          <tr><td>Prices, indicators, position sizing, stops</td><td>Summarizing what the platform computed</td></tr>
+          <tr><td>P&amp;L, R multiples, returns, correlations</td><td>Explaining why a candidate qualified</td></tr>
+          <tr><td>Portfolio weights, concentration, risk</td><td>Comparing original thesis against current conditions</td></tr>
+          <tr><td>Statistical metrics, ranking, backtesting</td><td>Morning and post-market briefings, journal analysis</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>AI never invents a price, an indicator, a news item, or a calculation.</strong> Where data is unavailable, the system says so. Every AI call is logged with its input payload hash, model, output, and cost, so any claim traces back to the rows that produced it. The AI layer can be deleted and the platform still works &mdash; which is the correct dependency direction.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;7</div>
+  <div class="sbody">
+    <h2>The honesty machinery</h2>
+    <p>Retail quantitative research fails in a predictable way: test many variants, keep the one that looks good, discard the rest, and mistake a beautiful backtest of noise for an edge. It is indistinguishable from success until real money is deployed. Five defences, all pre-committed:</p>
+    <ol class="defences">
+      <li><strong>Three-way data split.</strong> Development (2010&ndash;2015) permits unlimited exploration because nothing there counts as evidence. Validation (2016&ndash;2019) allows three configurations per hypothesis. Test (2020&ndash;2026) is sealed and opened once.</li>
+      <li><strong>Pre-registered success criteria.</strong> &ge;200 trades, profit factor &gt;1.20, above the 75th percentile of a 1,000-iteration random-selection distribution, drawdown &lt;25%, positive in &ge;3 of 5 regime buckets. Failing a criterion rejects the hypothesis &mdash; thresholds do not move.</li>
+      <li><strong>Stability surfaces, not best points.</strong> Parameters are chosen at the <em>centre of a plateau</em>, never the peak; choosing the maximum is fitting to noise by construction. A parameter with no plateau is evidence against the hypothesis, not an invitation to search harder.</li>
+      <li><strong>The random-selection benchmark.</strong> Same universe, same trade count, same holding period, 1,000 iterations. If a strategy cannot beat randomly chosen stocks held for the same duration, it has no selection edge &mdash; it has market beta wearing a costume. This is the most commonly omitted test in retail backtesting.</li>
+      <li><strong>Internal controls.</strong> H3 runs against a plain-pullback variant. If sweep-and-reclaim cannot beat &ldquo;buy dips in uptrends,&rdquo; the ICT framing is decorative &mdash; an uncomfortable finding, and precisely why the control exists.</li>
+    </ol>
+    <p>Every reported result states how many configurations preceded it. A profit factor selected from 50 trials is weaker evidence than the same number from 3, and the reader is entitled to know which they are looking at.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;8</div>
+  <div class="sbody">
+    <h2>Validation gates</h2>
+    <p>No strategy touches real capital before Stage F. Current position: <strong>Stage B on all four hypotheses.</strong></p>
+    <div class="ladder">
+      <div class="rung done">
+        <div class="rung-code">A</div>
+        <div><span class="rung-name">Idea</span><span class="rung-desc">Interesting, unproven</span></div>
+        <div class="rung-state">Passed</div>
+      </div>
+      <div class="rung here">
+        <div class="rung-code">B</div>
+        <div><span class="rung-name">Objective specification</span><span class="rung-desc">Rules fully defined, nothing tested</span></div>
+        <div class="rung-state">We are here</div>
+      </div>
+      <div class="rung">
+        <div class="rung-code">C</div>
+        <div><span class="rung-name">Historical test</span><span class="rung-desc">Initial backtest on development data</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+      <div class="rung">
+        <div class="rung-code">D</div>
+        <div><span class="rung-name">Robustness</span><span class="rung-desc">Overfitting and fragility probed</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+      <div class="rung">
+        <div class="rung-code">E</div>
+        <div><span class="rung-name">Out-of-sample</span><span class="rung-desc">Sealed data, one run, no iteration</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+      <div class="rung">
+        <div class="rung-code">F</div>
+        <div><span class="rung-name">Forward test</span><span class="rung-desc">Prospective, on paper</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+      <div class="capital-line">Real capital begins here</div>
+      <div class="rung">
+        <div class="rung-code">G</div>
+        <div><span class="rung-name">Small capital</span><span class="rung-desc">Limited real money</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+      <div class="rung">
+        <div class="rung-code">H</div>
+        <div><span class="rung-name">Scaling review</span><span class="rung-desc">Increased allocation on continued evidence</span></div>
+        <div class="rung-state">&mdash;</div>
+      </div>
+    </div>
+    <p><strong>The $10,000 stays uninvested until Stage E clears.</strong> Nothing is lost by waiting; no validated strategy will exist for months regardless.</p>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;9</div>
+  <div class="sbody">
+    <h2>What success looks like</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Horizon</th><th>Realistic outcome</th></tr></thead>
+        <tbody>
+          <tr><td class="k">3 months</td><td>Data pipeline verified to the penny. Indicators tested against golden values. First honest answers on H1&ndash;H4.</td></tr>
+          <tr><td class="k">6 months</td><td>Screener in daily use. Regime and breadth engines running. At least one hypothesis through Stage D &mdash; or honestly rejected.</td></tr>
+          <tr><td class="k">12 months</td><td>Positions, portfolio risk, journal, and analytics live. Something at Stage F on paper. A real track record beginning.</td></tr>
+          <tr><td class="k">24 months</td><td>Validated process, documented evidence, and a track record that would justify deploying larger capital &mdash; from savings, not from trading returns.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <p class="note-label">Honest arithmetic, stated once</p>
+      <p>At $10,000, a sustained and genuinely excellent 20%/year is $2,000. Exceptional and rare &mdash; 30% &mdash; is $3,000. Neither is income. The operator ranked <em>long-term wealth building</em> and <em>learning quantitative research</em> alongside <em>eventual significant trading income</em>; the first two are exactly right for this capital, and they are what make the third reachable later. Anyone claiming a small account can be traded into a living is selling something, and the mechanism is always leverage &mdash; precisely what would breach the 25% drawdown limit.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;10</div>
+  <div class="sbody">
+    <h2>Why &ldquo;no edge found&rdquo; is a successful outcome</h2>
+    <p>If we test H2, H3, and H4 honestly and find they carry no signal beyond H1, <strong>that is a win worth thousands of dollars and several years.</strong> The operator currently holds, on the strength of unsourced win-rate tables, that a four-confluence ICT model wins 70&ndash;82% of the time. Discovering that daily-bar Fair Value Gaps add nothing over simple momentum saves him from building a trading life on it.</p>
+    <div class="principle">
+      <p>The failure mode this project prevents is not &ldquo;the strategies don't work.&rdquo; It is &ldquo;the strategies don't work and we convinced ourselves otherwise.&rdquo;</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;11</div>
+  <div class="sbody">
+    <h2>What we are deliberately not building</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Not building</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Autonomous trading</strong></td><td>The operator makes every decision. The platform informs; it does not act.</td></tr>
+          <tr><td><strong>Price prediction</strong></td><td>Nothing here forecasts. It measures conditions and manages risk.</td></tr>
+          <tr><td><strong>Order flow, footprint, DOM, TPO</strong></td><td>Requires tick or Level 2 data, and decays before a 2&ndash;5 day hold begins. Permanently closed for this project.</td></tr>
+          <tr><td><strong>Options &mdash; for now</strong></td><td>Deferred until a share-based signal clears Stage E. Validating a signal and an options expression at once gives two sets of free parameters and no way to attribute the result.</td></tr>
+          <tr><td><strong>Futures module</strong></td><td>No funded account is held. Removed from scope.</td></tr>
+          <tr><td><strong>Automated parameter optimization</strong></td><td>Not until the overfitting protections in &sect;7 are proven in practice.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="snum">&sect;&nbsp;12</div>
+  <div class="sbody">
+    <h2>Current state and next action</h2>
+    <p><strong>Complete:</strong> repository assessment, trader profile, four specified hypotheses, indicator pre-screening, and this charter. Approved: universe, sizing, cost model, data splits, success criteria, indicator set, and hypothesis specifications.</p>
+    <p><strong>Next &mdash; Phase 1.</strong> Repository skeleton, configuration, database schema, provider abstraction, Alpaca ingestion, validation layer, and the pure-function calculation engine with golden-value tests.</p>
+    <div class="note">
+      <p class="note-label">Phase 1 gate</p>
+      <p>SPY, AAPL, and QQQ daily bars for five years match an independent reference to the penny; every validation rule passes; re-running ingestion is idempotent; every indicator matches a hand-computed golden value.</p>
+    </div>
+    <p>Then two diagnostics that cost minutes and could send us straight back to revise the specifications &mdash; the <strong>indicator redundancy matrix</strong> and the <strong>signal-frequency and overlap counts</strong>. H2 with displacement optional may fire so often it has no selectivity; H4 may prove to be H3 wearing a different name. Learning either in minutes rather than after a full backtest is the entire point of running them first.</p>
+    <p>That outcome is expected and desirable. Specifications that survive contact with data unchanged are usually specifications that were never tested against it.</p>
+  </div>
+</section>
+
+<footer class="foot">
+  <div>SCREENERV12</div>
+  <div>Charter &middot; rev. 1</div>
+  <div>All four hypotheses at Stage B</div>
+  <div>Nothing tested &middot; no results exist</div>
+</footer>
+
+</div>
