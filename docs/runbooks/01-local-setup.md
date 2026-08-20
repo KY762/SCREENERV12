@@ -171,3 +171,47 @@ The arithmetic itself is ~19 ms per symbol; the rest is database writes. A full
 rebuild is therefore something to run occasionally, not nightly -- which is what
 `--since` exists for. `metrics_daily` is a pure cache reproducible from
 `price_daily`, so `--rebuild` is always safe.
+
+---
+
+## 9. Universe and diagnostics (Phase 3 prerequisites)
+
+Build point-in-time universe membership from the metrics:
+
+```bash
+screener universe build
+screener universe members --on 2026-08-14
+```
+
+Membership is stored **per date**, never derived from today's data. A stock that
+failed the liquidity filter in 2019 was not tradeable in 2019, and screening
+history against today's universe silently selects the companies that went on to
+become large and liquid.
+
+### The two pre-test diagnostics
+
+Both run before any P&L, and either can invalidate a specification:
+
+```bash
+screener diagnose redundancy          # correlation across candidate indicators
+screener diagnose signals             # frequency + overlap for H2, H3, H4
+```
+
+**Redundancy** drops any indicator correlating at or above 0.85 with a
+higher-priority one. It can overrule the recommendations in `docs/04` -- that is
+the point: measurement beats judgement.
+
+**Signals** answers two questions cheaply:
+
+- *Frequency* -- does the setup select anything? A rule firing on 40% of bars is
+  a description of the market, not a signal.
+- *Overlap* -- are these separate hypotheses, or one hypothesis under three
+  names? Overlap above 60% of the rarer setup means fold them (`docs/05` 1.3).
+
+Vary the parameters that `docs/03` marks as under test rather than assumed:
+
+```bash
+screener diagnose signals --displacement 1.5      # displacement filter on
+screener diagnose signals                         # filter off (the null)
+screener diagnose signals --sweep-lookback 5
+```

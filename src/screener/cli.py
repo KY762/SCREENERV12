@@ -26,7 +26,11 @@ app = typer.Typer(
 db_app = typer.Typer(help="Database management.", no_args_is_help=True)
 metrics_app = typer.Typer(help="Derived metrics.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
+universe_app = typer.Typer(help="Universe construction.", no_args_is_help=True)
+diag_app = typer.Typer(help="Pre-test diagnostics.", no_args_is_help=True)
 app.add_typer(metrics_app, name="metrics")
+app.add_typer(universe_app, name="universe")
+app.add_typer(diag_app, name="diagnose")
 
 console = Console()
 
@@ -286,6 +290,203 @@ def metrics_show(
             fmt(r.rs_63, "{:+.2%}"), fmt(r.pct_from_252d_high, "{:.1%}"),
         )
     console.print(table)
+
+
+@universe_app.command("build")
+def universe_build(
+    name: str = typer.Option("liquid_us", "--name"),
+    min_price: float = typer.Option(10.0, "--min-price"),
+    min_dollar_volume: float = typer.Option(20_000_000.0, "--min-adv"),
+    min_history: int = typer.Option(250, "--min-history"),
+    rebuild: bool = typer.Option(False, "--rebuild"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Evaluate point-in-time universe membership and persist it.
+
+    Membership is stored per date, never derived from today's data. Screening
+    history against today's universe silently selects the companies that went on
+    to become large and liquid.
+    """
+    _configure_logging(verbose)
+    from .universe.build import build_universe
+    from .universe.definition import UniverseDefinition
+
+    definition = UniverseDefinition(
+        name=name, min_price=min_price,
+        min_dollar_volume=min_dollar_volume, min_history_days=min_history,
+    )
+    console.print(f"[dim]{definition.describe()}[/]")
+
+    with session_scope() as session:
+        result = build_universe(session, definition, rebuild=rebuild)
+
+    console.print(f"[green]{result.summary()}[/]")
+    for ticker, reason in list(result.symbols_excluded_static.items())[:15]:
+        console.print(f"  [yellow]{ticker}[/]: {reason}")
+
+
+@universe_app.command("members")
+def universe_members_cmd(
+    on: str = typer.Option(..., "--on", help="Date, YYYY-MM-DD."),
+    name: str = typer.Option("liquid_us", "--name"),
+) -> None:
+    """List universe members on a specific date."""
+    from .universe.build import universe_members
+
+    with session_scope() as session:
+        tickers = universe_members(session, name, date.fromisoformat(on))
+
+    if not tickers:
+        console.print(f"[yellow]No members in {name} on {on}.[/]")
+        return
+    console.print(f"[bold]{len(tickers)}[/] member(s) of {name} on {on}:")
+    console.print("  " + ", ".join(tickers))
+
+
+@diag_app.command("redundancy")
+def diagnose_redundancy(
+    threshold: float = typer.Option(0.85, "--threshold"),
+    sample: int = typer.Option(50_000, "--sample", help="Max rows to sample."),
+) -> None:
+    """Correlation matrix across candidate indicators.
+
+    Anything correlating at or above the threshold with a higher-priority
+    indicator is dropped -- on evidence rather than judgement. This can overrule
+    the recommendations in docs/04, which is the point.
+    """
+    import pandas as pd
+
+    from .db.models import MetricsDaily
+    from .diagnostics.redundancy import find_redundant
+
+    columns = [
+        "rs_adj_63", "ret_63", "ret_21", "pct_from_252d_high",
+        "rvol_20", "clv", "atr_pct_14", "realized_vol_63",
+    ]
+    with session_scope() as session:
+        rows = session.execute(
+            select(*[getattr(MetricsDaily, c) for c in columns]).limit(sample)
+        ).all()
+
+    if not rows:
+        console.print("[yellow]No metrics stored. Run 'screener metrics build'.[/]")
+        raise typer.Exit(code=1)
+
+    frame = pd.DataFrame(rows, columns=columns).astype("float64")
+    report = find_redundant(frame, priority=columns, threshold=threshold)
+
+    console.print(f"[bold]{report.summary()}[/]\n")
+    table = Table(title=f"Spearman correlation (n={report.observations:,})")
+    table.add_column("")
+    for c in columns:
+        table.add_column(c[:11], justify="right")
+    for row_name in columns:
+        cells = []
+        for col_name in columns:
+            r = report.matrix.loc[row_name, col_name]
+            if pd.isna(r):
+                cells.append("-")
+            elif row_name == col_name:
+                cells.append("[dim]1.00[/]")
+            else:
+                mark = "[red]" if abs(r) >= threshold else ""
+                close = "[/]" if mark else ""
+                cells.append(f"{mark}{r:+.2f}{close}")
+        table.add_row(row_name, *cells)
+    console.print(table)
+
+    for pair in report.redundant_pairs:
+        console.print(
+            f"  [red]drop[/] {pair.dropped} (r={pair.correlation:+.3f} with {pair.kept})"
+        )
+
+
+@diag_app.command("signals")
+def diagnose_signals(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    displacement: float | None = typer.Option(
+        None, "--displacement", help="Min displacement in ATR. Omit to disable the filter."
+    ),
+    sweep_lookback: int = typer.Option(10, "--sweep-lookback"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Signal frequency and overlap for H2, H3, and H4 -- no P&L computed.
+
+    Answers two questions cheaply, either of which can invalidate a
+    specification before a backtest is worth running:
+
+    FREQUENCY -- does the setup select anything? A rule firing on 40% of bars is
+    a description of the market, not a signal.
+
+    OVERLAP -- are these separate hypotheses, or one hypothesis under three
+    names? H3 and H4 are both reclaimed-level strategies. If they fire on the
+    same bars, crediting both double-counts one piece of evidence.
+    """
+    _configure_logging(verbose)
+    from .calc.indicators import slope_positive, sma
+    from .calc.patterns import fvg_entry_events, ifvg_entry_events, sweep_entry_events
+    from .diagnostics.signals import frequency_report, overlap_matrix
+    from .metrics.compute import load_bars
+
+    with session_scope() as session:
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",")]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+        universe = [(s.id, s.ticker) for s in session.scalars(stmt)]
+        bars_by_symbol = {
+            ticker: load_bars(session, sid) for sid, ticker in universe
+        }
+
+    bars_by_symbol = {k: v for k, v in bars_by_symbol.items() if len(v) >= 250}
+    if not bars_by_symbol:
+        console.print(
+            "[yellow]No symbol has >= 250 bars. Ingest more history first.[/]"
+        )
+        raise typer.Exit(code=1)
+
+    setups: dict[str, dict] = {"h2_fvg": {}, "h3_sweep": {}, "h4_ifvg": {}}
+
+    for ticker, bars in bars_by_symbol.items():
+        close = bars["close"]
+        sma50, sma200 = sma(close, 50), sma(close, 200)
+        trend = (
+            (close > sma50) & (sma50 > sma200) & slope_positive(sma200, 21).fillna(False)
+        )
+        setups["h2_fvg"][ticker] = fvg_entry_events(
+            bars, displacement_min=displacement, trend_mask=trend
+        )
+        setups["h3_sweep"][ticker] = sweep_entry_events(
+            bars, reference_kind="n_bar", n_bar=sweep_lookback, trend_mask=trend
+        )
+        setups["h4_ifvg"][ticker] = ifvg_entry_events(bars, trend_mask=trend)
+
+    disp_label = "off" if displacement is None else f"{displacement}x ATR"
+    console.print(
+        f"[dim]{len(bars_by_symbol)} symbol(s); displacement filter: {disp_label}; "
+        f"sweep lookback: {sweep_lookback} bars[/]\n"
+    )
+
+    table = Table(title="Signal frequency (no P&L)")
+    for col in ("Setup", "Signals", "% of bars", "Per symbol-yr", "Verdict"):
+        table.add_column(col, justify="right" if col != "Setup" and col != "Verdict" else "left")
+
+    for name, events in setups.items():
+        report = frequency_report(name, events, bars_by_symbol)
+        colour = {"usable frequency": "green"}.get(report.verdict, "yellow")
+        table.add_row(
+            name, f"{report.total_signals:,}", f"{report.signals_per_bar:.2%}",
+            f"{report.signals_per_symbol_year:.1f}",
+            f"[{colour}]{report.verdict}[/]",
+        )
+    console.print(table)
+
+    console.print("\n[bold]Signal overlap[/]")
+    for result in overlap_matrix(setups):
+        colour = "red" if "FOLD" in result.verdict else (
+            "yellow" if "jointly" in result.verdict else "green"
+        )
+        console.print(f"  [{colour}]{result.summary()}[/]")
 
 
 @app.command("verify")
