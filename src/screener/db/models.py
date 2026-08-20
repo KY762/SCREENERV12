@@ -33,6 +33,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -229,4 +230,92 @@ class DataQualityLog(Base):
 
     __table_args__ = (
         CheckConstraint("severity IN ('error','warning')", name="ck_dq_severity"),
+    )
+
+
+class MetricsDaily(Base):
+    """Precomputed derived metrics, one row per symbol per trading date.
+
+    This table is what makes screening fast. Recomputing 200 days of moving
+    averages across ~1,500 symbols at query time is slow and fragile; with the
+    metrics already materialised, a screen becomes a single indexed SQL query.
+
+    Recomputation is idempotent and re-runnable. Every column here is derived
+    from price_daily and can be rebuilt from scratch at any time, so this table
+    is a cache, never a source of truth.
+
+    Columns are Float rather than Numeric on purpose. These are statistical
+    quantities, not money -- nothing here determines a share count. Prices and
+    P&L stay Numeric in price_daily.
+    """
+
+    __tablename__ = "metrics_daily"
+
+    symbol_id: Mapped[int] = mapped_column(
+        ForeignKey("symbols.id", ondelete="CASCADE"), primary_key=True
+    )
+    date: Mapped[date] = mapped_column(Date, primary_key=True)
+
+    # trend
+    sma_20: Mapped[float | None] = mapped_column(Float)
+    sma_50: Mapped[float | None] = mapped_column(Float)
+    sma_200: Mapped[float | None] = mapped_column(Float)
+    sma_200_rising: Mapped[bool | None] = mapped_column(Boolean)
+    ma_aligned: Mapped[bool | None] = mapped_column(Boolean)
+
+    # volatility
+    atr_14: Mapped[float | None] = mapped_column(Float)
+    atr_pct_14: Mapped[float | None] = mapped_column(Float)
+    realized_vol_63: Mapped[float | None] = mapped_column(Float)
+
+    # momentum
+    ret_5: Mapped[float | None] = mapped_column(Float)
+    ret_21: Mapped[float | None] = mapped_column(Float)
+    ret_63: Mapped[float | None] = mapped_column(Float)
+    ret_126: Mapped[float | None] = mapped_column(Float)
+    ret_252: Mapped[float | None] = mapped_column(Float)
+
+    # relative strength (vs benchmark, filled by a second pass)
+    rs_63: Mapped[float | None] = mapped_column(Float)
+    rs_adj_63: Mapped[float | None] = mapped_column(Float)
+
+    # participation / structure
+    rvol_20: Mapped[float | None] = mapped_column(Float)
+    clv: Mapped[float | None] = mapped_column(Float)
+    pct_from_252d_high: Mapped[float | None] = mapped_column(Float)
+
+    # liquidity
+    dollar_vol_50: Mapped[float | None] = mapped_column(Float)
+
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_metrics_daily_date", "date"),)
+
+    def __repr__(self) -> str:
+        return f"<MetricsDaily symbol_id={self.symbol_id} {self.date}>"
+
+
+class UniverseSnapshot(Base):
+    """Point-in-time universe membership.
+
+    Membership is stored per date rather than computed from today's data. A
+    stock that failed the liquidity filter in 2019 was not tradeable in 2019,
+    and screening history against today's universe is a textbook survivorship
+    and look-ahead error.
+    """
+
+    __tablename__ = "universe_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    symbol_id: Mapped[int] = mapped_column(
+        ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False
+    )
+    definition_version: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("name", "date", "symbol_id", name="uq_universe_member"),
     )

@@ -24,7 +24,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 db_app = typer.Typer(help="Database management.", no_args_is_help=True)
+metrics_app = typer.Typer(help="Derived metrics.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
+app.add_typer(metrics_app, name="metrics")
 
 console = Console()
 
@@ -202,6 +204,88 @@ def freshness(max_age_days: int = typer.Option(4, "--max-age-days")) -> None:
     for sym in stale[:20]:
         console.print(f"  {sym.ticker}: last bar {sym.last_date}")
     raise typer.Exit(code=1)
+
+
+@metrics_app.command("build")
+def metrics_build(
+    symbols: str | None = typer.Option(
+        None, "--symbols", "-s", help="Comma-separated; omit for all."
+    ),
+    benchmark: str = typer.Option("SPY", "--benchmark", help="Relative-strength benchmark."),
+    rebuild: bool = typer.Option(False, "--rebuild", help="Delete and recompute."),
+    since: str | None = typer.Option(
+        None, "--since", help="Only write rows on/after this date (YYYY-MM-DD). "
+        "History is still used for the calculation."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Compute derived metrics from stored bars into metrics_daily.
+
+    Safe to re-run: unchanged rows are left untouched. metrics_daily is a cache
+    fully reproducible from price_daily, so --rebuild is always safe.
+    """
+    _configure_logging(verbose)
+    from .metrics.compute import build_metrics
+
+    tickers = [t.strip().upper() for t in symbols.split(",")] if symbols else None
+    with session_scope() as session:
+        results = build_metrics(
+            session, tickers, benchmark_ticker=benchmark, rebuild=rebuild,
+            since=date.fromisoformat(since) if since else None,
+        )
+
+    ok = [r for r in results if r.ok]
+    failed = [r for r in results if not r.ok]
+    rows = sum(r.rows_written for r in ok)
+
+    console.print(
+        f"[green]{len(ok)}[/] symbol(s) computed, [bold]{rows:,}[/] row(s) written"
+        + (f", [red]{len(failed)}[/] skipped" if failed else "")
+    )
+    for r in failed:
+        console.print(f"  [yellow]{r.ticker}[/]: {r.error}")
+    if not ok:
+        raise typer.Exit(code=1)
+
+
+@metrics_app.command("show")
+def metrics_show(
+    symbol: str = typer.Argument(..., help="Ticker."),
+    tail: int = typer.Option(5, "--tail", "-n"),
+) -> None:
+    """Print stored metrics for one symbol."""
+    from .db.models import MetricsDaily
+
+    ticker = symbol.strip().upper()
+    with session_scope() as session:
+        sym = session.scalar(select(Symbol).where(Symbol.ticker == ticker))
+        if sym is None:
+            console.print(f"[red]{ticker} not found.[/]")
+            raise typer.Exit(code=1)
+        rows = session.scalars(
+            select(MetricsDaily).where(MetricsDaily.symbol_id == sym.id)
+            .order_by(MetricsDaily.date.desc()).limit(tail)
+        ).all()
+
+    if not rows:
+        console.print(f"[yellow]No metrics for {ticker}. Run 'screener metrics build'.[/]")
+        raise typer.Exit(code=1)
+
+    table = Table(title=f"{ticker} -- metrics (NULL = insufficient history)")
+    for col in ("Date", "SMA50", "SMA200", "Aligned", "ATR%", "RVOL", "RS63", "52wH%"):
+        table.add_column(col, justify="right" if col != "Date" else "left")
+
+    def fmt(value, spec="{:.2f}"):
+        return "-" if value is None else spec.format(value)
+
+    for r in reversed(rows):
+        table.add_row(
+            str(r.date), fmt(r.sma_50), fmt(r.sma_200),
+            "-" if r.ma_aligned is None else ("yes" if r.ma_aligned else "no"),
+            fmt(r.atr_pct_14, "{:.2%}"), fmt(r.rvol_20),
+            fmt(r.rs_63, "{:+.2%}"), fmt(r.pct_from_252d_high, "{:.1%}"),
+        )
+    console.print(table)
 
 
 @app.command("verify")

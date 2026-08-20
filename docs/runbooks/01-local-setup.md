@@ -137,3 +137,37 @@ is recovered by simply running the command again.
 | `403` from Alpaca | Key mistyped, or the key is from the live dashboard rather than paper. |
 | Empty result for a valid ticker | The free IEX feed has thinner coverage on some symbols. Try SPY first to confirm the pipeline works. |
 | `screener: command not found` | Virtualenv not active. `source .venv/bin/activate`. |
+
+---
+
+## 8. Metrics (Phase 2)
+
+Once bars are ingested, compute the derived metrics that screening reads:
+
+```bash
+screener metrics build                    # all symbols, full history
+screener metrics show SPY -n 5            # inspect
+```
+
+Nightly, after ingestion, use `--since` so only new rows are written:
+
+```bash
+screener ingest --symbols SPY,QQQ,AAPL --start 2024-01-01
+screener metrics build --since 2026-08-01
+```
+
+`--since` limits which rows are **written**, never which are **computed**. A
+200-day average needs 200 prior bars, so the full series is always calculated
+and only the tail persisted.
+
+**Measured on this hardware** (SQLite, synthetic data, 1,500 bars/symbol):
+
+| Operation | 25 symbols | Extrapolated to 1,500 |
+| --- | --- | --- |
+| Full rebuild | 9.5 s | ~9.5 min |
+| Nightly `--since` | 0.9 s | ~0.9 min |
+
+The arithmetic itself is ~19 ms per symbol; the rest is database writes. A full
+rebuild is therefore something to run occasionally, not nightly -- which is what
+`--since` exists for. `metrics_daily` is a pure cache reproducible from
+`price_daily`, so `--rebuild` is always safe.
