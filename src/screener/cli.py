@@ -204,6 +204,113 @@ def freshness(max_age_days: int = typer.Option(4, "--max-age-days")) -> None:
     raise typer.Exit(code=1)
 
 
+@app.command("verify")
+def verify_cmd(
+    symbols: str = typer.Option("SPY,QQQ,AAPL", "--symbols", "-s"),
+    tail: int = typer.Option(10, "--tail", "-n", help="Most recent N bars to compare."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """PHASE 1 GATE: cross-check stored bars against an independent source.
+
+    Unit tests prove the code is internally consistent. This proves the DATA is
+    right, by comparing against a source that shares no code, no vendor, and no
+    bugs with our ingestion path.
+
+    Compares the MOST RECENT bars deliberately: over a short window a split is
+    very unlikely, so a difference in adjustment policy cannot explain a
+    mismatch. Prices must agree to the cent. Volume is expected to differ --
+    the free Alpaca feed is IEX-only, not the consolidated tape.
+    """
+    _configure_logging(verbose)
+    import httpx
+
+    from .providers.reference import StooqReference
+    from .validate.verify import compare_bars
+
+    tickers = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+    ref = StooqReference()
+    all_passed = True
+
+    for ticker in tickers:
+        with session_scope() as session:
+            sym = session.scalar(select(Symbol).where(Symbol.ticker == ticker))
+            if sym is None:
+                console.print(f"[yellow]{ticker}: not ingested, skipping.[/]")
+                continue
+            bars = session.scalars(
+                select(PriceDaily).where(PriceDaily.symbol_id == sym.id)
+                .order_by(PriceDaily.date.desc()).limit(tail)
+            ).all()
+
+        if not bars:
+            console.print(f"[yellow]{ticker}: no stored bars.[/]")
+            continue
+
+        ours = {
+            b.date: {
+                "open": float(b.open), "high": float(b.high),
+                "low": float(b.low), "close": float(b.close),
+                "volume": float(b.volume),
+            }
+            for b in bars
+        }
+        lo, hi = min(ours), max(ours)
+
+        try:
+            ref_bars = ref.get_bars(ticker, lo, hi)
+        except httpx.HTTPError as exc:
+            console.print(f"[yellow]{ticker}: reference unavailable ({exc}). Skipped.[/]")
+            continue
+
+        theirs = {
+            b.trade_date: {
+                "open": b.open, "high": b.high, "low": b.low,
+                "close": b.close, "volume": b.volume,
+            }
+            for b in ref_bars
+        }
+
+        result = compare_bars(ticker, ours, theirs, reference_name=ref.name)
+        colour = "green" if result.passed else "red"
+        console.print(f"[{colour}]{result.summary()}[/]")
+
+        if result.price_mismatches:
+            all_passed = False
+            table = Table(title=f"{ticker} price mismatches")
+            for col in ("Date", "Field", "Ours", ref.name.title(), "Diff"):
+                table.add_column(col)
+            for m in result.price_mismatches[:15]:
+                table.add_row(
+                    str(m.trade_date), m.field, f"{m.ours:.4f}",
+                    f"{m.theirs:.4f}", f"{m.difference:+.4f}",
+                )
+            console.print(table)
+
+        if result.missing_from_ours:
+            all_passed = False
+            console.print(
+                "  [red]sessions the reference has and we do not:[/] "
+                + ", ".join(str(d) for d in result.missing_from_ours[:10])
+            )
+
+        if result.volume_differences:
+            console.print(
+                f"  [dim]volume differs on {len(result.volume_differences)}/"
+                f"{result.dates_compared} bars -- expected on the IEX-only free feed, "
+                "not a failure[/]"
+            )
+
+    ref.close()
+
+    if all_passed:
+        console.print("\n[green bold]Phase 1 gate: PASSED[/] -- stored prices match "
+                      "an independent source.")
+    else:
+        console.print("\n[red bold]Phase 1 gate: FAILED[/] -- do not proceed. "
+                      "There is no point testing hypotheses against wrong prices.")
+        raise typer.Exit(code=1)
+
+
 @app.command("show")
 def show(
     symbol: str = typer.Argument(..., help="Ticker."),
