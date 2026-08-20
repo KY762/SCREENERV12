@@ -95,7 +95,11 @@ def test_confirmed_swing_low_is_delayed_by_right_bars():
 
 @pytest.mark.parametrize(
     "kind,expected_col",
-    [("prior_day", "liq_ref_prior_day"), ("n_bar", "liq_ref_3bar"), ("prior_week", "liq_ref_prior_week")],
+    [
+        ("prior_day", "liq_ref_prior_day"),
+        ("n_bar", "liq_ref_3bar"),
+        ("prior_week", "liq_ref_prior_week"),
+    ],
 )
 def test_liquidity_reference_excludes_current_bar(kind, expected_col):
     """The reference must pre-exist the sweep, or the test is circular."""

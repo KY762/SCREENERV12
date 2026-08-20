@@ -5,12 +5,10 @@ becoming a wrong indicator, a wrong signal, and a backtest edge that never
 existed.
 """
 
-from datetime import date
 
 import pandas as pd
-import pytest
 
-from screener.validate.rules import Severity, validate_bars
+from screener.validate.rules import validate_bars
 
 
 def _bars(rows, start="2024-01-02"):

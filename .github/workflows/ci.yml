@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Test
+        run: pytest -q
+
+      # The calculation layer is where correctness is won. If its tests are
+      # skipped or silently removed, the suite would still pass -- so assert
+      # the no-lookahead checks actually ran.
+      - name: Assert lookahead guards ran
+        run: |
+          COUNT=$(pytest tests/unit/calc/test_no_lookahead.py --collect-only -q | tail -1)
+          echo "lookahead tests collected: $COUNT"
+          pytest tests/unit/calc/test_no_lookahead.py -q

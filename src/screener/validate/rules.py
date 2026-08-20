@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 
-import numpy as np
 import pandas as pd
 
 
