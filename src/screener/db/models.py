@@ -319,3 +319,44 @@ class UniverseSnapshot(Base):
     __table_args__ = (
         UniqueConstraint("name", "date", "symbol_id", name="uq_universe_member"),
     )
+
+
+class ResearchRun(Base):
+    """Every evidential backtest, recorded whether or not its result was liked.
+
+    This table is the enforcement mechanism for the per-split budget in
+    docs/03-HYPOTHESES.md 0.8. The budget is only real if the count of
+    configurations already spent survives the session that spent them -- a rule
+    kept in someone's head is a rule that quietly relaxes the day a result
+    disappoints.
+
+    Development-split runs are recorded too. They carry no evidential weight and
+    consume no budget, but the record of what was explored is what makes the
+    eventual validation choice reviewable rather than a story told afterwards.
+    """
+
+    __tablename__ = "research_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    hypothesis: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    split: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    # Hash of the configuration, so re-running an identical config is
+    # recognised as the same spend rather than a second one.
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    config_json: Mapped[str] = mapped_column(Text, nullable=False)
+    run_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    trades: Mapped[int | None] = mapped_column(Integer)
+    expectancy_r: Mapped[float | None] = mapped_column(Float)
+    profit_factor: Mapped[float | None] = mapped_column(Float)
+    max_drawdown_pct: Mapped[float | None] = mapped_column(Float)
+    total_return_pct: Mapped[float | None] = mapped_column(Float)
+    random_percentile: Mapped[float | None] = mapped_column(Float)
+    criteria_passed: Mapped[bool | None] = mapped_column(Boolean)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_research_runs_budget", "hypothesis", "split", "config_hash"),
+    )

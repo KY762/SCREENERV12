@@ -28,9 +28,11 @@ metrics_app = typer.Typer(help="Derived metrics.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
 universe_app = typer.Typer(help="Universe construction.", no_args_is_help=True)
 diag_app = typer.Typer(help="Pre-test diagnostics.", no_args_is_help=True)
+backtest_app = typer.Typer(help="Backtesting.", no_args_is_help=True)
 app.add_typer(metrics_app, name="metrics")
 app.add_typer(universe_app, name="universe")
 app.add_typer(diag_app, name="diagnose")
+app.add_typer(backtest_app, name="backtest")
 
 console = Console()
 
@@ -622,6 +624,266 @@ def show(
             f"{bar.low:.2f}", f"{bar.close:.2f}", f"{bar.volume:,}",
         )
     console.print(table)
+
+
+@backtest_app.command("run")
+def backtest_run(
+    hypothesis: str = typer.Option(..., "--hypothesis", "-h", help="h1, h2, h3 or h4."),
+    split: str = typer.Option("development", "--split", help="development, validation or test."),
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    universe_name: str | None = typer.Option(
+        None, "--universe", help="Restrict entries to this point-in-time universe."
+    ),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    r_multiple: float | None = typer.Option(2.0, "--r-multiple", help="Target in R. 0 disables."),
+    time_limit: int | None = typer.Option(10, "--time-limit", help="Bars held. 0 disables."),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    displacement: float | None = typer.Option(None, "--displacement", help="H2 only, in ATR."),
+    hold: int = typer.Option(5, "--hold", help="H1 rebalance interval in days."),
+    top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
+    random_iterations: int = typer.Option(1000, "--random-iterations"),
+    seed: int = typer.Option(0, "--seed"),
+    confirm: bool = typer.Option(
+        False, "--confirm-spend",
+        help="Required on validation and test: acknowledges spending budget.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run one configuration of one hypothesis over one split.
+
+    Entries fill at the next session's open, never the signal bar's close.
+    Ambiguous bars resolve to the stop. Slippage is charged both ways. The
+    result is compared against random selection over the same window with the
+    same holding periods, because a strategy that cannot beat that has not
+    demonstrated selection, only exposure.
+
+    On validation and test splits this consumes pre-registered budget
+    (docs/03-HYPOTHESES.md 0.8) and the spend is recorded in the database.
+    """
+    _configure_logging(verbose)
+    from .backtest import budget
+    from .backtest.benchmarks import buy_and_hold, random_benchmark, trade_returns
+    from .backtest.engine import CostModel, ExitRule, run_backtest
+    from .backtest.performance import by_regime, check_criteria, summarize
+    from .backtest.splits import get_split
+    from .backtest.strategies import (
+        TrendFilter,
+        pattern_candidates,
+        relative_strength_candidates,
+    )
+    from .metrics.compute import load_bars
+    from .universe.build import universe_members
+
+    key = hypothesis.strip().lower()
+    if key not in {"h1", "h2", "h3", "h4"}:
+        console.print(f"[red]Unknown hypothesis {hypothesis!r}.[/] Expected h1, h2, h3 or h4.")
+        raise typer.Exit(code=1)
+
+    chosen = get_split(split)
+    console.print(f"[dim]{chosen.describe()}[/]")
+
+    config = {
+        "hypothesis": key,
+        "symbols": symbols or "all",
+        "universe": universe_name,
+        "r_multiple": r_multiple or None,
+        "time_limit": time_limit or None,
+        "slippage_bps": slippage_bps,
+        "trend_filter": trend_filter,
+        "displacement": displacement,
+        "hold": hold,
+        "top_pct": top_pct,
+    }
+
+    with session_scope() as session:
+        if chosen.carries_evidence:
+            state = budget.status(session, key, chosen, config)
+            if not state.already_run and not confirm:
+                console.print(
+                    f"[yellow]{state.describe()}[/]\n"
+                    f"This run would spend budget on the [bold]{chosen.name}[/] split, "
+                    "which carries evidential weight.\n"
+                    "Re-run with [bold]--confirm-spend[/] if that is intended."
+                )
+                raise typer.Exit(code=1)
+            try:
+                budget.check(session, key, chosen, config)
+            except budget.BudgetExceeded as exc:
+                console.print(f"[red]{exc}[/]")
+                raise typer.Exit(code=1) from exc
+
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+        rows = [(s.id, s.ticker) for s in session.scalars(stmt)]
+        bars_by_symbol = {ticker: load_bars(session, sid) for sid, ticker in rows}
+        bars_by_symbol = {k: v for k, v in bars_by_symbol.items() if not v.empty}
+
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+
+        members_cache: dict[date, set[str]] = {}
+
+        def in_universe(ticker: str, day: date) -> bool:
+            if universe_name is None:
+                return True
+            if day not in members_cache:
+                members_cache[day] = set(universe_members(session, universe_name, day))
+            return ticker in members_cache[day]
+
+        trend = TrendFilter(enabled=trend_filter)
+        if key == "h1":
+            candidates = relative_strength_candidates(
+                bars_by_symbol, trend=trend, rebalance_days=hold,
+                top_pct=top_pct, universe=in_universe,
+            )
+        else:
+            extra = {"displacement_min": displacement} if key == "h2" else {}
+            candidates = pattern_candidates(
+                bars_by_symbol, hypothesis=key, trend=trend,
+                universe=in_universe, **extra,
+            )
+
+        console.print(f"{len(candidates):,} candidate signal(s) before portfolio limits.")
+
+        result = run_backtest(
+            candidates, bars_by_symbol,
+            start=chosen.start, end=chosen.end,
+            starting_equity=equity,
+            exit_rule=ExitRule(
+                r_multiple=r_multiple or None,
+                time_limit=time_limit or None,
+            ),
+            costs=CostModel(slippage_bps=slippage_bps),
+        )
+
+        stats = summarize(result)
+        regimes = by_regime(result.trades)
+
+        percentile = None
+        holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
+        if holds and random_iterations > 0:
+            bench = random_benchmark(
+                bars_by_symbol, start=chosen.start, end=chosen.end,
+                n_trades=len(holds), hold_periods=holds,
+                iterations=random_iterations, seed=seed,
+                costs=CostModel(slippage_bps=slippage_bps),
+            )
+            observed = trade_returns(result.closed_trades)
+            mean_return = sum(observed) / len(observed) if observed else 0.0
+            percentile = bench.percentile_of(mean_return)
+            console.print(f"[dim]{bench.describe(mean_return)}[/]")
+
+        criteria = check_criteria(stats, regimes, percentile)
+        passed = all(c.passed for c in criteria)
+
+        budget.record(
+            session, hypothesis=key, split=chosen, config=config,
+            trades=stats.trades, expectancy_r=stats.expectancy_r,
+            profit_factor=stats.profit_factor,
+            max_drawdown_pct=stats.max_drawdown_pct,
+            total_return_pct=stats.total_return_pct,
+            random_percentile=percentile, criteria_passed=passed,
+        )
+
+    console.print(f"\n[bold]{stats.describe()}[/]")
+    if result.rejected:
+        top = sorted(result.rejected.items(), key=lambda kv: -kv[1])[:4]
+        console.print(
+            "[dim]signals not taken: "
+            + ", ".join(f"{reason} ({count})" for reason, count in top)
+            + "[/]"
+        )
+
+    if "SPY" in bars_by_symbol:
+        spy = buy_and_hold(
+            bars_by_symbol["SPY"], chosen.start, chosen.end,
+            CostModel(slippage_bps=slippage_bps),
+        )
+        console.print(f"[dim]SPY buy-and-hold over the same window: {spy:+.1%}[/]")
+
+    if regimes:
+        table = Table(title="By regime")
+        for col in ("Regime", "Trades", "Expectancy", "Total R"):
+            table.add_column(col, justify="right" if col != "Regime" else "left")
+        for name, bucket in regimes.items():
+            table.add_row(
+                name, str(bucket.trades),
+                f"{bucket.expectancy_r:+.3f}R", f"{bucket.total_return_pct:+.2f}",
+            )
+        console.print(table)
+
+    table = Table(title="Pre-registered criteria (docs/03-HYPOTHESES.md 0.6)")
+    for col in ("Criterion", "Observed", "Required", "Result"):
+        table.add_column(col, justify="left")
+    for criterion in criteria:
+        table.add_row(
+            criterion.name, criterion.observed, criterion.required,
+            "[green]pass[/]" if criterion.passed else "[red]fail[/]",
+        )
+    console.print(table)
+
+    verdict = "[green]ALL CRITERIA MET[/]" if passed else "[yellow]criteria not met[/]"
+    console.print(
+        f"\n{verdict} -- recorded on the {chosen.name} split"
+        + ("" if chosen.carries_evidence else " (exploratory: proves nothing)")
+    )
+
+
+@backtest_app.command("budget")
+def backtest_budget(
+    hypothesis: str | None = typer.Option(None, "--hypothesis", "-h"),
+) -> None:
+    """Show how much of each split's budget has been spent.
+
+    Runs are listed whatever their result. A research log that only records
+    the encouraging runs is how a hypothesis gets credited for its best look.
+    """
+    from .backtest.splits import SPLITS
+    from .db.models import ResearchRun
+
+    with session_scope() as session:
+        stmt = select(ResearchRun).order_by(ResearchRun.run_at.desc())
+        if hypothesis:
+            stmt = stmt.where(ResearchRun.hypothesis == hypothesis.strip().lower())
+        runs = list(session.scalars(stmt))
+
+        if not runs:
+            console.print("[yellow]No research runs recorded yet.[/]")
+            return
+
+        spent: dict[tuple[str, str], set[str]] = {}
+        for run in runs:
+            spent.setdefault((run.hypothesis, run.split), set()).add(run.config_hash)
+
+        table = Table(title="Split budget")
+        for col in ("Hypothesis", "Split", "Spent", "Limit", "Remaining"):
+            table.add_column(col, justify="right" if col not in ("Hypothesis", "Split") else "left")
+        for (hyp, split_name), hashes in sorted(spent.items()):
+            limit = SPLITS[split_name].config_budget if split_name in SPLITS else None
+            remaining = "unlimited" if limit is None else str(max(limit - len(hashes), 0))
+            table.add_row(
+                hyp, split_name, str(len(hashes)),
+                "unlimited" if limit is None else str(limit), remaining,
+            )
+        console.print(table)
+
+        recent = Table(title="Recent runs")
+        for col in ("When", "Hypothesis", "Split", "Trades", "Expectancy", "PF", "Passed"):
+            recent.add_column(col, justify="right" if col != "When" else "left")
+        for run in runs[:15]:
+            recent.add_row(
+                run.run_at.strftime("%Y-%m-%d %H:%M") if run.run_at else "-",
+                run.hypothesis, run.split,
+                str(run.trades if run.trades is not None else "-"),
+                f"{run.expectancy_r:+.3f}R" if run.expectancy_r is not None else "-",
+                f"{run.profit_factor:.2f}" if run.profit_factor is not None else "-",
+                "[green]yes[/]" if run.criteria_passed else "no",
+            )
+        console.print(recent)
 
 
 if __name__ == "__main__":

@@ -215,3 +215,89 @@ screener diagnose signals --displacement 1.5      # displacement filter on
 screener diagnose signals                         # filter off (the null)
 screener diagnose signals --sweep-lookback 5
 ```
+
+---
+
+## 10. Backtesting (Phase 4)
+
+Nothing in this section should be run before `screener verify` passes. A
+backtest on unverified prices produces a confident number about nothing.
+
+### The command
+
+```bash
+screener backtest run --hypothesis h2 --split development
+```
+
+That runs one configuration of one hypothesis over one split and prints the
+trade statistics, per-regime breakdown, and the pre-registered criteria from
+[`docs/03-HYPOTHESES.md`](../03-HYPOTHESES.md) §0.6 with a pass or fail against
+each one.
+
+What the engine assumes, all of it stated so results can be read honestly:
+
+| | |
+| --- | --- |
+| Fill | Next session's **open** -- never the close of the signal bar |
+| Ambiguous bar (stop and target both inside the range) | Resolves to the **stop** |
+| Gap through the stop | Fills at the **open**, worse than the stop |
+| Slippage | 5 bps per side by default, charged on entry and exit |
+| Sizing | `calc.sizing.plan_position` -- the same function the live path uses |
+
+The first three understate results. That is deliberate: daily bars cannot
+resolve intrabar order, and every ambiguity resolving in your favour is how a
+backtest becomes fiction.
+
+### The benchmark that matters
+
+Each run compares against random selection over the same window, with the same
+holding periods, drawn from the same symbols -- 1,000 iterations by default:
+
+```
+random: median +0.412%, 95th +1.885% | strategy +0.930% = 78.4th percentile
+```
+
+**A strategy that cannot beat that distribution has not demonstrated selection,
+only exposure.** It is the criterion most likely to fail and the one worth
+believing.
+
+### Splits and the budget
+
+```bash
+screener backtest budget           # what has been spent, and on what
+```
+
+| Split | Window | Budget |
+| --- | --- | --- |
+| `development` | 2010-2015 | Unlimited. Carries no evidential weight. |
+| `validation` | 2016-2019 | 3 configurations per hypothesis |
+| `test` | 2020-2026 | **1 configuration per hypothesis, once** |
+
+Explore freely on `development` -- results there prove nothing, which is exactly
+what makes free exploration safe. The other two splits require
+`--confirm-spend`, and once a hypothesis has spent its configurations there, the
+CLI refuses further runs. Re-running an *identical* configuration is always
+allowed; that is reproduction, not a second look.
+
+Every run is recorded in `research_runs` whether or not the result was liked.
+The budget lives in the database rather than in your memory precisely because a
+rule kept in someone's head relaxes the day a result disappoints.
+
+### Order of work
+
+```bash
+# 1. explore on development -- surfaces, structural questions, spec revision
+screener backtest run --hypothesis h2 --split development --r-multiple 2.0
+screener backtest run --hypothesis h2 --split development --r-multiple 1.5
+screener backtest run --hypothesis h2 --split development --no-trend-filter
+
+# 2. pick a plateau CENTRE, never a peak (docs/03 0.7), then confirm
+screener backtest run --hypothesis h2 --split validation --confirm-spend ...
+
+# 3. only when everything else is settled
+screener backtest run --hypothesis h2 --split test --confirm-spend ...
+```
+
+Always run H1 too. It is the control, and if the pattern hypotheses cannot beat
+plain relative strength, their extra complexity earned nothing -- which is a
+real finding, not a failure of the exercise.
