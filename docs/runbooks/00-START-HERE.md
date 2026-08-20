@@ -49,16 +49,38 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Windows:
+Windows — run this line **first**, once, and answer `Y`:
+
+```
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+Windows blocks PowerShell scripts by default, and the next step runs one. This
+setting applies to your account only and still blocks unsigned scripts
+downloaded from the internet. Without it you get
+*"running scripts is disabled on this system"*.
+
+Then:
+
 ```
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Takes a few minutes and prints a lot of text. That is fine.
+The install takes a few minutes and prints a lot of text. That is fine.
 
 You should now see `(.venv)` at the start of your terminal line.
+
+> **If you would rather not change the execution policy**, skip activation and
+> call the project's own Python directly instead — it works identically:
+>
+> ```
+> .venv\Scripts\python.exe -m pip install -e ".[dev]"
+> .venv\Scripts\python.exe -m pytest -q
+> ```
+>
+> Every later `screener ...` command then becomes `.venv\Scripts\screener.exe ...`.
 
 ## 5. Check it works
 
@@ -159,6 +181,8 @@ Then you can run `screener` commands.
 | It says | Do this |
 | --- | --- |
 | `command not found: screener` | Paste the three "every time you come back" lines above |
+| `running scripts is disabled on this system` | Windows execution policy — see step 4 |
+| `source : The term 'source' is not recognized` | That is the Mac line. On Windows use `.venv\Scripts\activate` |
 | `connection refused` | Open Docker Desktop, wait for "Engine running", try again |
 | `Alpaca credentials missing` | Redo step 7 |
 | `no such file or directory` | Paste `cd ~/SCREENERV12` and try again |
