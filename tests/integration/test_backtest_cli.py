@@ -226,3 +226,69 @@ def test_pattern_hypotheses_keep_their_r_target_default(loaded):
         ).first()
 
     assert json.loads(run.config_json)["r_multiple"] == 2.0
+
+
+def test_surface_sweeps_and_classifies(loaded):
+    cli, runner = loaded
+
+    result = runner.invoke(
+        cli.app,
+        ["backtest", "surface", "--hypothesis", "h2", "--split", "development",
+         "--vary", "r_multiple=1.0,2.0,3.0", "--vary", "time_limit=5,10"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "6 configuration(s)" in result.output
+    assert "parameter surface" in result.output
+    assert any(word in result.output for word in ("PLATEAU", "SPIKE", "NONE"))
+
+
+def test_surface_is_refused_on_an_evidential_split(loaded):
+    """A sweep would spend a 3-configuration budget in one command, without
+    anyone deciding to spend it."""
+    cli, runner = loaded
+
+    result = runner.invoke(
+        cli.app,
+        ["backtest", "surface", "--hypothesis", "h2", "--split", "validation",
+         "--vary", "r_multiple=1.0,2.0"],
+    )
+
+    assert result.exit_code == 1
+    assert "development-split only" in result.output
+
+
+def test_surface_rejects_an_unknown_parameter(loaded):
+    cli, runner = loaded
+
+    result = runner.invoke(
+        cli.app,
+        ["backtest", "surface", "--hypothesis", "h2",
+         "--vary", "sharpe_target=1.0,2.0"],
+    )
+
+    assert result.exit_code == 1
+    assert "Unknown parameter" in result.output
+
+
+def test_every_surface_cell_is_recorded_in_the_research_log(loaded):
+    """Exploration that leaves no trace is exploration nobody can audit."""
+    cli, runner = loaded
+    runner.invoke(
+        cli.app,
+        ["backtest", "surface", "--hypothesis", "h3", "--split", "development",
+         "--vary", "r_multiple=1.0,2.0,3.0"],
+    )
+
+    from sqlalchemy import func, select
+
+    from screener.db.models import ResearchRun
+    from screener.db.session import session_scope
+
+    with session_scope() as session:
+        count = session.scalar(
+            select(func.count()).select_from(ResearchRun).where(
+                ResearchRun.hypothesis == "h3", ResearchRun.notes == "surface sweep"
+            )
+        )
+    assert count == 3

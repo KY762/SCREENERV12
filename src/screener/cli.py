@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 import typer
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 from sqlalchemy import func, select
 
@@ -35,6 +36,13 @@ app.add_typer(diag_app, name="diagnose")
 app.add_typer(backtest_app, name="backtest")
 
 console = Console()
+
+# Declared at module level because ruff B008 forbids a call in a default, and
+# a list-valued Option needs one.
+VARY_OPTION = typer.Option(
+    ..., "--vary",
+    help="Parameter range, e.g. --vary r_multiple=1.0,1.5,2.0 --vary time_limit=5,10,15,20",
+)
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -1009,6 +1017,169 @@ def backtest_run(
     console.print(
         f"\n{verdict} -- recorded on the {chosen.name} split"
         + ("" if chosen.carries_evidence else " (exploratory: proves nothing)")
+    )
+
+
+@backtest_app.command("surface")
+def backtest_surface(
+    hypothesis: str = typer.Option(..., "--hypothesis", "-h", help="h1, h2, h3 or h4."),
+    vary: list[str] = VARY_OPTION,
+    split: str = typer.Option("development", "--split"),
+    symbols: str | None = typer.Option(None, "--symbols", "-s"),
+    universe_name: str | None = typer.Option(None, "--universe"),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    random_iterations: int = typer.Option(0, "--random-iterations"),
+    seed: int = typer.Option(0, "--seed"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Sweep a parameter range and classify the resulting surface.
+
+    Answers a parameter question the way docs/03 0.7 requires -- by looking at
+    the whole neighbourhood rather than picking the best value:
+
+      PLATEAU    broad positive region -> take its CENTRE, never the peak
+      SPIKE      one value works, neighbours fail -> noise; reject it
+      NONE       nothing positive -> evidence AGAINST the hypothesis
+
+    Development split only. Surfaces are exploration, and exploration on a
+    split that carries evidential weight is how a budget gets spent without
+    anyone deciding to spend it.
+    """
+    _configure_logging(verbose)
+    from .backtest import budget
+    from .backtest.runner import (
+        HYPOTHESES,
+        RunConfig,
+        build_candidates,
+        evaluate,
+        load_symbol_bars,
+        universe_filter,
+    )
+    from .backtest.splits import get_split
+    from .backtest.surface import Cell, analyse, parameter_grid, parse_vary
+
+    key = hypothesis.strip().lower()
+    if key not in HYPOTHESES:
+        console.print(f"[red]Unknown hypothesis {hypothesis!r}.[/] Expected one of h1-h4.")
+        raise typer.Exit(code=1)
+
+    chosen = get_split(split)
+    if chosen.carries_evidence:
+        console.print(
+            f"[red]Surfaces are development-split only.[/] The {chosen.name} split "
+            f"allows {chosen.config_budget} configuration(s) per hypothesis "
+            "(docs/03 0.8); a sweep would spend that in one command.\n"
+            "Explore on development, then run the chosen configuration once here."
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        varied = parse_vary(vary)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    grid = parameter_grid(varied)
+    base_fields = set(RunConfig(hypothesis=key).__dict__)
+    unknown = [name for name in varied if name not in base_fields]
+    if unknown:
+        console.print(
+            f"[red]Unknown parameter(s): {', '.join(unknown)}.[/]\n"
+            f"Available: {', '.join(sorted(base_fields - {'hypothesis'}))}"
+        )
+        raise typer.Exit(code=1)
+
+    console.print(f"[dim]{chosen.describe()}[/]")
+    console.print(
+        f"Sweeping [bold]{len(grid)}[/] configuration(s) of {key} over "
+        f"{', '.join(f'{k}({len(v)})' for k, v in sorted(varied.items()))}..."
+    )
+
+    cells: list[Cell] = []
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, symbols)
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+        universe = universe_filter(session, universe_name)
+
+        # Signals depend only on entry-side parameters, so cells that share
+        # them share one generation pass. On an exit-only sweep this is one
+        # pass instead of one per cell.
+        candidate_cache: dict[tuple, list] = {}
+
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            BarColumn(), TaskProgressColumn(), console=console,
+        ) as progress:
+            task = progress.add_task("sweeping", total=len(grid))
+            for params in grid:
+                config = RunConfig(
+                    hypothesis=key, equity=equity, slippage_bps=slippage_bps,
+                    trend_filter=trend_filter, **params,
+                )
+                entry_key = (
+                    config.trend_filter, config.displacement, config.hold,
+                    config.top_pct, config.stop_atr, config.rs_lookback,
+                    config.sweep_lookback,
+                )
+                if entry_key not in candidate_cache:
+                    candidate_cache[entry_key] = build_candidates(
+                        bars_by_symbol, config, universe
+                    )
+
+                outcome = evaluate(
+                    candidate_cache[entry_key], bars_by_symbol, config, chosen,
+                    random_iterations=random_iterations, seed=seed,
+                )
+                cells.append(Cell(params=params, outcome=outcome))
+                budget.record(
+                    session, hypothesis=key, split=chosen,
+                    config=outcome.config.as_dict(),
+                    trades=outcome.stats.trades,
+                    expectancy_r=outcome.stats.expectancy_r,
+                    profit_factor=outcome.stats.profit_factor,
+                    max_drawdown_pct=outcome.stats.max_drawdown_pct,
+                    total_return_pct=outcome.stats.total_return_pct,
+                    random_percentile=outcome.random_percentile,
+                    criteria_passed=outcome.passed,
+                    notes="surface sweep",
+                )
+                progress.advance(task)
+
+    verdict = analyse(cells, varied)
+
+    table = Table(title=f"{key} parameter surface -- {chosen.name} split")
+    for name in sorted(varied):
+        table.add_column(name, justify="right")
+    for col in ("Trades", "Expectancy", "PF", "MaxDD", "Return"):
+        table.add_column(col, justify="right")
+
+    for cell in sorted(cells, key=lambda c: -c.expectancy):
+        stats = cell.outcome.stats
+        marker = ""
+        if verdict.recommended is not None and cell.key == verdict.recommended.key:
+            marker = " [green]<- selected[/]"
+        elif verdict.best is not None and cell.key == verdict.best.key:
+            marker = " [dim]<- peak[/]"
+        table.add_row(
+            *[str(cell.params[name]) for name in sorted(varied)],
+            str(stats.trades),
+            f"{stats.expectancy_r:+.3f}R{marker}",
+            f"{stats.profit_factor:.2f}" if stats.profit_factor != float("inf") else "inf",
+            f"{stats.max_drawdown_pct:.1%}",
+            f"{stats.total_return_pct:+.1%}",
+        )
+    console.print(table)
+
+    colour = {"plateau": "green", "spike": "yellow", "none": "red"}[verdict.shape]
+    console.print(f"[{colour} bold]{verdict.describe()}[/]")
+    console.print(
+        f"[dim]{verdict.total_cells} configuration(s) tested to reach this. "
+        "docs/03 0.7 rule 5: a result selected from many trials is weaker "
+        "evidence than the same result from few.[/]"
     )
 
 
