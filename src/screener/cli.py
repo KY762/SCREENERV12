@@ -83,19 +83,37 @@ def ingest(
     symbols: str = typer.Option(..., "--symbols", "-s", help="Comma-separated tickers."),
     start: str = typer.Option(..., "--start", help="Start date, YYYY-MM-DD."),
     end: str | None = typer.Option(None, "--end", help="End date, YYYY-MM-DD. Defaults to today."),
+    provider_name: str = typer.Option(
+        "auto", "--provider",
+        help="auto, tiingo (deep history) or alpaca (recent years only).",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Fetch, validate, and store daily bars.
 
-    Safe to re-run over any range: unchanged bars are left untouched.
+    Safe to re-run over any range: unchanged bars are left untouched, so a run
+    interrupted by a rate limit resumes by simply running it again.
+
+    Provider choice matters for how far back history goes. Alpaca's free tier
+    serves only the most recent years; Tiingo serves decades. 'auto' prefers
+    Tiingo when a key is configured.
     """
     _configure_logging(verbose)
     from .ingest.prices import ingest_daily_bars
-    from .providers.alpaca import AlpacaProvider
     from .providers.base import ProviderError
 
     settings = get_settings()
-    if not settings.has_alpaca_credentials:
+    choice = provider_name.strip().lower()
+    if choice == "auto":
+        choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
+
+    if choice == "tiingo" and not settings.has_tiingo_credentials:
+        console.print(
+            "[red]Tiingo API key missing.[/] Set TIINGO_API_KEY in .env "
+            "(free key at tiingo.com -- see .env.example)."
+        )
+        raise typer.Exit(code=1)
+    if choice == "alpaca" and not settings.has_alpaca_credentials:
         console.print(
             "[red]Alpaca credentials missing.[/] Copy .env.example to .env and set "
             "ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY."
@@ -107,7 +125,17 @@ def ingest(
     end_date = date.fromisoformat(end) if end else date.today()
 
     try:
-        provider = AlpacaProvider(settings)
+        if choice == "tiingo":
+            from .providers.tiingo import TiingoProvider
+            provider = TiingoProvider(settings)
+        elif choice == "alpaca":
+            from .providers.alpaca import AlpacaProvider
+            provider = AlpacaProvider(settings)
+        else:
+            console.print(
+                f"[red]Unknown provider {provider_name!r}.[/] Expected auto, tiingo or alpaca."
+            )
+            raise typer.Exit(code=1)
     except ProviderError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=1) from exc

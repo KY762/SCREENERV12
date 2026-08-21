@@ -93,10 +93,21 @@ Red or "FAILED" → stop, send me what it printed.
 
 ## 6. Get free data keys
 
-1. Go to <https://alpaca.markets>, sign up (free).
+You need two accounts. Both free, neither wants a card.
+
+**Alpaca** — for recent prices and, later, paper trading:
+
+1. Go to <https://alpaca.markets>, sign up.
 2. In the sidebar, switch to **Paper Trading**.
 3. Click **API Keys** → **Generate**.
-4. Copy the **Key ID** and the **Secret Key** somewhere. The secret is shown once only.
+4. Copy the **Key ID** and the **Secret Key**. The secret is shown once only.
+
+**Tiingo** — for history going back decades. Alpaca's free plan only covers the
+last few years, which is not enough to test anything honestly:
+
+1. Go to <https://tiingo.com>, sign up.
+2. Open your account settings and find **API** → **Token**.
+3. Copy the token.
 
 ## 7. Save your keys
 
@@ -112,10 +123,12 @@ A text file opens. Find these two lines:
 ```
 ALPACA_API_KEY_ID=
 ALPACA_API_SECRET_KEY=
+TIINGO_API_KEY=
 ```
 
-Paste your Key ID after the first `=`. Paste your Secret after the second `=`.
-No spaces. No quotes. Ignore every other line in the file. Save. Close.
+Paste each value straight after its `=`. No spaces, no quotes. Do not add new
+lines at the bottom of the file -- fill in the ones already there. Ignore every
+other line. Save. Close.
 
 ## 8. Start the database
 

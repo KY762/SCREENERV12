@@ -38,6 +38,12 @@ class Settings(BaseSettings):
         description="'iex' on the free tier; 'sip' requires a paid subscription.",
     )
 
+    # Tiingo. Deeper daily history than Alpaca's free tier, and it serves raw
+    # and adjusted prices as separate fields -- which is what price_daily's
+    # raw-storage policy requires.
+    tiingo_api_key: SecretStr | None = None
+    tiingo_base_url: str = "https://api.tiingo.com"
+
     # --- other providers ----------------------------------------------------
     fred_api_key: SecretStr | None = None
     sec_user_agent: str = Field(
@@ -55,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def has_alpaca_credentials(self) -> bool:
         return bool(self.alpaca_api_key_id and self.alpaca_api_secret_key)
+
+    @property
+    def has_tiingo_credentials(self) -> bool:
+        return bool(self.tiingo_api_key)
 
 
 @lru_cache(maxsize=1)
