@@ -143,6 +143,16 @@ different data source.
 
 - **PASS / green** → done. Tell me and we move on.
 - **FAIL / red** → stop. Send me what it printed. Do not continue.
+- **INCONCLUSIVE** → the outside source would not answer. That is not a problem
+  with your data; free sites block automated requests without warning. Wait and
+  retry, or check by eye:
+
+  ```
+  screener show SPY -n 10
+  ```
+
+  Open SPY's daily chart on TradingView or your broker and compare those ten
+  rows. Matching to the cent gets you through the gate.
 
 If it mentions volume being different, that is normal and not a failure.
 

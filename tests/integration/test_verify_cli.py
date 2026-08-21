@@ -89,8 +89,14 @@ MATCHING = [
 
 
 def use(monkeypatch, reference):
+    """Substitute the whole reference factory.
+
+    Patching a single source class would leave the other one in the chain
+    making real HTTP requests, so a test could pass by falling back to the
+    stub after a genuine network round trip.
+    """
     monkeypatch.setattr(
-        "screener.providers.reference.StooqReference", lambda *a, **k: reference
+        "screener.providers.reference.build_reference", lambda *a, **k: reference
     )
 
 
@@ -179,3 +185,10 @@ def test_volume_differences_alone_do_not_fail_the_gate(ingested, monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert "PASSED" in result.output
+
+
+def test_an_unknown_reference_name_is_a_clean_error(ingested):
+    cli, runner = ingested
+    result = runner.invoke(cli.app, ["verify", "--symbols", "SPY", "--reference", "nope"])
+    assert result.exit_code == 1
+    assert "unknown reference" in result.output

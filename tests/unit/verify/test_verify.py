@@ -12,9 +12,13 @@ import httpx
 import pytest
 
 from screener.providers.reference import (
+    ChainedReference,
+    ReferenceBar,
     ReferenceUnavailable,
     StooqReference,
+    build_reference,
     parse_stooq_csv,
+    parse_yahoo_chart,
 )
 from screener.validate.verify import compare_bars
 
@@ -237,3 +241,123 @@ def test_all_hosts_failing_raises_rather_than_returning_empty():
 
     with pytest.raises(ReferenceUnavailable):
         StooqReference(client=client).get_bars("SPY", date(2026, 8, 1), date(2026, 8, 20))
+
+
+# --------------------------------------------------------------------------
+# Yahoo reference and source chaining
+# --------------------------------------------------------------------------
+
+YAHOO_PAYLOAD = {
+    "chart": {
+        "result": [{
+            "timestamp": [1723728600, 1723815000],
+            "indicators": {"quote": [{
+                "open": [100.0, 101.0],
+                "high": [102.0, 103.0],
+                "low": [99.0, 100.0],
+                "close": [101.5, 102.5],
+                "volume": [1_000_000, 1_100_000],
+            }]},
+        }],
+        "error": None,
+    }
+}
+
+
+def test_yahoo_payload_parses_to_bars():
+    bars = parse_yahoo_chart(YAHOO_PAYLOAD)
+
+    assert [b.trade_date for b in bars] == [date(2024, 8, 15), date(2024, 8, 16)]
+    assert bars[0].open == 100.0
+    assert bars[1].close == 102.5
+
+
+def test_a_session_still_in_progress_is_dropped_rather_than_defaulted():
+    """Yahoo emits nulls for the running session. A partial bar compared
+    against a completed one would fail the gate for the wrong reason."""
+    payload = {
+        "chart": {"result": [{
+            "timestamp": [1723728600, 1723815000],
+            "indicators": {"quote": [{
+                "open": [100.0, None], "high": [102.0, None], "low": [99.0, None],
+                "close": [101.5, None], "volume": [1_000_000, None],
+            }]},
+        }], "error": None}
+    }
+    assert len(parse_yahoo_chart(payload)) == 1
+
+
+def test_empty_yahoo_payload_yields_no_bars():
+    assert parse_yahoo_chart({"chart": {"result": [], "error": None}}) == []
+    assert parse_yahoo_chart({}) == []
+
+
+class _StubSource:
+    def __init__(self, name, bars=None, raises=None):
+        self.name = name
+        self._bars = bars
+        self._raises = raises
+        self.closed = False
+
+    def get_bars(self, ticker, start, end):
+        if self._raises:
+            raise self._raises
+        return self._bars or []
+
+    def close(self):
+        self.closed = True
+
+
+ONE_BAR = [ReferenceBar(date(2026, 8, 20), 100.0, 101.0, 99.0, 100.5, 1e6)]
+
+
+def test_chain_falls_through_to_a_working_source():
+    dead = _StubSource("dead", raises=ReferenceUnavailable("blocked"))
+    alive = _StubSource("alive", ONE_BAR)
+
+    chain = ChainedReference([dead, alive])
+    assert chain.get_bars("SPY", date(2026, 8, 1), date(2026, 8, 20)) == ONE_BAR
+
+
+def test_chain_names_the_source_that_answered():
+    """'Verified against yahoo' and 'verified against stooq' are different
+    claims, and the output should not leave the reader guessing which."""
+    chain = ChainedReference([
+        _StubSource("dead", raises=ReferenceUnavailable("blocked")),
+        _StubSource("yahoo", ONE_BAR),
+    ])
+    chain.get_bars("SPY", date(2026, 8, 1), date(2026, 8, 20))
+
+    assert chain.last_source == "yahoo"
+
+
+def test_chain_raises_when_every_source_fails_and_reports_each_reason():
+    chain = ChainedReference([
+        _StubSource("stooq", raises=ReferenceUnavailable("html anti-bot page")),
+        _StubSource("yahoo", raises=ReferenceUnavailable("rate limited")),
+    ])
+
+    with pytest.raises(ReferenceUnavailable) as exc:
+        chain.get_bars("SPY", date(2026, 8, 1), date(2026, 8, 20))
+
+    assert "anti-bot" in str(exc.value)
+    assert "rate limited" in str(exc.value)
+
+
+def test_chain_closes_every_source():
+    sources = [_StubSource("a", ONE_BAR), _StubSource("b", ONE_BAR)]
+    ChainedReference(sources).close()
+    assert all(s.closed for s in sources)
+
+
+def test_build_reference_rejects_an_unknown_name():
+    with pytest.raises(ValueError, match="unknown reference"):
+        build_reference("bloomberg")
+
+
+def test_auto_chains_yahoo_before_stooq():
+    chain = build_reference("auto")
+    try:
+        assert [s.name for s in chain.sources] == ["yahoo", "stooq"]
+    finally:
+        chain.close()

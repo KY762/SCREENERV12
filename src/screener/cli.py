@@ -495,6 +495,10 @@ def diagnose_signals(
 def verify_cmd(
     symbols: str = typer.Option("SPY,QQQ,AAPL", "--symbols", "-s"),
     tail: int = typer.Option(10, "--tail", "-n", help="Most recent N bars to compare."),
+    reference: str = typer.Option(
+        "auto", "--reference",
+        help="auto (try each in turn), yahoo, or stooq.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """PHASE 1 GATE: cross-check stored bars against an independent source.
@@ -511,11 +515,15 @@ def verify_cmd(
     _configure_logging(verbose)
     import httpx
 
-    from .providers.reference import ReferenceUnavailable, StooqReference
+    from .providers.reference import ReferenceUnavailable, build_reference
     from .validate.verify import compare_bars
 
     tickers = [t.strip().upper() for t in symbols.split(",") if t.strip()]
-    ref = StooqReference()
+    try:
+        ref = build_reference(reference)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
     verified: list[str] = []     # actually compared, and matched
     failed: list[str] = []       # actually compared, and did not match
     skipped: list[str] = []      # never compared -- proves nothing either way
@@ -562,7 +570,8 @@ def verify_cmd(
             for b in ref_bars
         }
 
-        result = compare_bars(ticker, ours, theirs, reference_name=ref.name)
+        answered = getattr(ref, "last_source", None) or ref.name
+        result = compare_bars(ticker, ours, theirs, reference_name=answered)
         if result.dates_compared == 0:
             console.print(f"[yellow]{result.summary()}[/]")
             skipped.append(ticker)
@@ -573,7 +582,7 @@ def verify_cmd(
 
         if result.price_mismatches:
             table = Table(title=f"{ticker} price mismatches")
-            for col in ("Date", "Field", "Ours", ref.name.title(), "Diff"):
+            for col in ("Date", "Field", "Ours", answered.title(), "Diff"):
                 table.add_column(col)
             for m in result.price_mismatches[:15]:
                 table.add_row(
@@ -615,8 +624,10 @@ def verify_cmd(
             "[red bold]Phase 1 gate: INCONCLUSIVE[/] -- NOTHING WAS COMPARED.\n"
             "The reference source could not be reached for any symbol, so this "
             "run is not evidence that the stored prices are right.\n"
-            "Retry later, or verify by eye: [bold]screener show SPY -n 10[/] "
-            "against your broker or TradingView. Ten bars is enough."
+            "Try a single source to see why: [bold]screener verify --reference yahoo -v[/]\n"
+            "Or verify by eye: [bold]screener show SPY -n 10[/] against your broker "
+            "or TradingView. Ten bars checked by hand is real evidence; a green "
+            "line that compared nothing is not."
         )
         raise typer.Exit(code=1)
 
