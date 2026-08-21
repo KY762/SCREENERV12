@@ -43,12 +43,20 @@ class RunConfig:
     time_limit: int | None = None
     slippage_bps: float = 5.0
     trend_filter: bool = True
+    # Whether a stop is used at all. Not a tuning knob -- a structural question.
+    # If removing the stop turns a losing configuration profitable, the entry
+    # rule was never the problem and the exit design is what costs.
+    use_stop: bool = True
     displacement: float | None = None
     hold: int = 5
     top_pct: float = 0.10
     stop_atr: float = 2.0
     rs_lookback: int = 63
     sweep_lookback: int = 10
+
+    def __post_init__(self) -> None:
+        if not self.use_stop and self.time_limit == 0:
+            raise ValueError("a configuration with no stop needs a time limit")
 
     def resolved(self) -> RunConfig:
         """Apply per-hypothesis defaults from the specification.
@@ -144,7 +152,11 @@ def evaluate(
         candidates, bars_by_symbol,
         start=split.start, end=split.end,
         starting_equity=config.equity,
-        exit_rule=ExitRule(r_multiple=config.r_multiple, time_limit=config.time_limit),
+        exit_rule=ExitRule(
+            r_multiple=config.r_multiple,
+            time_limit=config.time_limit,
+            use_stop=config.use_stop,
+        ),
         costs=costs,
     )
 

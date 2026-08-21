@@ -397,3 +397,35 @@ def test_a_candidate_needs_exactly_one_kind_of_stop():
 def test_a_non_positive_stop_distance_is_rejected():
     with pytest.raises(ValueError, match="must be positive"):
         Candidate("AAA", "test", date(2020, 1, 1), date(2020, 1, 2), stop_distance=0.0)
+
+
+def test_removing_the_stop_lets_a_trade_survive_a_drawdown_it_would_have_lost_to():
+    """The diagnostic behind --no-stop: if a losing configuration turns
+    profitable without the stop, the entry rule was never the problem."""
+    d = days("2020-01-01", 6)
+    bars = {"AAA": frame([
+        (d[0], 100, 100, 100, 100),
+        (d[1], 100, 100, 100, 100),   # entry at 100, stop 95
+        (d[2], 99, 100, 90, 98),      # would stop out here
+        (d[3], 98, 105, 97, 104),
+        (d[4], 104, 112, 103, 111),
+        (d[5], 111, 112, 110, 111),
+    ])}
+    candidate = Candidate(
+        "AAA", "test", date.fromisoformat(d[0]), date.fromisoformat(d[1]),
+        stop_level=95.0,
+    )
+
+    stopped = run(
+        bars, [candidate],
+        exit_rule=ExitRule(r_multiple=None, time_limit=4, use_stop=True),
+    )
+    unstopped = run(
+        bars, [candidate],
+        exit_rule=ExitRule(r_multiple=None, time_limit=4, use_stop=False),
+    )
+
+    assert stopped.trades[0].exit_reason == "stop"
+    assert stopped.trades[0].pnl < 0
+    assert unstopped.trades[0].exit_reason == "time"
+    assert unstopped.trades[0].pnl > 0

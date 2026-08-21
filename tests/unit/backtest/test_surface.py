@@ -137,3 +137,9 @@ def test_the_number_of_configurations_tested_is_reported():
     cells = [cell(0.1, r=1.0), cell(0.1, r=1.5), cell(0.1, r=2.0)]
 
     assert analyse(cells, varied).total_cells == 3
+
+
+def test_a_configuration_with_no_stop_still_needs_an_exit():
+    """Removing the stop is a diagnostic, not a way to hold forever."""
+    with pytest.raises(ValueError, match="needs a time limit"):
+        RunConfig(hypothesis="h1", use_stop=False, time_limit=0)

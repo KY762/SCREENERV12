@@ -809,6 +809,11 @@ def backtest_run(
     ),
     slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
     trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    use_stop: bool = typer.Option(
+        True, "--stop/--no-stop",
+        help="--no-stop removes the stop entirely. A diagnostic, not a way to trade: "
+             "it isolates whether the entry rule or the exit design is losing money.",
+    ),
     displacement: float | None = typer.Option(None, "--displacement", help="H2 only, in ATR."),
     hold: int = typer.Option(
         5, "--hold",
@@ -875,6 +880,7 @@ def backtest_run(
         "time_limit": time_limit or None,
         "slippage_bps": slippage_bps,
         "trend_filter": trend_filter,
+        "use_stop": use_stop,
         "displacement": displacement,
         "hold": hold,
         "top_pct": top_pct,
@@ -943,6 +949,7 @@ def backtest_run(
             exit_rule=ExitRule(
                 r_multiple=r_multiple or None,
                 time_limit=time_limit or None,
+                use_stop=use_stop,
             ),
             costs=CostModel(slippage_bps=slippage_bps),
         )
@@ -977,6 +984,13 @@ def backtest_run(
         )
 
     console.print(f"\n[bold]{stats.describe()}[/]")
+    if stats.exits:
+        total = sum(stats.exits.values())
+        breakdown = ", ".join(
+            f"{reason} {count} ({count / total:.0%})"
+            for reason, count in sorted(stats.exits.items(), key=lambda kv: -kv[1])
+        )
+        console.print(f"[dim]exits: {breakdown}[/]")
     if result.rejected:
         top = sorted(result.rejected.items(), key=lambda kv: -kv[1])[:4]
         console.print(
@@ -1030,6 +1044,7 @@ def backtest_surface(
     equity: float = typer.Option(10_000.0, "--equity"),
     slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
     trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    use_stop: bool = typer.Option(True, "--stop/--no-stop"),
     random_iterations: int = typer.Option(0, "--random-iterations"),
     seed: int = typer.Option(0, "--seed"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -1118,7 +1133,7 @@ def backtest_surface(
             for params in grid:
                 config = RunConfig(
                     hypothesis=key, equity=equity, slippage_bps=slippage_bps,
-                    trend_filter=trend_filter, **params,
+                    trend_filter=trend_filter, use_stop=use_stop, **params,
                 )
                 entry_key = (
                     config.trend_filter, config.displacement, config.hold,
