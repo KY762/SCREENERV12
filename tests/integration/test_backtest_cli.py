@@ -173,3 +173,56 @@ def test_budget_command_is_clear_when_nothing_has_run(cli_env):
     result = runner.invoke(cli_env.app, ["backtest", "budget"])
     assert result.exit_code == 0
     assert "No research runs" in result.output
+
+
+def test_h1_defaults_to_its_specified_exits(loaded):
+    """docs/03 H1 exits on TIME or STOP and specifies no profit target.
+    Applying the shared 2R default would test something the spec does not
+    describe -- and the config is recorded, so the record would be wrong too."""
+    cli, runner = loaded
+    runner.invoke(
+        cli.app,
+        ["backtest", "run", "--hypothesis", "h1", "--split", "development",
+         "--random-iterations", "0", "--hold", "7"],
+    )
+
+    result = runner.invoke(cli.app, ["backtest", "budget", "--hypothesis", "h1"])
+    assert result.exit_code == 0, result.output
+
+    from sqlalchemy import select
+
+    from screener.db.models import ResearchRun
+    from screener.db.session import session_scope
+
+    with session_scope() as session:
+        run = session.scalars(
+            select(ResearchRun).where(ResearchRun.hypothesis == "h1")
+        ).first()
+
+    import json
+    config = json.loads(run.config_json)
+    assert config["r_multiple"] is None, "H1 must not carry a profit target by default"
+    assert config["time_limit"] == 7, "--hold must drive H1's time exit"
+
+
+def test_pattern_hypotheses_keep_their_r_target_default(loaded):
+    cli, runner = loaded
+    runner.invoke(
+        cli.app,
+        ["backtest", "run", "--hypothesis", "h2", "--split", "development",
+         "--random-iterations", "0"],
+    )
+
+    import json
+
+    from sqlalchemy import select
+
+    from screener.db.models import ResearchRun
+    from screener.db.session import session_scope
+
+    with session_scope() as session:
+        run = session.scalars(
+            select(ResearchRun).where(ResearchRun.hypothesis == "h2")
+        ).first()
+
+    assert json.loads(run.config_json)["r_multiple"] == 2.0

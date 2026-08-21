@@ -790,13 +790,25 @@ def backtest_run(
         None, "--universe", help="Restrict entries to this point-in-time universe."
     ),
     equity: float = typer.Option(10_000.0, "--equity"),
-    r_multiple: float | None = typer.Option(2.0, "--r-multiple", help="Target in R. 0 disables."),
-    time_limit: int | None = typer.Option(10, "--time-limit", help="Bars held. 0 disables."),
+    r_multiple: float | None = typer.Option(
+        None, "--r-multiple",
+        help="Profit target in R. Omit for the hypothesis default; 0 disables. "
+             "H1 has NO target in its specification -- it exits on time or stop.",
+    ),
+    time_limit: int | None = typer.Option(
+        None, "--time-limit",
+        help="Bars held before a time exit. Omit to use --hold. 0 disables.",
+    ),
     slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
     trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
     displacement: float | None = typer.Option(None, "--displacement", help="H2 only, in ATR."),
-    hold: int = typer.Option(5, "--hold", help="H1 rebalance interval in days."),
+    hold: int = typer.Option(
+        5, "--hold",
+        help="H1 hold horizon in days: the time exit, and the rebalance interval.",
+    ),
     top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
+    stop_atr: float = typer.Option(2.0, "--stop-atr", help="H1 stop, in ATR(14)."),
+    rs_lookback: int = typer.Option(63, "--rs-lookback", help="H1 relative-strength window."),
     random_iterations: int = typer.Option(1000, "--random-iterations"),
     seed: int = typer.Option(0, "--seed"),
     confirm: bool = typer.Option(
@@ -838,6 +850,15 @@ def backtest_run(
     chosen = get_split(split)
     console.print(f"[dim]{chosen.describe()}[/]")
 
+    # Defaults follow each hypothesis's own specification rather than one
+    # shared setting. H1 (docs/03) exits on TIME or STOP and has no profit
+    # target; H2/H3/H4 surface over R targets. Applying a 2R target to H1
+    # tests something the specification does not describe.
+    if time_limit is None:
+        time_limit = hold if key == "h1" else 10
+    if r_multiple is None:
+        r_multiple = None if key == "h1" else 2.0
+
     config = {
         "hypothesis": key,
         "symbols": symbols or "all",
@@ -849,6 +870,8 @@ def backtest_run(
         "displacement": displacement,
         "hold": hold,
         "top_pct": top_pct,
+        "stop_atr": stop_atr if key == "h1" else None,
+        "rs_lookback": rs_lookback if key == "h1" else None,
     }
 
     with session_scope() as session:
@@ -894,6 +917,7 @@ def backtest_run(
             candidates = relative_strength_candidates(
                 bars_by_symbol, trend=trend, rebalance_days=hold,
                 top_pct=top_pct, universe=in_universe,
+                stop_atr=stop_atr, lookback=rs_lookback,
             )
         else:
             extra = {"displacement_min": displacement} if key == "h2" else {}
