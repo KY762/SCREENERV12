@@ -119,3 +119,46 @@ def test_show_unknown_symbol_is_a_clean_error(cli_env, runner):
     result = runner.invoke(cli.app, ["show", "NOPE"])
     assert result.exit_code == 1
     assert "not found" in result.output
+
+
+def test_config_reports_a_configured_provider(cli_env, runner):
+    """'Is my key being read?' must be answerable without guessing."""
+    result = runner.invoke(cli_env.app, ["config"])
+
+    assert result.exit_code == 0, result.output
+    assert "ALPACA" in result.output
+    assert "TIINGO" in result.output
+
+
+def test_config_names_which_provider_ingest_will_use(cli_env, runner, monkeypatch):
+    """A key that is present but unread looks identical to one never pasted."""
+    monkeypatch.setenv("TIINGO_API_KEY", "test-token")
+    from screener import config
+    config.get_settings.cache_clear()
+
+    result = runner.invoke(cli_env.app, ["config"])
+
+    assert "will use Tiingo" in result.output
+
+
+def test_config_warns_when_only_alpaca_is_available(cli_env, runner, monkeypatch):
+    monkeypatch.delenv("TIINGO_API_KEY", raising=False)
+    from screener import config
+    config.get_settings.cache_clear()
+
+    result = runner.invoke(cli_env.app, ["config"])
+
+    assert "will use Alpaca" in result.output
+    assert "2020-07-27" in result.output, "the measured limit should be stated, not implied"
+
+
+def test_config_never_prints_a_secret(cli_env, runner, monkeypatch):
+    monkeypatch.setenv("TIINGO_API_KEY", "super-secret-token-value")
+    monkeypatch.setenv("ALPACA_API_KEY_ID", "another-secret-value")
+    from screener import config
+    config.get_settings.cache_clear()
+
+    result = runner.invoke(cli_env.app, ["config"])
+
+    assert "super-secret-token-value" not in result.output
+    assert "another-secret-value" not in result.output

@@ -519,6 +519,63 @@ def diagnose_signals(
         console.print(f"  [{colour}]{result.summary()}[/]")
 
 
+@app.command("config")
+def config_cmd() -> None:
+    """Show what is configured, without printing any secret.
+
+    Exists because "is my key being read?" is otherwise unanswerable without
+    guessing, and a key that is present but unread looks identical to a key
+    that was never pasted.
+    """
+    from .config import PROJECT_ROOT
+
+    settings = get_settings()
+    env_file = PROJECT_ROOT / ".env"
+
+    table = Table(title="Configuration")
+    for col in ("Setting", "Value", "Status"):
+        table.add_column(col)
+
+    if env_file.exists():
+        table.add_row(".env file", str(env_file), "[green]found[/]")
+    else:
+        table.add_row(
+            ".env file", str(env_file),
+            "[red]MISSING[/] -- copy .env.example to .env",
+        )
+
+    url = settings.database_url
+    table.add_row("database", url.rsplit("@", 1)[-1] if "@" in url else url, "")
+
+    alpaca = settings.has_alpaca_credentials
+    table.add_row(
+        "ALPACA_API_KEY_ID / SECRET",
+        "set" if alpaca else "not set",
+        "[green]ready[/]" if alpaca else "[yellow]execution unavailable[/]",
+    )
+
+    tiingo = settings.has_tiingo_credentials
+    table.add_row(
+        "TIINGO_API_KEY",
+        "set" if tiingo else "not set",
+        "[green]ready[/]" if tiingo else "[yellow]deep history unavailable[/]",
+    )
+
+    console.print(table)
+
+    if tiingo:
+        console.print(
+            "[green]'screener ingest' will use Tiingo[/] -- history back to the 1990s."
+        )
+    elif alpaca:
+        console.print(
+            "[yellow]'screener ingest' will use Alpaca[/] -- its free tier only "
+            "serves the most recent years (measured: first bar 2020-07-27).\n"
+            "Add TIINGO_API_KEY to .env for full history. Free key at tiingo.com."
+        )
+    else:
+        console.print("[red]No market-data provider is configured.[/] See .env.example.")
+
 @app.command("verify")
 def verify_cmd(
     symbols: str = typer.Option("SPY,QQQ,AAPL", "--symbols", "-s"),
