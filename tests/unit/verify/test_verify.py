@@ -41,23 +41,95 @@ def test_identical_bars_pass():
     assert "PASS" in result.summary()
 
 
-def test_sub_cent_rounding_is_tolerated():
-    """0.004 is rounding between two feeds, not a disagreement about price."""
-    theirs = _bars()
-    theirs[D1] = {**theirs[D1], "close": 103.004}
-    assert compare_bars("SPY", _bars(), theirs).passed
+def test_venue_level_differences_are_tolerated():
+    """An IEX-only feed and the consolidated tape see DIFFERENT TRADES, so a
+    few cents on a $100 stock is two correct measurements of one session --
+    not a disagreement about price. Failing here fails the gate on good data.
 
-
-def test_a_real_price_difference_fails():
-    """One cent is a real difference. Everything downstream is built on price."""
+    Measured live on AAPL at ~$310: differences of 2 to 9 cents, either sign,
+    across all four fields. That is 1-3 bps.
+    """
     theirs = _bars()
-    theirs[D1] = {**theirs[D1], "close": 103.02}
+    theirs[D1] = {**theirs[D1], "close": 103.02, "open": 99.98, "high": 105.03}
     result = compare_bars("SPY", _bars(), theirs)
+
+    assert result.passed
+    assert result.max_abs_deviation_bps < 25.0
+
+
+def test_a_material_price_difference_fails():
+    """Beyond the tolerance is a real disagreement, and everything downstream
+    is built on price."""
+    theirs = _bars()
+    theirs[D1] = {**theirs[D1], "close": 104.5}      # ~145 bps
+    result = compare_bars("SPY", _bars(), theirs)
+
     assert not result.passed
     assert len(result.price_mismatches) == 1
     m = result.price_mismatches[0]
     assert (m.field, m.trade_date) == ("close", D1)
-    assert m.difference == pytest.approx(-0.02)
+    assert m.bps_difference == pytest.approx(-143.5, abs=1.0)
+
+
+def test_the_tolerance_is_relative_not_absolute():
+    """Two cents is noise at $103 and a real error at $2. A fixed cent
+    threshold gets one of those wrong."""
+    penny_ours = {D1: {"open": 2.00, "high": 2.10, "low": 1.95, "close": 2.00}}
+    penny_theirs = {D1: {"open": 2.00, "high": 2.10, "low": 1.95, "close": 2.05}}
+
+    assert not compare_bars("PENNY", penny_ours, penny_theirs).passed
+
+
+def test_a_missed_split_fails_loudly():
+    """The error class that most needs catching: our price is double theirs."""
+    theirs = {
+        d: {k: (v / 2 if k != "volume" else v) for k, v in bar.items()}
+        for d, bar in _bars().items()
+    }
+    result = compare_bars("SPY", _bars(), theirs)
+
+    assert not result.passed
+    assert result.max_abs_deviation_bps > 1000
+
+
+def test_a_small_but_one_directional_offset_fails_as_systematic():
+    """Venue noise is symmetric -- sometimes above, sometimes below. A small
+    offset in a CONSISTENT direction is an adjustment or alignment error, and
+    it can hide under a plain magnitude tolerance."""
+    theirs = {
+        d: {k: (v * 0.9985 if k != "volume" else v) for k, v in bar.items()}
+        for d, bar in _bars().items()
+    }
+    result = compare_bars("SPY", _bars(), theirs)
+
+    assert result.price_mismatches == [], "each difference is inside the tolerance"
+    assert result.systematic_bias
+    assert not result.passed
+    assert "systematic bias" in result.summary()
+
+
+def test_symmetric_noise_of_the_same_size_is_not_flagged_as_systematic():
+    """The control for the test above: same magnitude, mixed signs, passes."""
+    ours = _bars()
+    theirs = _bars()
+    theirs[D1] = {**theirs[D1], "open": 100.1, "high": 104.9, "low": 98.1, "close": 102.9}
+    theirs[D2] = {**theirs[D2], "open": 102.9, "high": 108.1, "low": 101.9, "close": 107.1}
+    result = compare_bars("SPY", ours, theirs)
+
+    assert not result.systematic_bias
+    assert result.sign_agreement < 0.9
+    assert result.passed
+
+
+def test_tolerance_is_configurable_for_a_stricter_check():
+    theirs = _bars()
+    theirs[D1] = {**theirs[D1], "close": 103.02}
+
+    assert compare_bars("SPY", _bars(), theirs).passed
+    strict = compare_bars(
+        "SPY", _bars(), theirs, price_tolerance_bps=1.0, price_tolerance_abs=0.0
+    )
+    assert not strict.passed
 
 
 def test_volume_difference_does_not_fail_the_gate():

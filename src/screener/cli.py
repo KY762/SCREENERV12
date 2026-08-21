@@ -499,6 +499,10 @@ def verify_cmd(
         "auto", "--reference",
         help="auto (try each in turn), yahoo, or stooq.",
     ),
+    tolerance_bps: float = typer.Option(
+        25.0, "--tolerance-bps",
+        help="Price agreement tolerance in basis points. 25 = 0.25%.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """PHASE 1 GATE: cross-check stored bars against an independent source.
@@ -509,8 +513,16 @@ def verify_cmd(
 
     Compares the MOST RECENT bars deliberately: over a short window a split is
     very unlikely, so a difference in adjustment policy cannot explain a
-    mismatch. Prices must agree to the cent. Volume is expected to differ --
-    the free Alpaca feed is IEX-only, not the consolidated tape.
+    mismatch.
+
+    Prices are checked for MATERIAL agreement, not equality. The free Alpaca
+    feed is IEX-only -- one venue, not the consolidated tape the reference
+    reports -- so the two see different trades and a few basis points of
+    disagreement is two correct measurements of the same session. Demanding an
+    exact match would fail the gate on correct data. What the gate catches is
+    the class of errors that would poison everything downstream: wrong symbol,
+    misaligned dates, a missed split, stale bars. All are orders of magnitude
+    larger than venue noise.
     """
     _configure_logging(verbose)
     import httpx
@@ -571,7 +583,10 @@ def verify_cmd(
         }
 
         answered = getattr(ref, "last_source", None) or ref.name
-        result = compare_bars(ticker, ours, theirs, reference_name=answered)
+        result = compare_bars(
+            ticker, ours, theirs,
+            reference_name=answered, price_tolerance_bps=tolerance_bps,
+        )
         if result.dates_compared == 0:
             console.print(f"[yellow]{result.summary()}[/]")
             skipped.append(ticker)
@@ -582,12 +597,13 @@ def verify_cmd(
 
         if result.price_mismatches:
             table = Table(title=f"{ticker} price mismatches")
-            for col in ("Date", "Field", "Ours", answered.title(), "Diff"):
+            for col in ("Date", "Field", "Ours", answered.title(), "Diff", "bps"):
                 table.add_column(col)
             for m in result.price_mismatches[:15]:
                 table.add_row(
                     str(m.trade_date), m.field, f"{m.ours:.4f}",
                     f"{m.theirs:.4f}", f"{m.difference:+.4f}",
+                    f"{m.bps_difference:+.1f}",
                 )
             console.print(table)
 
@@ -595,6 +611,13 @@ def verify_cmd(
             console.print(
                 "  [red]sessions the reference has and we do not:[/] "
                 + ", ".join(str(d) for d in result.missing_from_ours[:10])
+            )
+
+        if result.systematic_bias:
+            console.print(
+                "  [red]differences are one-directional, not symmetric noise[/] -- "
+                "that is the signature of an adjustment or date-alignment error, "
+                "not of two venues seeing different trades."
             )
 
         if result.volume_differences:

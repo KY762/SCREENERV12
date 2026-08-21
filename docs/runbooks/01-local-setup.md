@@ -102,7 +102,13 @@ the code is internally consistent; only this proves the *data* is right.
 
 **Expect an exact match on OHLC.** These are raw, unadjusted bars, so:
 
-- **Prices must match to the cent** against a source showing *unadjusted* data.
+- **Prices must agree materially** -- within 25 bps by default -- against a
+  source showing *unadjusted* data. Exact equality is not achievable: the free
+  Alpaca feed is IEX-only, one venue rather than the consolidated tape, so the
+  two sources see different trades. Observed on liquid names: 1-3 bps, either
+  sign. The gate is sized to catch wrong symbols, misaligned dates, missed
+  splits and stale bars, all of which are far larger. Tighten it with
+  `--tolerance-bps` if you ever move to a consolidated feed.
 - If your reference shows *adjusted* prices, older bars will differ after any split
   or dividend. That is correct behaviour, not a bug -- see the adjustment policy in
   `providers/base.py`.

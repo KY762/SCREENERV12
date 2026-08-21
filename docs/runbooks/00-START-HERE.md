@@ -152,7 +152,10 @@ different data source.
   ```
 
   Open SPY's daily chart on TradingView or your broker and compare those ten
-  rows. Matching to the cent gets you through the gate.
+  rows. They will not match to the penny and are not supposed to -- the free
+  Alpaca feed sees one exchange, your broker sees all of them. What you are
+  checking is that the numbers are the SAME PRICES, within a few cents on a
+  $300 stock. A stock at the wrong price, or a day shifted, is obvious.
 
 If it mentions volume being different, that is normal and not a failure.
 
