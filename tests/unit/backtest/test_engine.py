@@ -323,3 +323,77 @@ def test_no_duplicate_position_in_the_same_symbol():
 def test_exit_rule_that_never_exits_is_rejected():
     with pytest.raises(ValueError, match="never exits"):
         ExitRule(r_multiple=None, time_limit=None, use_stop=False)
+
+
+# --------------------------------------------------------------------------
+# Stop semantics -- found by a live run, not by inspection
+# --------------------------------------------------------------------------
+
+def test_entry_relative_stop_is_measured_from_the_fill_not_the_prior_close():
+    """docs/03 H1 says "stop at entry - k x ATR". Anchoring to the last close
+    instead lets the overnight gap decide how much is risked."""
+    d = days("2020-01-01", 4)
+    bars = {"AAA": frame([
+        (d[0], 100, 100, 100, 100),
+        (d[1], 90, 91, 89, 90),      # gaps down 10 before we fill
+        (d[2], 90, 91, 89, 90),
+        (d[3], 90, 91, 89, 90),
+    ])}
+    candidate = Candidate(
+        "AAA", "test", date.fromisoformat(d[0]), date.fromisoformat(d[1]),
+        stop_distance=5.0, atr=2.0,
+    )
+
+    result = run(bars, [candidate])
+
+    trade = result.trades[0]
+    assert trade.entry_price == Decimal("90.00")
+    assert trade.stop == Decimal("85.00"), "5 below the FILL, not 5 below yesterday"
+
+
+def test_a_gap_down_onto_an_absolute_stop_is_refused_not_traded_at_absurd_risk():
+    """The live H1 failure. Filling just above a fixed stop leaves a tiny risk
+    per share, and an ordinary day's move then reads as a loss of many R --
+    the statistic breaks before the trade does."""
+    d = days("2020-01-01", 4)
+    bars = {"AAA": frame([
+        (d[0], 100, 100, 100, 100),
+        (d[1], 95.1, 96, 94, 95),    # opens a dime above the 95 stop
+        (d[2], 95, 96, 94, 95),
+        (d[3], 95, 96, 94, 95),
+    ])}
+    candidate = Candidate(
+        "AAA", "test", date.fromisoformat(d[0]), date.fromisoformat(d[1]),
+        stop_level=95.0, atr=2.0,
+    )
+
+    result = run(bars, [candidate])
+
+    assert result.trades == []
+    assert result.rejected.get("stop too close after the gap") == 1
+
+
+def test_a_normal_distance_to_an_absolute_stop_still_trades():
+    """The control for the test above: the guard must not reject ordinary
+    setups, only degenerate ones."""
+    d = days("2020-01-01", 4)
+    bars = {"AAA": frame([(x, 100, 101, 99, 100) for x in d])}
+    candidate = Candidate(
+        "AAA", "test", date.fromisoformat(d[0]), date.fromisoformat(d[1]),
+        stop_level=95.0, atr=2.0,
+    )
+
+    assert len(run(bars, [candidate]).trades) == 1
+
+
+def test_a_candidate_needs_exactly_one_kind_of_stop():
+    args = ("AAA", "test", date(2020, 1, 1), date(2020, 1, 2))
+    with pytest.raises(ValueError, match="exactly one"):
+        Candidate(*args)
+    with pytest.raises(ValueError, match="exactly one"):
+        Candidate(*args, stop_level=95.0, stop_distance=5.0)
+
+
+def test_a_non_positive_stop_distance_is_rejected():
+    with pytest.raises(ValueError, match="must be positive"):
+        Candidate("AAA", "test", date(2020, 1, 1), date(2020, 1, 2), stop_distance=0.0)

@@ -51,15 +51,47 @@ def _money(value: float | int | str | Decimal) -> Decimal:
 
 @dataclass(frozen=True)
 class Candidate:
-    """A setup that has triggered and is ready to execute on ``entry_date``."""
+    """A setup that has triggered and is ready to execute on ``entry_date``.
+
+    A stop is expressed one of two ways, and the distinction is not cosmetic:
+
+    ``stop_level``     an absolute price. Correct where the stop IS the setup's
+                       geometry -- the far edge of a gap, the low of a sweep.
+                       Those levels mean something specific; moving them to
+                       follow the fill would discard the reason for the trade.
+
+    ``stop_distance``  a distance below the fill. Correct where the spec says
+                       "entry minus k x ATR" (H1), because then the RISK is the
+                       constant and the level follows from wherever we filled.
+
+    Using an absolute level where the spec calls for a distance produces a risk
+    per share that varies with the overnight gap -- and when a stock opens just
+    above its level, a tiny risk per share turns an ordinary day's move into a
+    loss of many R.
+    """
 
     ticker: str
     setup: str
     signal_date: date
     entry_date: date
-    stop_level: float
+    stop_level: float | None = None
+    stop_distance: float | None = None
+    atr: float | None = None   # for the minimum-stop-distance guard
     rank: float = 0.0          # higher wins when slots are scarce
     sector: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.stop_level is None) == (self.stop_distance is None):
+            raise ValueError(
+                "a candidate needs exactly one of stop_level or stop_distance"
+            )
+        if self.stop_distance is not None and self.stop_distance <= 0:
+            raise ValueError("stop_distance must be positive for a long position")
+
+    def stop_for(self, fill: Decimal) -> Decimal:
+        if self.stop_distance is not None:
+            return _money(fill - Decimal(str(self.stop_distance)))
+        return _money(self.stop_level)
 
 
 @dataclass(frozen=True)
@@ -160,6 +192,7 @@ def run_backtest(
     exit_rule: ExitRule | None = None,
     limits: RiskLimits | None = None,
     costs: CostModel | None = None,
+    min_stop_distance_atr: float = 0.25,
 ) -> BacktestResult:
     """Simulate ``candidates`` over the window and return trades plus equity.
 
@@ -262,7 +295,19 @@ def run_backtest(
                 continue
 
             fill = costs.buy_fill(Decimal(str(row["open"])))
-            stop = _money(candidate.stop_level)
+            stop = candidate.stop_for(fill)
+
+            # A stop that sits just under the fill makes the R denominator tiny,
+            # and an ordinary day's move then reads as a loss of many R. The
+            # statistic stops meaning anything before the trade does, so the
+            # trade is refused rather than allowed to distort the record.
+            if candidate.atr and min_stop_distance_atr > 0:
+                floor = Decimal(str(candidate.atr * min_stop_distance_atr))
+                if fill - stop < floor:
+                    rejected["stop too close after the gap"] = (
+                        rejected.get("stop too close after the gap", 0) + 1
+                    )
+                    continue
             open_risk = sum(
                 (p.trade.risk_dollars for p in open_positions.values()), Decimal("0")
             )

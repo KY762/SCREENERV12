@@ -110,3 +110,40 @@ def test_missing_random_benchmark_counts_as_a_failure_not_a_skip():
     vs_random = next(r for r in results if r.name == "vs_random")
     assert not vs_random.passed
     assert vs_random.observed == "not run"
+
+
+# --------------------------------------------------------------------------
+# Regime units -- the live run printed "worst -19725.7%"
+# --------------------------------------------------------------------------
+
+def test_regime_return_is_a_return_not_a_sum_of_r_multiples():
+    """A bucket holding a sum of R was compared against a -15% floor and
+    formatted as a percentage, so -197 R displayed as -19725.7%. The unit has
+    to match the threshold it is tested against."""
+    # Two trades, one share each, -100 dollars total, on 10,000 of equity.
+    trades = [trade(-50), trade(-50)]
+
+    buckets = by_regime(trades, starting_equity=10_000)
+
+    assert buckets["bull_2013_2014"].total_return_pct == pytest.approx(-0.01)
+
+
+def test_regime_return_scales_with_account_size():
+    trades = [trade(-50), trade(-50)]
+
+    small = by_regime(trades, starting_equity=1_000)["bull_2013_2014"]
+    large = by_regime(trades, starting_equity=100_000)["bull_2013_2014"]
+
+    assert small.total_return_pct == pytest.approx(-0.10)
+    assert large.total_return_pct == pytest.approx(-0.001)
+
+
+def test_robustness_criterion_reads_the_corrected_unit():
+    """A -1% regime must not fail a -15% floor."""
+    trades = [trade(-50), trade(-50)]
+    stats = summarize(result_of(trades))
+
+    results = check_criteria(stats, by_regime(trades, 10_000))
+    robustness = next(r for r in results if r.name == "regime_robustness")
+
+    assert "-1.0%" in robustness.observed

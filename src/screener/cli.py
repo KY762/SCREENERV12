@@ -916,7 +916,7 @@ def backtest_run(
         )
 
         stats = summarize(result)
-        regimes = by_regime(result.trades)
+        regimes = by_regime(result.trades, equity)
 
         percentile = None
         holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
@@ -962,12 +962,12 @@ def backtest_run(
 
     if regimes:
         table = Table(title="By regime")
-        for col in ("Regime", "Trades", "Expectancy", "Total R"):
+        for col in ("Regime", "Trades", "Expectancy", "Return"):
             table.add_column(col, justify="right" if col != "Regime" else "left")
         for name, bucket in regimes.items():
             table.add_row(
                 name, str(bucket.trades),
-                f"{bucket.expectancy_r:+.3f}R", f"{bucket.total_return_pct:+.2f}",
+                f"{bucket.expectancy_r:+.3f}R", f"{bucket.total_return_pct:+.1%}",
             )
         console.print(table)
 

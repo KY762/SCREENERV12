@@ -86,39 +86,54 @@ def summarize(result: BacktestResult) -> Stats:
     )
 
 
-def by_regime(trades: list[Trade]) -> dict[str, Stats | None]:
-    """Per-regime totals in R. Buckets with no trades report None, not zero --
-    'no evidence' and 'no edge' are different findings."""
-    buckets: dict[str, list[float]] = {}
+def by_regime(
+    trades: list[Trade], starting_equity: float | Decimal = 10_000
+) -> dict[str, Stats]:
+    """Per-regime statistics. Buckets with no trades are absent, not zero --
+    'no evidence' and 'no edge' are different findings.
+
+    ``total_return_pct`` here is a genuine RETURN: the bucket's P&L divided by
+    starting equity. It previously held a sum of R multiples, which the
+    robustness criterion then compared against a -15% floor and printed as a
+    percentage -- so a bucket at -197 R displayed as "-19725.7%". The units have
+    to match the threshold they are tested against.
+    """
+    equity = float(starting_equity) or 1.0
+    buckets: dict[str, list[Trade]] = {}
     for trade in trades:
         if trade.exit_date is None or trade.r_multiple is None:
             continue
         name = regime_for(trade.entry_date)
         if name is None:
             continue
-        buckets.setdefault(name, []).append(trade.r_multiple)
+        buckets.setdefault(name, []).append(trade)
     return {
-        name: _r_only_stats(values) for name, values in sorted(buckets.items())
+        name: _bucket_stats(bucket, equity) for name, bucket in sorted(buckets.items())
     }
 
 
-def _r_only_stats(r_values: list[float]) -> Stats:
-    wins = [r for r in r_values if r > 0]
-    losses = [r for r in r_values if r < 0]
+def _bucket_stats(bucket: list[Trade], equity: float) -> Stats:
+    r_values = [t.r_multiple for t in bucket if t.r_multiple is not None]
+    pnls = [float(t.pnl) for t in bucket]
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p < 0]
     gross_loss = -sum(losses)
     return Stats(
-        trades=len(r_values),
+        trades=len(bucket),
         wins=len(wins),
         losses=len(losses),
-        win_rate=len(wins) / len(r_values) if r_values else 0.0,
+        win_rate=len(wins) / len(bucket) if bucket else 0.0,
         expectancy_r=sum(r_values) / len(r_values) if r_values else 0.0,
-        expectancy_dollars=0.0,
+        expectancy_dollars=sum(pnls) / len(pnls) if pnls else 0.0,
         profit_factor=(sum(wins) / gross_loss) if gross_loss > 0 else float("inf"),
         gross_profit=sum(wins),
         gross_loss=gross_loss,
         max_drawdown_pct=0.0,
-        total_return_pct=sum(r_values),
-        avg_bars_held=0.0,
+        # P&L as a fraction of starting equity -- the unit the -15% floor is in.
+        total_return_pct=sum(pnls) / equity,
+        avg_bars_held=(
+            sum(t.bars_held for t in bucket) / len(bucket) if bucket else 0.0
+        ),
         exits={},
     )
 
@@ -144,7 +159,7 @@ class CriterionResult:
 
 def check_criteria(
     stats: Stats,
-    regimes: dict[str, Stats | None],
+    regimes: dict[str, Stats],
     random_percentile: float | None = None,
 ) -> list[CriterionResult]:
     """Apply the pre-registered criteria. Returns one row per criterion.
@@ -153,13 +168,8 @@ def check_criteria(
     on the first failure -- 'failed on trade count' and 'failed on everything'
     call for different revisions.
     """
-    positive_buckets = sum(
-        1 for s in regimes.values() if s is not None and s.expectancy_r > 0
-    )
-    worst = min(
-        (s.total_return_pct for s in regimes.values() if s is not None),
-        default=0.0,
-    )
+    positive_buckets = sum(1 for s in regimes.values() if s.expectancy_r > 0)
+    worst = min((s.total_return_pct for s in regimes.values()), default=0.0)
 
     results = [
         CriterionResult(

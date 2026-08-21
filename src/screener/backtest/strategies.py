@@ -62,6 +62,7 @@ def _events_to_candidates(
     events,
     universe: UniverseMask,
     sector: str | None,
+    atr_series: pd.Series | None = None,
 ) -> list[Candidate]:
     out: list[Candidate] = []
     index = bars.index
@@ -72,13 +73,20 @@ def _events_to_candidates(
         entry_day = index[event.entry_idx].date()
         if not universe(ticker, entry_day):
             continue
+        atr_value = None
+        if atr_series is not None:
+            raw = atr_series.iloc[event.trigger_idx]
+            atr_value = None if pd.isna(raw) else float(raw)
         out.append(
             Candidate(
                 ticker=ticker,
                 setup=event.setup,
                 signal_date=signal_day,
                 entry_date=entry_day,
+                # The stop is the setup's geometry -- the gap edge, the sweep
+                # low -- so it stays an absolute level.
                 stop_level=event.stop_level,
+                atr=atr_value,
                 sector=sector,
             )
         )
@@ -122,7 +130,9 @@ def pattern_candidates(
             continue
         events = detector(bars, trend_mask=trend.mask(bars), **kwargs)
         candidates.extend(
-            _events_to_candidates(ticker, bars, events, universe, sectors.get(ticker))
+            _events_to_candidates(
+                ticker, bars, events, universe, sectors.get(ticker), atr(bars, 14)
+            )
         )
     return sorted(candidates, key=lambda c: (c.entry_date, c.ticker))
 
@@ -205,17 +215,19 @@ def relative_strength_candidates(
             entry_day = bars.index[position + 1].date()
             if not universe(ticker, entry_day):
                 continue
-            # Stop is set from the entry bar's OPEN, which is not yet known at
-            # ranking time -- so it is expressed relative to the last close and
-            # the engine treats it as an absolute level.
-            reference_close = float(bars["close"].loc[day])
+            # docs/03 H1: "Stop at entry - k x ATR(14)". A DISTANCE, not a
+            # level. Anchoring it to the last known close instead would let the
+            # overnight gap decide how much is risked -- and on a gap down to
+            # just above the level, risk per share collapses and an ordinary
+            # day's move reads as a loss of many R.
             candidates.append(
                 Candidate(
                     ticker=ticker,
                     setup="rs_continuation",
                     signal_date=day.date(),
                     entry_date=entry_day,
-                    stop_level=reference_close - stop_atr * float(atr_value),
+                    stop_distance=stop_atr * float(atr_value),
+                    atr=float(atr_value),
                     rank=rank_value,
                     sector=sectors.get(ticker),
                 )
