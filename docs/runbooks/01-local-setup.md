@@ -307,3 +307,47 @@ screener backtest run --hypothesis h2 --split test --confirm-spend ...
 Always run H1 too. It is the control, and if the pattern hypotheses cannot beat
 plain relative strength, their extra complexity earned nothing -- which is a
 real finding, not a failure of the exercise.
+
+
+---
+
+## 11. The development battery (one command)
+
+Running experiments one at a time invites stopping when a result looks good.
+The battery is declared in full, in `src/screener/research/battery.py`, before
+any of it runs -- twelve experiments, 118 configurations, each with the question
+it answers written beside it:
+
+```bash
+screener research explore
+```
+
+It writes `research/<date>-development-battery.md` for reading and a matching
+`.json` so the numbers can be re-read exactly rather than re-typed from a
+screenshot. Both are meant to be committed:
+
+```bash
+git add research
+git commit -m "battery results"
+git push
+```
+
+**Development split only.** A 118-configuration sweep on validation would spend
+a three-configuration budget in a single command, which is the failure mode the
+budget exists to prevent.
+
+### What each experiment is for
+
+| Experiment | Question |
+| --- | --- |
+| `*_exits` | Is there ANY target and holding period where this is profitable? |
+| `*_no_stop` | Same entries, no stop. Entry rule or exit design? |
+| `h1_selection` | Does the momentum lookback or selection cutoff matter? |
+| `h1_trend_filter` | Does requiring an uptrend help, or just trade less? |
+| `h2_displacement` | Does the displacement filter contribute anything? |
+| `h3_lookback` | Which liquidity reference is being swept? |
+
+The `_no_stop` experiments matter most when everything is losing. If removing
+the stop turns a configuration profitable, the entry rule was never the problem
+and the finding is about exit design -- a different result with different
+consequences.

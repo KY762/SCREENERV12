@@ -527,6 +527,135 @@ def diagnose_signals(
         console.print(f"  [{colour}]{result.summary()}[/]")
 
 
+research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
+app.add_typer(research_app, name="research")
+
+
+@research_app.command("explore")
+def research_explore(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    universe_name: str | None = typer.Option(None, "--universe"),
+    split: str = typer.Option("development", "--split"),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    random_iterations: int = typer.Option(
+        300, "--random-iterations",
+        help="Per configuration. 0 skips the random benchmark entirely.",
+    ),
+    seed: int = typer.Option(0, "--seed"),
+    out: str = typer.Option("research", "--out", help="Directory for the report."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run the whole development battery and write a report.
+
+    Twelve experiments, 118 configurations, declared in
+    src/screener/research/battery.py BEFORE any of them ran -- each with the
+    question it answers written beside it. A battery declared up front and run
+    to completion cannot be quietly stopped once a result looks good.
+
+    Writes Markdown and JSON to --out. Both are meant to be committed: the
+    JSON so the numbers can be re-read exactly rather than re-typed from a
+    screenshot.
+
+    Development split only. This is exploration, and exploration on a split
+    that carries evidential weight spends a budget nobody decided to spend.
+    """
+    _configure_logging(verbose)
+    from pathlib import Path
+
+    from .backtest.runner import load_symbol_bars, universe_filter
+    from .backtest.splits import get_split
+    from .research.battery import BATTERY, battery_size, run_experiment
+    from .research.report import write_report
+
+    chosen = get_split(split)
+    if chosen.carries_evidence:
+        console.print(
+            f"[red]The battery is development-split only.[/] The {chosen.name} split "
+            f"allows {chosen.config_budget} configuration(s) per hypothesis "
+            f"(docs/03 §0.8); this battery is {battery_size()} configurations."
+        )
+        raise typer.Exit(code=1)
+
+    console.print(f"[dim]{chosen.describe()}[/]")
+
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, symbols)
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+        universe = universe_filter(session, universe_name)
+
+        console.print(
+            f"[bold]{len(BATTERY)}[/] experiments, [bold]{battery_size()}[/] "
+            f"configurations, {len(bars_by_symbol)} symbols."
+        )
+
+        from .backtest import budget
+
+        results = []
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            BarColumn(), TaskProgressColumn(), console=console,
+        ) as progress:
+            task = progress.add_task("running battery", total=battery_size())
+            for experiment in BATTERY:
+                progress.update(task, description=f"[cyan]{experiment.name}[/]")
+                result = run_experiment(
+                    experiment, bars_by_symbol, chosen,
+                    equity=equity, slippage_bps=slippage_bps, universe=universe,
+                    random_iterations=random_iterations, seed=seed,
+                    on_cell=lambda: progress.advance(task),
+                )
+                for cell in result.cells:
+                    budget.record(
+                        session, hypothesis=experiment.hypothesis, split=chosen,
+                        config=cell.outcome.config.as_dict(),
+                        trades=cell.outcome.stats.trades,
+                        expectancy_r=cell.outcome.stats.expectancy_r,
+                        profit_factor=cell.outcome.stats.profit_factor,
+                        max_drawdown_pct=cell.outcome.stats.max_drawdown_pct,
+                        total_return_pct=cell.outcome.stats.total_return_pct,
+                        random_percentile=cell.outcome.random_percentile,
+                        criteria_passed=cell.outcome.passed,
+                        notes=f"battery:{experiment.name}",
+                    )
+                results.append(result)
+
+    md_path, json_path = write_report(
+        results, chosen,
+        {"symbols": len(bars_by_symbol), "slippage_bps": slippage_bps, "equity": equity},
+        Path(out),
+    )
+
+    table = Table(title="Battery summary")
+    for col in ("Experiment", "Configs", "Shape", "Best", "Selected"):
+        table.add_column(col, justify="left" if col == "Experiment" else "right")
+    for result in results:
+        colour = {"plateau": "green", "spike": "yellow", "none": "red"}[
+            result.verdict.shape
+        ]
+        chosen_cell = result.verdict.recommended
+        table.add_row(
+            result.experiment.name,
+            str(len(result.cells)),
+            f"[{colour}]{result.verdict.shape}[/]",
+            f"{result.verdict.best.expectancy:+.3f}R" if result.verdict.best else "-",
+            ", ".join(f"{k}={v}" for k, v in sorted(chosen_cell.params.items()))
+            if chosen_cell else "-",
+        )
+    console.print(table)
+
+    console.print(f"\n[green]Report written:[/] {md_path}")
+    console.print(f"[green]Raw numbers:[/]   {json_path}")
+    console.print(
+        "\n[bold]Send these to Claude by committing them:[/]\n"
+        f"  git add {out}\n"
+        '  git commit -m "battery results"\n'
+        "  git push"
+    )
+
+
 @app.command("config")
 def config_cmd() -> None:
     """Show what is configured, without printing any secret.
