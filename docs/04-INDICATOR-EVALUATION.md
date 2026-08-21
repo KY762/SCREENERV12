@@ -242,6 +242,12 @@ information.
 This runs *before* the signal-frequency diagnostic and could remove candidates from §5 on evidence
 rather than on my judgement — which is strictly better.
 
+> **MEASURED 2026-08-20.** `realized_vol_63` correlates **+0.88** with `atr_pct_14` and is dropped as
+> a ranking input, on evidence rather than judgement. `rvol_20` and `clv` correlate with nothing in
+> the set, supporting the arguments in §5.5 and `05` §2.2.2. `rs_adj_63` ↔ `ret_63` at **+0.80** sits
+> just under the threshold — the volatility adjustment survives, but whether it earns its keep is now
+> an open empirical question. See [`06-DIAGNOSTIC-RESULTS.md`](06-DIAGNOSTIC-RESULTS.md) §1.
+
 ## 8. Summary of proposed amendments to `03-HYPOTHESES.md`
 
 | # | Change | Type | Net parameter cost |

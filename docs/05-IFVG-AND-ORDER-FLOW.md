@@ -1,7 +1,9 @@
 # Inverse FVG & Order-Flow Concepts at End-of-Day
 
 **Date:** 2026-08-17
-**Status:** DRAFT — proposed additions, awaiting approval. Nothing tested.
+**Status:** Approved. §1.3's overlap prediction was MEASURED on 2026-08-20 and **refuted** —
+H3 and H4 share 1.2% of the rarer setup's entry bars, not the >60% that would have folded
+them together. H4 is admitted standalone. See [`06-DIAGNOSTIC-RESULTS.md`](06-DIAGNOSTIC-RESULTS.md) §3.
 **Prompted by:** operator question — has IFVG been explored, and what about other order-flow concepts?
 
 **Correction first:** profile §5 listed Inverse FVG as transferable to daily bars, and then no hypothesis
@@ -67,6 +69,13 @@ This matters concretely: if IFVG and H3 signals overlap on 70% of the same bars,
 with two names, and testing both as independent findings would double-count the same evidence. **A
 signal-overlap matrix is therefore mandatory before either is credited** — cheap to compute, and it
 belongs alongside the redundancy check in `04` §7.
+
+> **MEASURED 2026-08-20 — this prediction was wrong.** H3 and H4 share **1.2%** of the rarer setup's
+> entry bars (35 of 3,093). The structural argument above was sound as far as it went, but *which*
+> level is reclaimed turns out to dominate: a swing low and an inverted bearish gap almost never
+> coincide. The real overlap is **H2 ↔ H4 at 30.7%** — both are built on fair value gaps — which is
+> below the fold threshold but means their results are reported jointly, never as two independent
+> confirmations. Full numbers in [`06-DIAGNOSTIC-RESULTS.md`](06-DIAGNOSTIC-RESULTS.md) §3.
 
 ## 1.4 Red Team — the conditional-sample problem
 
