@@ -29,7 +29,28 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-STOOQ_URL = "https://stooq.com/q/d/l/"
+# Stooq serves the same CSV from two hosts. They fail independently -- one
+# returning 404 or a rate-limit page while the other answers is common -- so
+# both are tried before the reference is declared unavailable.
+STOOQ_HOSTS = ("https://stooq.com/q/d/l/", "https://stooq.pl/q/d/l/")
+
+# Stooq refuses or 404s requests without a browser-like User-Agent.
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; SCREENERV12 data verification; "
+        "one request per symbol)"
+    ),
+    "Accept": "text/csv,text/plain,*/*",
+}
+
+
+class ReferenceUnavailable(RuntimeError):
+    """The reference could not be read. NOT a verification failure.
+
+    The distinction is load-bearing: 'the prices disagree' and 'we could not
+    ask' are different findings, and collapsing them into one lets an
+    unanswered question be recorded as a passed check.
+    """
 
 
 @dataclass(frozen=True)
@@ -57,9 +78,33 @@ class StooqReference:
             "d2": end.strftime("%Y%m%d"),
             "i": "d",
         }
-        response = self._client.get(STOOQ_URL, params=params)
-        response.raise_for_status()
-        return parse_stooq_csv(response.text)
+        problems: list[str] = []
+        for host in STOOQ_HOSTS:
+            try:
+                response = self._client.get(host, params=params, headers=HEADERS)
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                problems.append(f"{host}: {exc}")
+                continue
+
+            text = response.text.strip()
+            if not text.lower().startswith("date,"):
+                # Rate-limit notices and error pages arrive with HTTP 200 and a
+                # body that is not CSV. Parsing that would yield zero bars and
+                # read as a clean comparison of nothing.
+                first_line = text.splitlines()[0][:120] if text else "(empty body)"
+                problems.append(f"{host}: not CSV -- {first_line!r}")
+                continue
+
+            bars = parse_stooq_csv(text)
+            if not bars:
+                problems.append(f"{host}: CSV contained no usable rows")
+                continue
+            return bars
+
+        raise ReferenceUnavailable(
+            f"{ticker}: no reference data ({'; '.join(problems)})"
+        )
 
     def close(self) -> None:
         self._client.close()

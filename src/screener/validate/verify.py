@@ -54,10 +54,20 @@ class VerificationResult:
     def passed(self) -> bool:
         """Prices must match. Volume differences and reference gaps do not fail
         the gate -- the reference is not authoritative about which sessions
-        exist, and its volume is measured differently."""
-        return not self.price_mismatches and not self.missing_from_ours
+        exist, and its volume is measured differently.
+
+        Zero bars compared is NOT a pass. A check that examined nothing has
+        produced no evidence, and reporting that as success is worse than
+        reporting failure: it retires the question."""
+        return (
+            self.dates_compared > 0
+            and not self.price_mismatches
+            and not self.missing_from_ours
+        )
 
     def summary(self) -> str:
+        if self.dates_compared == 0:
+            return f"{self.ticker}: INCONCLUSIVE -- no overlapping bars to compare"
         if self.passed:
             return (
                 f"{self.ticker}: PASS -- {self.dates_compared} bars match "

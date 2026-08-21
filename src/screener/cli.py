@@ -511,18 +511,21 @@ def verify_cmd(
     _configure_logging(verbose)
     import httpx
 
-    from .providers.reference import StooqReference
+    from .providers.reference import ReferenceUnavailable, StooqReference
     from .validate.verify import compare_bars
 
     tickers = [t.strip().upper() for t in symbols.split(",") if t.strip()]
     ref = StooqReference()
-    all_passed = True
+    verified: list[str] = []     # actually compared, and matched
+    failed: list[str] = []       # actually compared, and did not match
+    skipped: list[str] = []      # never compared -- proves nothing either way
 
     for ticker in tickers:
         with session_scope() as session:
             sym = session.scalar(select(Symbol).where(Symbol.ticker == ticker))
             if sym is None:
                 console.print(f"[yellow]{ticker}: not ingested, skipping.[/]")
+                skipped.append(ticker)
                 continue
             bars = session.scalars(
                 select(PriceDaily).where(PriceDaily.symbol_id == sym.id)
@@ -531,6 +534,7 @@ def verify_cmd(
 
         if not bars:
             console.print(f"[yellow]{ticker}: no stored bars.[/]")
+            skipped.append(ticker)
             continue
 
         ours = {
@@ -545,8 +549,9 @@ def verify_cmd(
 
         try:
             ref_bars = ref.get_bars(ticker, lo, hi)
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, ReferenceUnavailable) as exc:
             console.print(f"[yellow]{ticker}: reference unavailable ({exc}). Skipped.[/]")
+            skipped.append(ticker)
             continue
 
         theirs = {
@@ -558,11 +563,15 @@ def verify_cmd(
         }
 
         result = compare_bars(ticker, ours, theirs, reference_name=ref.name)
+        if result.dates_compared == 0:
+            console.print(f"[yellow]{result.summary()}[/]")
+            skipped.append(ticker)
+            continue
         colour = "green" if result.passed else "red"
         console.print(f"[{colour}]{result.summary()}[/]")
+        (verified if result.passed else failed).append(ticker)
 
         if result.price_mismatches:
-            all_passed = False
             table = Table(title=f"{ticker} price mismatches")
             for col in ("Date", "Field", "Ours", ref.name.title(), "Diff"):
                 table.add_column(col)
@@ -574,7 +583,6 @@ def verify_cmd(
             console.print(table)
 
         if result.missing_from_ours:
-            all_passed = False
             console.print(
                 "  [red]sessions the reference has and we do not:[/] "
                 + ", ".join(str(d) for d in result.missing_from_ours[:10])
@@ -589,13 +597,41 @@ def verify_cmd(
 
     ref.close()
 
-    if all_passed:
-        console.print("\n[green bold]Phase 1 gate: PASSED[/] -- stored prices match "
-                      "an independent source.")
-    else:
-        console.print("\n[red bold]Phase 1 gate: FAILED[/] -- do not proceed. "
-                      "There is no point testing hypotheses against wrong prices.")
+    console.print(
+        f"\n{len(verified)} verified, {len(failed)} mismatched, {len(skipped)} not compared."
+    )
+
+    if failed:
+        console.print(
+            "[red bold]Phase 1 gate: FAILED[/] -- do not proceed. "
+            "There is no point testing hypotheses against wrong prices."
+        )
         raise typer.Exit(code=1)
+
+    if not verified:
+        # The single most dangerous outcome, because it looks like success if
+        # the skip lines scroll past. Nothing was checked, so nothing is known.
+        console.print(
+            "[red bold]Phase 1 gate: INCONCLUSIVE[/] -- NOTHING WAS COMPARED.\n"
+            "The reference source could not be reached for any symbol, so this "
+            "run is not evidence that the stored prices are right.\n"
+            "Retry later, or verify by eye: [bold]screener show SPY -n 10[/] "
+            "against your broker or TradingView. Ten bars is enough."
+        )
+        raise typer.Exit(code=1)
+
+    if skipped:
+        console.print(
+            f"[yellow bold]Phase 1 gate: PARTIAL[/] -- {', '.join(verified)} "
+            f"match an independent source; {', '.join(skipped)} were not compared.\n"
+            "Re-run to cover the rest before treating the gate as passed."
+        )
+        raise typer.Exit(code=1)
+
+    console.print(
+        "[green bold]Phase 1 gate: PASSED[/] -- stored prices match "
+        "an independent source."
+    )
 
 
 @app.command("show")
