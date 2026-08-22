@@ -107,3 +107,20 @@ def test_every_cell_lands_in_the_research_log(loaded, tmp_path):  # noqa: F811
             )
         )
     assert count == battery_size()
+
+
+def test_every_hypothesis_gets_an_isolated_exit_comparison():
+    """A stop-vs-no-stop comparison at default portfolio limits measures the
+    exit rule AND which signals each arm had room to take. The isolated
+    experiments remove the second effect."""
+    isolated = {
+        e.hypothesis for e in BATTERY if e.name.endswith("_exit_isolated")
+    }
+    assert isolated == {"h1", "h2", "h3", "h4"}
+
+    for experiment in BATTERY:
+        if not experiment.name.endswith("_exit_isolated"):
+            continue
+        assert experiment.vary == {"use_stop": [True, False]}
+        assert experiment.base["max_positions"] > 5
+        assert experiment.base["equity"] > 10_000

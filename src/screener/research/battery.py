@@ -140,6 +140,42 @@ BATTERY: tuple[Experiment, ...] = (
         kind="structural",
     ),
 
+    # -- Exit design, isolated from portfolio competition --------------------
+    # The first live no-stop run looked decisive: H3 went from -0.121R to
+    # +0.485R. But its trade count fell from 651 to 203 and cash rejections
+    # rose from 239 to 605 -- longer holds occupy the five slots for longer, so
+    # the two arms took DIFFERENT signals. That comparison measures exit rule
+    # and selection together.
+    #
+    # These shrink per-trade risk and the concentration cap until nearly every
+    # signal fits, so both arms see the same trades and the only difference is
+    # the exit.
+    #
+    # Shrinking risk is necessary, not incidental: at 1% risk with a 2-ATR stop
+    # a position is 25-33% of equity on a typical large cap, so the 25%
+    # concentration cap binds on almost every trade and four positions exhaust
+    # a cash account. Raising the slot count alone changes nothing.
+    *[
+        Experiment(
+            name=f"{h}_exit_isolated",
+            hypothesis=h,
+            question="With portfolio competition removed so both arms take the "
+                     "same signals, does the stop help or cost?",
+            vary={"use_stop": [True, False]},
+            base={
+                "equity": 5_000_000.0,
+                "max_positions": 60,
+                "max_open_risk_pct": 0.60,
+                "risk_pct_per_trade": 0.0005,
+                "max_position_pct": 0.015,
+                "time_limit": 20,
+                "r_multiple": 0,
+            },
+            kind="structural",
+        )
+        for h in ("h1", "h2", "h3", "h4")
+    ],
+
     # -- H4, inverse fair value gap -----------------------------------------
     Experiment(
         name="h4_exits",
@@ -188,13 +224,16 @@ def run_experiment(
     cache: dict[tuple, list] = {}
 
     for params in parameter_grid(experiment.vary):
-        merged = {**experiment.base, **params}
-        config = RunConfig(
-            hypothesis=experiment.hypothesis,
-            equity=equity,
-            slippage_bps=slippage_bps,
-            **merged,
-        )
+        # base may override the run-wide defaults -- the isolation
+        # experiments need a bigger account and more slots than the profile.
+        fields = {
+            "hypothesis": experiment.hypothesis,
+            "equity": equity,
+            "slippage_bps": slippage_bps,
+            **experiment.base,
+            **params,
+        }
+        config = RunConfig(**fields)
         entry_key = (
             config.trend_filter, config.displacement, config.hold,
             config.top_pct, config.stop_atr, config.rs_lookback,

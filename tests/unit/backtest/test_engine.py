@@ -429,3 +429,38 @@ def test_removing_the_stop_lets_a_trade_survive_a_drawdown_it_would_have_lost_to
     assert stopped.trades[0].pnl < 0
     assert unstopped.trades[0].exit_reason == "time"
     assert unstopped.trades[0].pnl > 0
+
+
+def test_raising_the_slot_limit_lets_both_arms_take_the_same_signals():
+    """Why the isolation experiments exist. With five slots, a longer-held
+    arm occupies them and takes FEWER signals -- so a stop-vs-no-stop
+    comparison at default limits measures selection as well as exit rule."""
+    d = days("2020-01-01", 30)
+    tickers = [f"S{i}" for i in range(10)]
+    bars = {t: frame([(x, 100, 101, 99, 100) for x in d]) for t in tickers}
+    candidates = [
+        Candidate(t, "test", date.fromisoformat(d[0]), date.fromisoformat(d[1]),
+                  stop_level=95.0)
+        for t in tickers
+    ]
+    rule = ExitRule(r_multiple=None, time_limit=20)
+
+    constrained = run(
+        bars, candidates, exit_rule=rule,
+        limits=RiskLimits(max_concurrent_positions=5),
+    )
+    # Slots alone are not enough: at 1% risk with a $5 stop each position is
+    # a quarter of the account, so cash runs out after four regardless of how
+    # many slots exist. Per-trade risk has to shrink too.
+    freed = run(
+        bars, candidates, exit_rule=rule, starting_equity=5_000_000,
+        limits=RiskLimits(
+            risk_pct_per_trade=Decimal("0.0005"),
+            max_position_pct=Decimal("0.015"),
+            max_concurrent_positions=60,
+            max_total_open_risk_pct=Decimal("0.60"),
+        ),
+    )
+
+    assert len(constrained.trades) == 5
+    assert len(freed.trades) == 10, "with slots free, every signal is taken"

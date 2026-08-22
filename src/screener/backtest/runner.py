@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..calc.sizing import RiskLimits
 from ..db.models import Symbol
 from ..metrics.compute import load_bars
 from .benchmarks import random_benchmark, trade_returns
@@ -53,6 +55,13 @@ class RunConfig:
     stop_atr: float = 2.0
     rs_lookback: int = 63
     sweep_lookback: int = 10
+    # Portfolio constraints. Defaults are the approved profile values; raising
+    # them is how an exit-rule comparison is freed from the slot competition
+    # that otherwise decides which signals each arm gets to take.
+    max_positions: int = 5
+    max_open_risk_pct: float = 0.05
+    risk_pct_per_trade: float = 0.01
+    max_position_pct: float = 0.25
 
     def __post_init__(self) -> None:
         if not self.use_stop and self.time_limit == 0:
@@ -152,6 +161,12 @@ def evaluate(
         candidates, bars_by_symbol,
         start=split.start, end=split.end,
         starting_equity=config.equity,
+        limits=RiskLimits(
+            risk_pct_per_trade=Decimal(str(config.risk_pct_per_trade)),
+            max_position_pct=Decimal(str(config.max_position_pct)),
+            max_concurrent_positions=config.max_positions,
+            max_total_open_risk_pct=Decimal(str(config.max_open_risk_pct)),
+        ),
         exit_rule=ExitRule(
             r_multiple=config.r_multiple,
             time_limit=config.time_limit,
