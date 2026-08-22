@@ -45,6 +45,20 @@ VARY_OPTION = typer.Option(
 )
 
 
+def _load_events(session, bars_by_symbol) -> dict[str, list]:
+    """Stored earnings dates keyed by ticker, for the hypotheses that need them."""
+    from .ingest.events import earnings_dates
+
+    out: dict[str, list] = {}
+    for symbol in session.scalars(
+        select(Symbol).where(Symbol.ticker.in_(list(bars_by_symbol)))
+    ):
+        dates = earnings_dates(session, symbol.id)
+        if dates:
+            out[symbol.ticker] = dates
+    return out
+
+
 def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
@@ -543,10 +557,14 @@ def research_explore(
         help="Per configuration. 0 skips the random benchmark entirely.",
     ),
     seed: int = typer.Option(0, "--seed"),
+    battery: str = typer.Option(
+        "round1", "--battery",
+        help="round1 (h1-h4), round2 (h5, h7), earnings (h6), or all.",
+    ),
     out: str = typer.Option("research", "--out", help="Directory for the report."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Run the whole development battery and write a report.
+    """Run a declared battery of experiments and write a report.
 
     Twelve experiments, 118 configurations, declared in
     src/screener/research/battery.py BEFORE any of them ran -- each with the
@@ -565,15 +583,22 @@ def research_explore(
 
     from .backtest.runner import load_symbol_bars, universe_filter
     from .backtest.splits import get_split
-    from .research.battery import BATTERY, battery_size, run_experiment
+    from .research.battery import battery_size, run_experiment, select_battery
     from .research.report import write_report
+
+    try:
+        experiments = select_battery(battery)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
 
     chosen = get_split(split)
     if chosen.carries_evidence:
         console.print(
             f"[red]The battery is development-split only.[/] The {chosen.name} split "
             f"allows {chosen.config_budget} configuration(s) per hypothesis "
-            f"(docs/03 §0.8); this battery is {battery_size()} configurations."
+            f"(docs/03 §0.8); this battery is {battery_size(experiments)} "
+            "configurations."
         )
         raise typer.Exit(code=1)
 
@@ -586,9 +611,22 @@ def research_explore(
             raise typer.Exit(code=1)
         universe = universe_filter(session, universe_name)
 
+        events = _load_events(session, bars_by_symbol)
+        runnable = [
+            e for e in experiments
+            if e.hypothesis != "h6" or events
+        ]
+        skipped = [e for e in experiments if e not in runnable]
+        if skipped:
+            console.print(
+                f"[yellow]Skipping {len(skipped)} experiment(s) needing earnings "
+                "dates.[/] Run 'screener ingest-earnings' to include them."
+            )
+
         console.print(
-            f"[bold]{len(BATTERY)}[/] experiments, [bold]{battery_size()}[/] "
-            f"configurations, {len(bars_by_symbol)} symbols."
+            f"[bold]{len(runnable)}[/] experiments, "
+            f"[bold]{battery_size(runnable)}[/] configurations, "
+            f"{len(bars_by_symbol)} symbols."
         )
 
         from .backtest import budget
@@ -598,13 +636,14 @@ def research_explore(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
             BarColumn(), TaskProgressColumn(), console=console,
         ) as progress:
-            task = progress.add_task("running battery", total=battery_size())
-            for experiment in BATTERY:
+            task = progress.add_task("running battery", total=battery_size(runnable))
+            for experiment in runnable:
                 progress.update(task, description=f"[cyan]{experiment.name}[/]")
                 result = run_experiment(
                     experiment, bars_by_symbol, chosen,
                     equity=equity, slippage_bps=slippage_bps, universe=universe,
                     random_iterations=random_iterations, seed=seed,
+                    events_by_symbol=events,
                     on_cell=lambda: progress.advance(task),
                 )
                 for cell in result.cells:
@@ -653,6 +692,159 @@ def research_explore(
         f"  git add {out}\n"
         '  git commit -m "battery results"\n'
         "  git push"
+    )
+
+
+@app.command("ingest-earnings")
+def ingest_earnings_cmd(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    start: str = typer.Option("2010-01-01", "--start"),
+    end: str | None = typer.Option(None, "--end"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Fetch earnings-related filing dates from SEC EDGAR.
+
+    Free, no key, no account -- EDGAR asks only for a descriptive User-Agent
+    with a contact address, which SEC_USER_AGENT supplies.
+
+    A filing date is NOT an announcement date. Companies release results by
+    press release and file days later; this prefers the 8-K acceptance date as
+    the closest available proxy and records which form each date came from, so
+    the distinction survives into analysis instead of being averaged away.
+    """
+    _configure_logging(verbose)
+    from .ingest.events import ingest_earnings
+    from .providers.base import ProviderError
+    from .providers.edgar import EdgarProvider
+
+    try:
+        provider = EdgarProvider(get_settings())
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end) if end else date.today()
+
+    with session_scope() as session:
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+        tickers = [s.ticker for s in session.scalars(stmt)]
+
+        if not tickers:
+            console.print("[red]No symbols stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+
+        console.print(
+            f"Fetching filing dates for [bold]{len(tickers)}[/] symbol(s) "
+            f"{start_date} to {end_date}. EDGAR is rate-limited to ~7/sec, so this "
+            "takes about a second per symbol."
+        )
+        summary = ingest_earnings(session, provider, tickers, start_date, end_date)
+
+    provider.close()
+    console.print(f"[green]{summary.summary()}[/]")
+    for failure in summary.failed[:10]:
+        console.print(f"  [yellow]{failure.ticker}[/]: {failure.error}")
+
+
+@universe_app.command("coverage")
+def universe_coverage(
+    tickers: str = typer.Option(
+        "TWTR,ATVI,SIVB,FRC,SBNY,CERN,XLNX,MRO,ANF,BBBY",
+        "--tickers",
+        help="Known delisted or acquired symbols to probe.",
+    ),
+    provider_name: str = typer.Option("auto", "--provider"),
+    start: str = typer.Option("2010-01-01", "--start"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """MEASURE SURVIVORSHIP: does the data provider carry delisted companies?
+
+    Every backtest result so far carries an unquantified caveat -- the universe
+    contains only companies that still exist, so any strategy is measured on
+    survivors. This turns that caveat into a number by asking the provider for
+    symbols that are known to have been acquired or to have failed.
+
+    A provider returning nothing for all of them cannot support an unbiased
+    universe at any price, and every result from it must continue to state so.
+    """
+    _configure_logging(verbose)
+    from .providers.base import BarRequest, ProviderError
+
+    settings = get_settings()
+    choice = provider_name.strip().lower()
+    if choice == "auto":
+        choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
+
+    try:
+        if choice == "tiingo":
+            from .providers.tiingo import TiingoProvider
+            provider = TiingoProvider(settings)
+        else:
+            from .providers.alpaca import AlpacaProvider
+            provider = AlpacaProvider(settings)
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    probes = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    start_date = date.fromisoformat(start)
+    end_date = date.today()
+
+    console.print(f"Probing [bold]{len(probes)}[/] delisted symbol(s) against {choice}...")
+
+    table = Table(title=f"Delisted-ticker coverage — {choice}")
+    for col in ("Symbol", "Bars", "First", "Last", "Verdict"):
+        table.add_column(col, justify="right" if col == "Bars" else "left")
+
+    found = 0
+    for ticker in probes:
+        try:
+            frame = provider.get_daily_bars(
+                BarRequest((ticker,), start_date, end_date, "raw")
+            )
+        except ProviderError as exc:
+            table.add_row(ticker, "-", "-", "-", f"[yellow]error: {str(exc)[:40]}[/]")
+            continue
+
+        if frame.empty:
+            table.add_row(ticker, "0", "-", "-", "[red]absent[/]")
+            continue
+
+        dates = frame.index.get_level_values("date")
+        found += 1
+        table.add_row(
+            ticker, f"{len(frame):,}", str(min(dates)), str(max(dates)),
+            "[green]present[/]",
+        )
+
+    console.print(table)
+    provider.close()
+
+    share = found / len(probes) if probes else 0.0
+    if found == 0:
+        console.print(
+            "[red bold]No delisted coverage.[/] Every universe built from this "
+            "provider contains only survivors, and every backtest on it is "
+            "inflated by an unknown amount. The caveat stays on every result."
+        )
+    elif share < 0.5:
+        console.print(
+            f"[yellow bold]Partial coverage — {found}/{len(probes)}.[/] Better than "
+            "none, but a universe built from this still leans toward survivors."
+        )
+    else:
+        console.print(
+            f"[green bold]Coverage present — {found}/{len(probes)}.[/] A delisted-"
+            "inclusive universe is buildable. Rebuild it before trusting any "
+            "cross-sectional result."
+        )
+    console.print(
+        "[dim]Note: absence can also mean the symbol was never covered rather "
+        "than dropped on delisting. Treat this as a floor, not a measurement.[/]"
     )
 
 
@@ -975,18 +1167,17 @@ def backtest_run(
     from .backtest.benchmarks import buy_and_hold, random_benchmark, trade_returns
     from .backtest.engine import CostModel, ExitRule, run_backtest
     from .backtest.performance import by_regime, check_criteria, summarize
+    from .backtest.runner import HYPOTHESES
     from .backtest.splits import get_split
-    from .backtest.strategies import (
-        TrendFilter,
-        pattern_candidates,
-        relative_strength_candidates,
-    )
     from .metrics.compute import load_bars
     from .universe.build import universe_members
 
     key = hypothesis.strip().lower()
-    if key not in {"h1", "h2", "h3", "h4"}:
-        console.print(f"[red]Unknown hypothesis {hypothesis!r}.[/] Expected h1, h2, h3 or h4.")
+    if key not in HYPOTHESES:
+        console.print(
+            f"[red]Unknown hypothesis {hypothesis!r}.[/] Expected one of "
+            f"{', '.join(HYPOTHESES)}."
+        )
         raise typer.Exit(code=1)
 
     chosen = get_split(split)
@@ -1055,19 +1246,24 @@ def backtest_run(
                 members_cache[day] = set(universe_members(session, universe_name, day))
             return ticker in members_cache[day]
 
-        trend = TrendFilter(enabled=trend_filter)
-        if key == "h1":
-            candidates = relative_strength_candidates(
-                bars_by_symbol, trend=trend, rebalance_days=hold,
-                top_pct=top_pct, universe=in_universe,
-                stop_atr=stop_atr, lookback=rs_lookback,
+        from .backtest.runner import RunConfig, build_candidates
+
+        run_config = RunConfig(
+            hypothesis=key, equity=equity, r_multiple=r_multiple,
+            time_limit=time_limit, slippage_bps=slippage_bps,
+            trend_filter=trend_filter, use_stop=use_stop,
+            displacement=displacement, hold=hold, top_pct=top_pct,
+            stop_atr=stop_atr, rs_lookback=rs_lookback,
+        ).resolved()
+
+        events = _load_events(session, bars_by_symbol) if key == "h6" else None
+        try:
+            candidates = build_candidates(
+                bars_by_symbol, run_config, in_universe, events_by_symbol=events
             )
-        else:
-            extra = {"displacement_min": displacement} if key == "h2" else {}
-            candidates = pattern_candidates(
-                bars_by_symbol, hypothesis=key, trend=trend,
-                universe=in_universe, **extra,
-            )
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=1) from exc
 
         console.print(f"{len(candidates):,} candidate signal(s) before portfolio limits.")
 
@@ -1196,6 +1392,7 @@ def backtest_surface(
     from .backtest.runner import (
         HYPOTHESES,
         RunConfig,
+        _entry_key,
         build_candidates,
         evaluate,
         load_symbol_bars,
@@ -1248,6 +1445,7 @@ def backtest_surface(
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
             raise typer.Exit(code=1)
         universe = universe_filter(session, universe_name)
+        surface_events = _load_events(session, bars_by_symbol) if key == "h6" else None
 
         # Signals depend only on entry-side parameters, so cells that share
         # them share one generation pass. On an exit-only sweep this is one
@@ -1264,14 +1462,11 @@ def backtest_surface(
                     hypothesis=key, equity=equity, slippage_bps=slippage_bps,
                     trend_filter=trend_filter, use_stop=use_stop, **params,
                 )
-                entry_key = (
-                    config.trend_filter, config.displacement, config.hold,
-                    config.top_pct, config.stop_atr, config.rs_lookback,
-                    config.sweep_lookback,
-                )
+                entry_key = _entry_key(config)
                 if entry_key not in candidate_cache:
                     candidate_cache[entry_key] = build_candidates(
-                        bars_by_symbol, config, universe
+                        bars_by_symbol, config, universe,
+                        events_by_symbol=surface_events,
                     )
 
                 outcome = evaluate(

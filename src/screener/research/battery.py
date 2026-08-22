@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from ..backtest.runner import RunConfig, build_candidates, evaluate
+from ..backtest.runner import RunConfig, _entry_key, build_candidates, evaluate
 from ..backtest.splits import Split
 from ..backtest.surface import Cell, SurfaceVerdict, analyse, parameter_grid
 
@@ -194,9 +194,129 @@ BATTERY: tuple[Experiment, ...] = (
     ),
 )
 
+# --------------------------------------------------------------------------
+# Round 2
+# --------------------------------------------------------------------------
+# Admitted after Round 1 returned no positive configuration in 40 sweeps. Each
+# was chosen for having published evidence behind it, NOT for looking promising
+# in our own failed results -- picking follow-ups out of a failed search is how
+# a null result gets mined into a false positive.
+#
+# Three hypotheses, not ten. New hypotheses carry their own multiple-comparisons
+# cost at the hypothesis level, and testing twenty ideas to report the one that
+# survives validation is the same error as testing twenty parameters.
+
+ROUND_2_BATTERY: tuple[Experiment, ...] = (
+    Experiment(
+        name="h5_momentum_canonical",
+        hypothesis="h5",
+        question="Does 12-1 momentum -- the version with decades of replication "
+                 "-- work where H1's 63-day no-skip variant did not?",
+        vary={"hold": [21, 63, 126], "top_pct": [0.05, 0.10, 0.20]},
+        base={"stop_atr": 3.0, "monthly_rebalance": True},
+    ),
+    Experiment(
+        name="h5_skip_matters",
+        hypothesis="h5",
+        question="Is the skip month load-bearing, or decoration? skip=0 is "
+                 "H1's formation; skip=21 is the literature's.",
+        vary={"mom_skip": [0, 5, 21, 42]},
+        base={"hold": 63, "stop_atr": 3.0},
+        kind="structural",
+    ),
+    Experiment(
+        name="h5_no_stop",
+        hypothesis="h5",
+        question="Does momentum survive without a stop, as the literature's "
+                 "version has none at all?",
+        vary={"hold": [21, 63, 126]},
+        base={"use_stop": False, "top_pct": 0.10},
+        kind="structural",
+    ),
+    Experiment(
+        name="h5_rebalance",
+        hypothesis="h5",
+        question="Monthly versus daily rebalancing -- does the documented "
+                 "frequency matter, or is it convention?",
+        vary={"monthly_rebalance": [True, False]},
+        base={"hold": 63, "stop_atr": 3.0},
+        kind="structural",
+    ),
+    Experiment(
+        name="h7_squeeze_exits",
+        hypothesis="h7",
+        question="Is there a target and holding period where range expansion "
+                 "after compression is profitable?",
+        vary=dict(EXIT_SURFACE),
+    ),
+    Experiment(
+        name="h7_compression_depth",
+        hypothesis="h7",
+        question="How quiet must it get first? A threshold that only works at "
+                 "one depth is a threshold fitted to noise.",
+        vary={"squeeze_percentile": [0.10, 0.20, 0.30, 0.40]},
+        base={"r_multiple": 3.0, "time_limit": 20},
+    ),
+    Experiment(
+        name="h7_no_stop",
+        hypothesis="h7",
+        question="Same entries with no stop -- entry rule or exit design?",
+        vary={"time_limit": [5, 10, 20, 40]},
+        base={"use_stop": False, "r_multiple": 0},
+        kind="structural",
+    ),
+)
+
+# Requires earnings dates, so it is kept separate and skipped when absent
+# rather than failing the whole battery.
+EARNINGS_BATTERY: tuple[Experiment, ...] = (
+    Experiment(
+        name="h6_drift_exits",
+        hypothesis="h6",
+        question="Does price drift after an earnings filing, and over what "
+                 "horizon?",
+        vary={"time_limit": [5, 10, 20, 40, 60]},
+        base={"use_stop": False, "r_multiple": 0},
+    ),
+    Experiment(
+        name="h6_reaction_size",
+        hypothesis="h6",
+        question="Does the size of the reaction sort the drift? The literature "
+                 "sorts on surprise; this substitutes the market's response.",
+        vary={"reaction_pct": [0.0, 0.02, 0.03, 0.05, 0.08]},
+        base={"time_limit": 40, "use_stop": False, "r_multiple": 0},
+    ),
+    Experiment(
+        name="h6_entry_delay",
+        hypothesis="h6",
+        question="How much of the drift is gone by the time we could act? "
+                 "A day-one edge that vanishes by day three is not tradeable.",
+        vary={"entry_delay": [1, 2, 3, 5]},
+        base={"time_limit": 40, "use_stop": False, "r_multiple": 0},
+    ),
+)
+
+
+ALL_BATTERIES = {
+    "round1": BATTERY,
+    "round2": ROUND_2_BATTERY,
+    "earnings": EARNINGS_BATTERY,
+}
+
 
 def battery_size(battery=BATTERY) -> int:
     return sum(experiment.size for experiment in battery)
+
+
+def select_battery(name: str) -> tuple[Experiment, ...]:
+    key = name.strip().lower()
+    if key == "all":
+        return BATTERY + ROUND_2_BATTERY + EARNINGS_BATTERY
+    if key not in ALL_BATTERIES:
+        raise ValueError(
+            f"unknown battery {name!r}; expected all, {', '.join(ALL_BATTERIES)}"
+        )
+    return ALL_BATTERIES[key]
 
 
 def run_experiment(
@@ -209,6 +329,7 @@ def run_experiment(
     universe=None,
     random_iterations: int = 0,
     seed: int = 0,
+    events_by_symbol: dict[str, list] | None = None,
     on_cell=None,
 ) -> ExperimentResult:
     """Run every cell of one experiment.
@@ -234,13 +355,11 @@ def run_experiment(
             **params,
         }
         config = RunConfig(**fields)
-        entry_key = (
-            config.trend_filter, config.displacement, config.hold,
-            config.top_pct, config.stop_atr, config.rs_lookback,
-            config.sweep_lookback,
-        )
+        entry_key = _entry_key(config)
         if entry_key not in cache:
-            cache[entry_key] = build_candidates(bars_by_symbol, config, universe)
+            cache[entry_key] = build_candidates(
+                bars_by_symbol, config, universe, events_by_symbol=events_by_symbol
+            )
 
         outcome = evaluate(
             cache[entry_key], bars_by_symbol, config, split,

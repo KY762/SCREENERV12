@@ -360,3 +360,36 @@ class ResearchRun(Base):
     __table_args__ = (
         Index("ix_research_runs_budget", "hypothesis", "split", "config_hash"),
     )
+
+
+class EarningsEvent(Base):
+    """Earnings-related filing dates, one row per symbol per reporting period.
+
+    The `filed` date is what EDGAR publishes and what any study must key on. It
+    is NOT the announcement date: companies issue results by press release and
+    file days later. The 8-K acceptance date is the closer proxy and is what
+    ingestion prefers, with periodic filings as the fallback -- `form` records
+    which was used so the distinction survives into analysis rather than being
+    averaged away.
+
+    `period` is the fiscal period the filing reports on, where EDGAR states it.
+    Grouping by period rather than by filing keeps one event per quarter when a
+    company files several 8-Ks for unrelated reasons.
+    """
+
+    __tablename__ = "earnings_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol_id: Mapped[int] = mapped_column(
+        ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    filed: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    form: Mapped[str] = mapped_column(String(12), nullable=False)
+    period: Mapped[date | None] = mapped_column(Date)
+    accession: Mapped[str | None] = mapped_column(String(32))
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="edgar")
+
+    __table_args__ = (
+        UniqueConstraint("symbol_id", "filed", "form", name="uq_earnings_event"),
+        Index("ix_earnings_symbol_filed", "symbol_id", "filed"),
+    )

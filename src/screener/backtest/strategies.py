@@ -19,7 +19,9 @@ from datetime import date
 
 import pandas as pd
 
+from ..calc.compression import expansion_events
 from ..calc.indicators import atr, slope_positive, sma
+from ..calc.momentum import month_end_mask, volatility_scaled_momentum
 from ..calc.patterns import fvg_entry_events, ifvg_entry_events, sweep_entry_events
 from ..calc.relative_strength import relative_strength_adjusted
 from .engine import Candidate
@@ -114,6 +116,8 @@ def pattern_candidates(
         "sweep": sweep_entry_events,
         "h4": ifvg_entry_events,
         "ifvg": ifvg_entry_events,
+        "h7": expansion_events,
+        "squeeze": expansion_events,
     }
     key = hypothesis.strip().lower()
     if key not in detectors:
@@ -229,6 +233,184 @@ def relative_strength_candidates(
                     stop_distance=stop_atr * float(atr_value),
                     atr=float(atr_value),
                     rank=rank_value,
+                    sector=sectors.get(ticker),
+                )
+            )
+    return sorted(candidates, key=lambda c: (c.entry_date, -c.rank, c.ticker))
+
+
+# --------------------------------------------------------------------------
+# Round 2
+# --------------------------------------------------------------------------
+
+def canonical_momentum_candidates(
+    bars_by_symbol: Mapping[str, pd.DataFrame],
+    *,
+    lookback: int = 252,
+    skip: int = 21,
+    top_pct: float = 0.10,
+    stop_atr: float = 3.0,
+    atr_window: int = 14,
+    vol_window: int = 63,
+    monthly: bool = True,
+    trend: TrendFilter | None = None,
+    universe: UniverseMask = always_in_universe,
+    sectors: Mapping[str, str] | None = None,
+) -> list[Candidate]:
+    """H5 -- cross-sectional momentum in its canonical form.
+
+    Round 1's H1 ranked on a 63-day return, rebalanced every 5 days, with a
+    2-ATR stop. Every one of those choices departs from the effect the
+    literature documents, and all of them failed together, so which departure
+    mattered is unknown. This is the version with the replication behind it:
+
+        12-month formation, skipping the most recent month, monthly rebalance.
+
+    The skip is the substantive difference. Short-horizon returns reverse, so a
+    63-day lookback with no skip mixes reversal into continuation. The monthly
+    rebalance is equally substantive: the anomaly is documented at monthly
+    frequency, and rebalancing weekly changes the effect and multiplies costs.
+
+    The stop stays wide by default and is expressed as a distance, because the
+    strongest Round 1 finding was that a stop set inside normal noise costs
+    more than it protects.
+    """
+    trend = trend if trend is not None else TrendFilter(enabled=False)
+    sectors = sectors or {}
+
+    scores: dict[str, pd.Series] = {}
+    trends: dict[str, pd.Series | None] = {}
+    atrs: dict[str, pd.Series] = {}
+    for ticker, bars in bars_by_symbol.items():
+        if bars.empty or len(bars) < lookback + 5:
+            continue
+        scores[ticker] = volatility_scaled_momentum(
+            bars["close"], lookback, skip, vol_window
+        )
+        mask = trend.mask(bars)
+        trends[ticker] = None if mask is None else mask.fillna(False).astype(bool)
+        atrs[ticker] = atr(bars, atr_window)
+
+    if not scores:
+        return []
+
+    calendar = sorted({day for s in scores.values() for day in s.index})
+    if monthly:
+        marks = month_end_mask(pd.DatetimeIndex(calendar))
+        rebalance_days = [d for d, flag in zip(calendar, marks, strict=True) if flag]
+    else:
+        rebalance_days = calendar
+
+    candidates: list[Candidate] = []
+    for day in rebalance_days:
+        ranked: list[tuple[float, str]] = []
+        for ticker, series in scores.items():
+            if day not in series.index:
+                continue
+            value = series.loc[day]
+            if pd.isna(value):
+                continue
+            trend_series = trends[ticker]
+            if trend_series is not None and (
+                day not in trend_series.index or not bool(trend_series.loc[day])
+            ):
+                continue
+            ranked.append((float(value), ticker))
+
+        if not ranked:
+            continue
+        ranked.sort(reverse=True)
+        for score, ticker in ranked[: max(1, int(len(ranked) * top_pct))]:
+            bars = bars_by_symbol[ticker]
+            position = bars.index.get_indexer([day])[0]
+            if position < 0 or position + 1 >= len(bars.index):
+                continue
+            atr_value = atrs[ticker].loc[day]
+            if pd.isna(atr_value) or atr_value <= 0:
+                continue
+            entry_day = bars.index[position + 1].date()
+            if not universe(ticker, entry_day):
+                continue
+            candidates.append(
+                Candidate(
+                    ticker=ticker,
+                    setup="momentum_12_1",
+                    signal_date=day.date(),
+                    entry_date=entry_day,
+                    stop_distance=stop_atr * float(atr_value),
+                    atr=float(atr_value),
+                    rank=score,
+                    sector=sectors.get(ticker),
+                )
+            )
+    return sorted(candidates, key=lambda c: (c.entry_date, -c.rank, c.ticker))
+
+
+def drift_candidates(
+    bars_by_symbol: Mapping[str, pd.DataFrame],
+    events_by_symbol: Mapping[str, list],
+    *,
+    reaction_pct: float = 0.03,
+    entry_delay: int = 1,
+    stop_atr: float = 3.0,
+    atr_window: int = 14,
+    trend: TrendFilter | None = None,
+    universe: UniverseMask = always_in_universe,
+    sectors: Mapping[str, str] | None = None,
+) -> list[Candidate]:
+    """H6 -- post-earnings drift, anchored on the reported reaction.
+
+    The literature's version sorts on earnings SURPRISE against analyst
+    estimates. We have no estimates and no budget for them, so this sorts on
+    the market's own reaction instead: a filing date, and a move of at least
+    ``reaction_pct`` on it.
+
+    That substitution is a real weakening and is stated wherever the results
+    are. Price reaction conflates the surprise with how the surprise was
+    received, and the filing date lags the press release. Both push toward
+    finding nothing, which is the safe direction to be wrong in -- but a null
+    result here is weaker evidence against drift than a null in the literature's
+    setup would be.
+    """
+    trend = trend if trend is not None else TrendFilter(enabled=False)
+    sectors = sectors or {}
+    candidates: list[Candidate] = []
+
+    for ticker, bars in bars_by_symbol.items():
+        events = events_by_symbol.get(ticker) or []
+        if bars.empty or not events:
+            continue
+        atr_series = atr(bars, atr_window)
+        mask = trend.mask(bars)
+        trend_series = None if mask is None else mask.fillna(False).astype(bool)
+        close = bars["close"]
+
+        for event_date in events:
+            stamp = pd.Timestamp(event_date)
+            position = bars.index.searchsorted(stamp)
+            if position <= 0 or position + entry_delay >= len(bars.index):
+                continue
+            day = bars.index[position]
+            reaction = (close.iloc[position] - close.iloc[position - 1]) / close.iloc[position - 1]
+            if reaction < reaction_pct:
+                continue
+            if trend_series is not None and not bool(trend_series.iloc[position]):
+                continue
+            atr_value = atr_series.iloc[position]
+            if pd.isna(atr_value) or atr_value <= 0:
+                continue
+            entry_day = bars.index[position + entry_delay].date()
+            if not universe(ticker, entry_day):
+                continue
+            candidates.append(
+                Candidate(
+                    ticker=ticker,
+                    setup="earnings_drift",
+                    signal_date=day.date(),
+                    entry_date=entry_day,
+                    stop_distance=stop_atr * float(atr_value),
+                    atr=float(atr_value),
+                    rank=float(reaction),
                     sector=sectors.get(ticker),
                 )
             )
