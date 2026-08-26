@@ -848,6 +848,142 @@ def universe_coverage(
     )
 
 
+@app.command("ingest-fundamentals")
+def ingest_fundamentals_cmd(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Fetch reported financials from SEC EDGAR's XBRL API.
+
+    One request per company returns its whole filing history, so this is slow
+    and runs once. Every version of every restated figure is stored, keyed on
+    the accession number -- that is what makes it possible to ask what was
+    reported as of a past date rather than what is true now.
+    """
+    _configure_logging(verbose)
+    from .ingest.fundamentals import ingest_fundamentals
+    from .providers.base import ProviderError
+    from .providers.edgar import EdgarProvider
+
+    try:
+        provider = EdgarProvider(get_settings())
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    with session_scope() as session:
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+        tickers = [s.ticker for s in session.scalars(stmt)]
+
+        if not tickers:
+            console.print("[red]No symbols stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+
+        console.print(
+            f"Fetching financials for [bold]{len(tickers)}[/] symbol(s). Each "
+            "response covers the full filing history and can be tens of "
+            "megabytes, so allow a few seconds per symbol."
+        )
+        summary = ingest_fundamentals(session, provider, tickers)
+
+    provider.close()
+    console.print(f"[green]{summary.summary()}[/]")
+    for failure in summary.failed[:10]:
+        console.print(f"  [yellow]{failure.ticker}[/]: {failure.error}")
+
+
+@app.command("value")
+def value_cmd(
+    on: str | None = typer.Option(None, "--on", help="Date, YYYY-MM-DD. Defaults to today."),
+    symbols: str | None = typer.Option(None, "--symbols", "-s"),
+    sort: str = typer.Option("price_to_book", "--sort", help="Column to rank on."),
+    limit: int = typer.Option(25, "--limit", "-n"),
+) -> None:
+    """Value screen from point-in-time financials.
+
+    Every figure shown is one that had been FILED on or before the chosen date.
+    A period ends months before its numbers are public, so screening on the
+    period date would use information nobody had -- the 'reported' and 'lag'
+    columns show which filing each row rests on and how stale it was.
+
+    No ranking here implies an edge. None of these screens has been validated
+    on this data.
+    """
+    from .fundamentals.pit import facts_as_of
+    from .fundamentals.ratios import CONCEPTS, snapshot
+
+    as_of = date.fromisoformat(on) if on else date.today()
+
+    with session_scope() as session:
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+
+        rows = []
+        for symbol in session.scalars(stmt):
+            bar = session.scalars(
+                select(PriceDaily)
+                .where(PriceDaily.symbol_id == symbol.id, PriceDaily.date <= as_of)
+                .order_by(PriceDaily.date.desc())
+                .limit(1)
+            ).first()
+            if bar is None:
+                continue
+            facts = facts_as_of(session, symbol.id, CONCEPTS, as_of)
+            if not facts:
+                continue
+            rows.append(snapshot(symbol.ticker, float(bar.close), facts))
+
+    if not rows:
+        console.print(
+            "[yellow]No fundamentals stored for this date.[/] "
+            "Run 'screener ingest-fundamentals' first."
+        )
+        raise typer.Exit(code=1)
+
+    def key(row):
+        value = getattr(row, sort, None)
+        return (value is None, value if value is not None else 0)
+
+    rows.sort(key=key)
+
+    table = Table(title=f"Value screen — as filed on or before {as_of}")
+    for col in ("Symbol", "Price", "P/B", "NCAV/sh", "NetCash/sh",
+                "GrossProf", "ROA", "Reported", "Lag"):
+        table.add_column(col, justify="right" if col != "Symbol" else "left")
+
+    def fmt(value, spec="{:.2f}"):
+        return "-" if value is None else spec.format(value)
+
+    for row in rows[:limit]:
+        flags = ""
+        if row.below_ncav:
+            flags = " [green]net-net[/]"
+        elif row.below_net_cash:
+            flags = " [green]<cash[/]"
+        table.add_row(
+            row.ticker + flags,
+            fmt(row.price),
+            fmt(row.price_to_book),
+            fmt(row.ncav_per_share),
+            fmt(row.net_cash_per_share),
+            fmt(row.gross_profitability, "{:.3f}"),
+            fmt(row.return_on_assets, "{:.3f}"),
+            row.reported_as_of or "-",
+            f"{row.lag_days}d" if row.lag_days is not None else "-",
+        )
+    console.print(table)
+    console.print(
+        f"[dim]{len(rows)} symbol(s) with filed financials. Lag is the gap "
+        "between period end and filing date -- the window in which the figure "
+        "existed but nobody could see it.[/]"
+    )
+
+
 @app.command("config")
 def config_cmd() -> None:
     """Show what is configured, without printing any secret.

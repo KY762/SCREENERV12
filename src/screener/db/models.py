@@ -393,3 +393,46 @@ class EarningsEvent(Base):
         UniqueConstraint("symbol_id", "filed", "form", name="uq_earnings_event"),
         Index("ix_earnings_symbol_filed", "symbol_id", "filed"),
     )
+
+
+class Fundamental(Base):
+    """One reported financial fact, as filed.
+
+    Every version is stored, not just the latest. Companies restate prior
+    periods, and a screen that uses the restated figure is using knowledge
+    nobody had at the time. Keeping all versions is what makes it possible to
+    ask "what was reported as of date D" rather than "what is true now".
+
+    `filed` is the load-bearing column and every point-in-time query filters on
+    it. A period ends months before the numbers are public, so a screen keyed
+    on `period_end` trades on information that did not exist.
+
+    `concept` is our normalised name; `tag` is the XBRL tag it came from.
+    Registrants use different tags for the same idea, so the mapping is
+    many-to-one and the original is kept for auditability.
+    """
+
+    __tablename__ = "fundamentals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol_id: Mapped[int] = mapped_column(
+        ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False
+    )
+    concept: Mapped[str] = mapped_column(String(40), nullable=False)
+    tag: Mapped[str] = mapped_column(String(80), nullable=False)
+    unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    filed: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    accession: Mapped[str] = mapped_column(String(32), nullable=False)
+    form: Mapped[str | None] = mapped_column(String(12))
+    fiscal_year: Mapped[int | None] = mapped_column(Integer)
+    fiscal_period: Mapped[str | None] = mapped_column(String(4))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "symbol_id", "concept", "period_end", "accession", "unit",
+            name="uq_fundamental_version",
+        ),
+        Index("ix_fundamentals_pit", "symbol_id", "concept", "filed"),
+    )

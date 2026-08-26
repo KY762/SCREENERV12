@@ -16,6 +16,7 @@ from screener.providers.base import ProviderError
 from screener.providers.edgar import (
     EdgarProvider,
     earliest_per_period,
+    parse_company_facts,
     parse_submissions,
     parse_ticker_map,
 )
@@ -166,3 +167,89 @@ def test_undated_filings_survive_when_a_symbol_has_no_report_dates_at_all():
         }}
     })
     assert len(earliest_per_period(filings)) == 2
+
+
+# --------------------------------------------------------------------------
+# XBRL company facts
+# --------------------------------------------------------------------------
+
+COMPANY_FACTS = {
+    "cik": 320193,
+    "facts": {
+        "us-gaap": {
+            "Assets": {"units": {"USD": [
+                {"end": "2023-09-30", "val": 352583000000, "accn": "orig",
+                 "form": "10-K", "filed": "2023-11-03", "fy": 2023, "fp": "FY"},
+                {"end": "2023-09-30", "val": 352000000000, "accn": "restated",
+                 "form": "10-K/A", "filed": "2024-05-01"},
+            ]}},
+            "StockholdersEquity": {"units": {"USD": [
+                {"end": "2023-09-30", "val": 62146000000, "accn": "orig",
+                 "form": "10-K", "filed": "2023-11-03"},
+            ]}},
+            "SomeIrrelevantTag": {"units": {"USD": [
+                {"end": "2023-09-30", "val": 1, "accn": "orig",
+                 "form": "10-K", "filed": "2023-11-03"},
+            ]}},
+        },
+        "dei": {
+            "EntityCommonStockSharesOutstanding": {"units": {"shares": [
+                {"end": "2023-09-30", "val": 15550061000, "accn": "orig",
+                 "form": "10-K", "filed": "2023-11-03"},
+            ]}},
+        },
+    },
+}
+
+
+def test_company_facts_flatten_to_records():
+    facts = parse_company_facts("AAPL", COMPANY_FACTS)
+    concepts = {f.concept for f in facts}
+
+    assert "assets" in concepts
+    assert "equity" in concepts
+    assert "shares_outstanding" in concepts, "dei tags carry the share count"
+
+
+def test_every_restated_version_is_kept():
+    """Discarding old versions makes it impossible to reconstruct what was
+    known at a past date, which is the entire reason for storing this."""
+    assets = [f for f in parse_company_facts("AAPL", COMPANY_FACTS) if f.concept == "assets"]
+
+    assert len(assets) == 2
+    assert {f.accession for f in assets} == {"orig", "restated"}
+    assert {f.filed for f in assets} == {date(2023, 11, 3), date(2024, 5, 1)}
+
+
+def test_unmapped_tags_are_ignored():
+    tags = {f.tag for f in parse_company_facts("AAPL", COMPANY_FACTS)}
+    assert "SomeIrrelevantTag" not in tags
+
+
+def test_the_originating_tag_is_preserved():
+    """Concepts are many-to-one over tags. Keeping the source tag is what makes
+    an odd value auditable rather than mysterious."""
+    equity = next(f for f in parse_company_facts("AAPL", COMPANY_FACTS) if f.concept == "equity")
+    assert equity.tag == "StockholdersEquity"
+
+
+def test_units_are_recorded_because_shares_are_not_dollars():
+    facts = parse_company_facts("AAPL", COMPANY_FACTS)
+    units = {f.concept: f.unit for f in facts}
+
+    assert units["assets"] == "USD"
+    assert units["shares_outstanding"] == "shares"
+
+
+def test_a_record_missing_a_filing_date_is_dropped():
+    """Without a filing date there is no way to know when it became public, so
+    it cannot be used point-in-time at all."""
+    payload = {"facts": {"us-gaap": {"Assets": {"units": {"USD": [
+        {"end": "2023-09-30", "val": 100, "accn": "x", "form": "10-K"},
+    ]}}}}}
+    assert parse_company_facts("AAPL", payload) == []
+
+
+def test_empty_facts_payload_is_handled():
+    assert parse_company_facts("AAPL", {}) == []
+    assert parse_company_facts("AAPL", {"facts": {}}) == []

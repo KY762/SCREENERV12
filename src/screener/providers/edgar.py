@@ -39,6 +39,40 @@ log = logging.getLogger(__name__)
 
 TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
+COMPANY_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+
+# Balance-sheet and income tags needed for value and quality screens. Several
+# concepts are reported under different tags by different registrants, so each
+# entry is a fallback chain tried in order -- a single lookup silently returns
+# nothing for perhaps a third of companies.
+FACT_TAGS: dict[str, tuple[str, ...]] = {
+    "assets": ("Assets",),
+    "assets_current": ("AssetsCurrent",),
+    "liabilities": ("Liabilities",),
+    "liabilities_current": ("LiabilitiesCurrent",),
+    "equity": (
+        "StockholdersEquity",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ),
+    "cash": (
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ),
+    "revenue": (
+        "Revenues",
+        "RevenueFromContractWithCustomerExcludingAssessedTax",
+        "SalesRevenueNet",
+    ),
+    "cost_of_revenue": ("CostOfRevenue", "CostOfGoodsAndServicesSold"),
+    "gross_profit": ("GrossProfit",),
+    "net_income": ("NetIncomeLoss",),
+    "operating_cash_flow": ("NetCashProvidedByUsedInOperatingActivities",),
+    "long_term_debt": ("LongTermDebtNoncurrent", "LongTermDebt"),
+    "shares_outstanding": (
+        "CommonStockSharesOutstanding",
+        "EntityCommonStockSharesOutstanding",
+    ),
+}
 
 # Forms that carry results. 8-K is the press release; the rest are periodic.
 EARNINGS_FORMS = ("8-K", "10-Q", "10-K")
@@ -46,6 +80,29 @@ EARNINGS_FORMS = ("8-K", "10-Q", "10-K")
 # SEC fair access asks for no more than ten requests a second. One every
 # 150ms is comfortably inside that and needs no coordination.
 REQUEST_INTERVAL = 0.15
+
+
+@dataclass(frozen=True)
+class Fact:
+    """One reported value, with the date it became public.
+
+    ``filed`` is the load-bearing field. A period ends months before anyone can
+    see the numbers, so a screen keyed on ``period_end`` is trading on
+    information that did not exist. Every point-in-time query filters on
+    ``filed``.
+    """
+
+    symbol: str
+    concept: str          # our normalised name, e.g. "assets_current"
+    tag: str              # the XBRL tag it actually came from
+    unit: str
+    period_end: date
+    value: float
+    filed: date
+    accession: str
+    form: str
+    fiscal_year: int | None = None
+    fiscal_period: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +189,18 @@ class EdgarProvider:
             f for f in parse_submissions(ticker, payload, forms)
             if start <= f.filed <= end
         ]
+
+    def get_company_facts(self, ticker: str) -> list[Fact]:
+        """Every reported financial fact EDGAR holds for this registrant.
+
+        One request per company, covering its entire filing history. The
+        response is large -- tens of megabytes for an old filer -- which is why
+        this is fetched once and stored rather than queried per screen.
+        """
+        cik = self.cik_for(ticker)
+        if cik is None:
+            raise ProviderError(f"EDGAR does not list a CIK for {ticker}")
+        return parse_company_facts(ticker, self._get(COMPANY_FACTS_URL.format(cik=cik)))
 
     def get_earnings_dates(self, ticker: str, start: date, end: date) -> list[Filing]:
         """One filing per reporting period, preferring the 8-K press release.
@@ -243,3 +312,63 @@ def as_datetime(value: str) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return None
+
+
+def parse_company_facts(
+    ticker: str, payload: dict, wanted: dict[str, tuple[str, ...]] | None = None
+) -> list[Fact]:
+    """Flatten EDGAR's companyfacts response.
+
+    The structure is facts -> taxonomy -> tag -> units -> unit -> [records].
+    Records for the same period appear MULTIPLE times, once per filing that
+    reported it, which is how restatements are represented. All versions are
+    kept: discarding them would make it impossible to reconstruct what was
+    known at a past date, which is the entire point of storing this.
+    """
+    wanted = wanted or FACT_TAGS
+    reverse: dict[str, str] = {}
+    for concept, tags in wanted.items():
+        for tag in tags:
+            reverse.setdefault(tag, concept)
+
+    facts_block = (payload or {}).get("facts") or {}
+    out: list[Fact] = []
+
+    for taxonomy, tags in facts_block.items():
+        if taxonomy not in ("us-gaap", "dei"):
+            continue
+        for tag, body in (tags or {}).items():
+            concept = reverse.get(tag)
+            if concept is None:
+                continue
+            for unit, records in ((body or {}).get("units") or {}).items():
+                for record in records or []:
+                    fact = _parse_fact(ticker, concept, tag, unit, record)
+                    if fact is not None:
+                        out.append(fact)
+
+    return sorted(out, key=lambda f: (f.concept, f.period_end, f.filed))
+
+
+def _parse_fact(
+    ticker: str, concept: str, tag: str, unit: str, record: dict
+) -> Fact | None:
+    try:
+        end = date.fromisoformat(record["end"])
+        filed = date.fromisoformat(record["filed"])
+        value = float(record["val"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return Fact(
+        symbol=ticker.upper(),
+        concept=concept,
+        tag=tag,
+        unit=unit,
+        period_end=end,
+        value=value,
+        filed=filed,
+        accession=str(record.get("accn") or ""),
+        form=str(record.get("form") or ""),
+        fiscal_year=record.get("fy") if isinstance(record.get("fy"), int) else None,
+        fiscal_period=record.get("fp") or None,
+    )
