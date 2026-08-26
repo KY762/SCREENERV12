@@ -759,6 +759,10 @@ def universe_candidates(
         True, "--context/--no-context",
         help="Include the ETFs the regime panel needs.",
     ),
+    small_caps: bool = typer.Option(
+        True, "--small-caps/--no-small-caps",
+        help="Include the small-cap tier.",
+    ),
 ) -> None:
     """The candidate pool, sized for a small account.
 
@@ -773,12 +777,15 @@ def universe_candidates(
     """
     from .universe.candidates import (
         MARKET_CONTEXT,
-        TRADING_CANDIDATES,
+        SMALL_CAP_CANDIDATES,
         all_symbols,
+        pool,
         trading_symbols,
     )
 
-    symbols = all_symbols() if context else trading_symbols()
+    symbols = (
+        all_symbols(small_caps) if context else trading_symbols(small_caps)
+    )
 
     if plain:
         print(",".join(symbols))
@@ -788,7 +795,7 @@ def universe_candidates(
     table.add_column("Sector")
     table.add_column("N", justify="right")
     table.add_column("Symbols", overflow="fold")
-    for sector, tickers in TRADING_CANDIDATES.items():
+    for sector, tickers in pool(small_caps).items():
         table.add_row(sector, str(len(tickers)), " ".join(tickers))
     if context:
         table.add_row(
@@ -797,11 +804,20 @@ def universe_candidates(
         )
     console.print(table)
 
+    small_count = sum(len(t) for t in SMALL_CAP_CANDIDATES.values())
     console.print(
-        f"\n[bold]{len(trading_symbols())}[/] tradeable candidates"
+        f"\n[bold]{len(trading_symbols(small_caps))}[/] tradeable candidates"
+        + (f" (including {small_count} small caps)" if small_caps else "")
         + (f" plus [bold]{len(MARKET_CONTEXT)}[/] context symbols" if context else "")
         + f" = [bold]{len(symbols)}[/] to ingest."
     )
+    if small_caps:
+        console.print(
+            "[dim]A larger pool does not produce more trades — five slots and a "
+            "ten-day hold cap the account near 126 a year, against roughly 2,800 "
+            "signals. The small-cap tier is here because a $10,000 account can "
+            "take positions a fund cannot, not to raise the count.[/]"
+        )
     console.print(
         "\n[bold]Load them, then let the data decide:[/]\n"
         "  screener ingest --symbols $(screener universe candidates --plain) "

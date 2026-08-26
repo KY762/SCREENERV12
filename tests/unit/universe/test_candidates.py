@@ -64,3 +64,36 @@ def test_sector_lookup_works_both_ways():
     assert sector_of(ticker.lower()) == "Energy"
     assert sector_of("SPY") is None
     assert sector_map()[ticker] == "Energy"
+
+
+def test_the_small_cap_tier_can_be_excluded():
+    """Ingesting 265 symbols on a rate-limited free tier takes hours. Someone
+    starting out should be able to load the core pool first."""
+    from screener.universe.candidates import SMALL_CAP_CANDIDATES
+
+    with_small = trading_symbols(include_small_caps=True)
+    without = trading_symbols(include_small_caps=False)
+
+    assert len(with_small) > len(without)
+    assert set(without) < set(with_small)
+    assert sum(len(t) for t in SMALL_CAP_CANDIDATES.values()) > 100
+
+
+def test_no_symbol_is_duplicated_across_the_two_tiers():
+    """A duplicate would be counted twice against the per-sector cap."""
+    from screener.universe.candidates import (
+        SMALL_CAP_CANDIDATES,
+        TRADING_CANDIDATES,
+    )
+
+    core = {t for ts in TRADING_CANDIDATES.values() for t in ts}
+    small = {t for ts in SMALL_CAP_CANDIDATES.values() for t in ts}
+    assert not core & small
+
+
+def test_sector_lookup_covers_the_small_cap_tier():
+    from screener.universe.candidates import SMALL_CAP_CANDIDATES
+
+    ticker = SMALL_CAP_CANDIDATES["Restaurants"][0]
+    assert sector_of(ticker) == "Restaurants"
+    assert ticker in sector_map()

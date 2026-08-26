@@ -31,6 +31,26 @@ correlation between positions much higher than the position count suggests.
 No claim is made that any of these is a good investment. They are instruments
 this account can express a position in, which is a prerequisite, not a
 recommendation.
+
+On pool size
+------------
+A bigger pool does NOT produce more trades. At five slots and a ten-day hold
+the account can hold roughly 126 positions a year, while 127 symbols already
+generate around 1,500 H2 signals -- so under a tenth of what is available is
+takeable. Doubling the pool halves that fraction and changes nothing else,
+unless the ranking that chooses between candidates is good, and no ranking here
+has been validated.
+
+The reason to expand is therefore qualitative, not quantitative: SMALLER
+companies, where a $10,000 account has a structural advantage. A fund running
+billions cannot take a meaningful position in a $500M company; inefficiency
+persists where large capital cannot reach. That is the one edge available to
+this account that does not depend on forecasting anything.
+
+Two costs come with it, both real. Small caps delist far more often, so the
+survivorship problem in `universe coverage` gets worse, not better. And spreads
+are wider, which the flat 5 bps slippage assumption in the backtest understates
+-- results on small caps should be re-run at 15 bps before being believed.
 """
 
 from __future__ import annotations
@@ -79,6 +99,52 @@ TRADING_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Smaller companies, added deliberately rather than to inflate the count. This
+# is where the account's size stops being a limitation -- see the module
+# docstring. Expect a higher ingestion-failure rate here: some of these will
+# have been acquired or delisted since the list was written, and a failed
+# symbol is information rather than a problem.
+SMALL_CAP_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "Semis & equipment (small)": (
+        "RMBS", "SITM", "POWI", "SLAB", "DIOD", "ACLS", "UCTT", "ICHR",
+        "COHU", "FORM", "ONTO", "AEIS", "CRUS", "MKSI",
+    ),
+    "Software (small)": (
+        "APPF", "BLKB", "ENV", "WK", "SPT", "ASAN", "BRZE", "AI",
+        "BIGC", "FROG", "JAMF", "PD", "YEXT", "DOMO",
+    ),
+    "Retail (small)": (
+        "BOOT", "SHOO", "WWW", "OXM", "ZUMZ", "BKE", "TLYS",
+        "FIVE", "OLLI", "BURL", "DKS", "ASO",
+    ),
+    "Restaurants": (
+        "WEN", "JACK", "PLAY", "CAKE", "TXRH", "SHAK", "WING",
+        "PTLO", "CBRL", "DENN", "EAT",
+    ),
+    "Regional banks": (
+        "WAL", "ZION", "CMA", "SNV", "PB", "UMBF", "ONB", "FHN",
+        "VLY", "ASB", "BOKF", "CBSH",
+    ),
+    "Industrials (small)": (
+        "AIT", "MLI", "GBX", "WNC", "ALG", "TRN", "MYRG", "PRIM",
+        "IESC", "ROAD", "STRL", "TILE",
+    ),
+    "Energy (small)": (
+        "SM", "MTDR", "CRC", "GPOR", "CRK", "NOG", "VTLE", "REPX",
+    ),
+    "Health care (small)": (
+        "HALO", "MEDP", "ICUI", "LNTH", "ITGR", "MMSI", "AMED",
+        "EHC", "SEM", "PNTG", "CRVL",
+    ),
+    "Homebuilding": (
+        "KBH", "TPH", "CCS", "LGIH", "MHO", "BZH", "HOV", "SKY",
+    ),
+    "Mining & materials (small)": (
+        "SXC", "HCC", "ARCH", "BTU", "CDE", "HL", "PAAS", "AG",
+        "EXK", "UEC",
+    ),
+}
+
 # Not for trading. These feed the regime panel, the sector-rotation strip and
 # the relative-strength benchmark, and are screened out of candidate lists.
 MARKET_CONTEXT: tuple[str, ...] = (
@@ -92,18 +158,26 @@ MARKET_CONTEXT: tuple[str, ...] = (
 )
 
 
-def trading_symbols() -> tuple[str, ...]:
+def pool(include_small_caps: bool = True) -> dict[str, tuple[str, ...]]:
+    """The candidate groups, optionally without the small-cap tier."""
+    groups = dict(TRADING_CANDIDATES)
+    if include_small_caps:
+        groups.update(SMALL_CAP_CANDIDATES)
+    return groups
+
+
+def trading_symbols(include_small_caps: bool = True) -> tuple[str, ...]:
     """Every candidate, deduplicated, in a stable order."""
     seen: dict[str, None] = {}
-    for tickers in TRADING_CANDIDATES.values():
+    for tickers in pool(include_small_caps).values():
         for ticker in tickers:
             seen.setdefault(ticker, None)
     return tuple(seen)
 
 
-def all_symbols() -> tuple[str, ...]:
+def all_symbols(include_small_caps: bool = True) -> tuple[str, ...]:
     """Candidates plus the context symbols the regime panel needs."""
-    seen: dict[str, None] = {t: None for t in trading_symbols()}
+    seen: dict[str, None] = {t: None for t in trading_symbols(include_small_caps)}
     for ticker in MARKET_CONTEXT:
         seen.setdefault(ticker, None)
     return tuple(seen)
@@ -116,11 +190,11 @@ def sector_of(ticker: str) -> str | None:
     enough for limiting correlated positions and honest about being coarse.
     """
     target = ticker.strip().upper()
-    for sector, tickers in TRADING_CANDIDATES.items():
+    for sector, tickers in pool().items():
         if target in tickers:
             return sector
     return None
 
 
 def sector_map() -> dict[str, str]:
-    return {t: s for s, ts in TRADING_CANDIDATES.items() for t in ts}
+    return {t: s for s, ts in pool().items() for t in ts}
