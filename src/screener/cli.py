@@ -984,6 +984,109 @@ def value_cmd(
     )
 
 
+@app.command("status")
+def status_cmd() -> None:
+    """Where the project stands, in one screen.
+
+    Written for two readers: the operator returning after a gap, and a fresh
+    Claude session that has none of the conversation behind the repository.
+    Both need the same thing -- what data exists, what has been run, what has
+    been decided, and what to do next.
+    """
+    from sqlalchemy import func
+
+    from .backtest.splits import SPLITS
+    from .db.models import EarningsEvent, Fundamental, MetricsDaily, ResearchRun
+
+    settings = get_settings()
+    next_steps: list[str] = []
+
+    with session_scope() as session:
+        symbols = list(session.scalars(select(Symbol).order_by(Symbol.ticker)))
+        bar_count = session.scalar(select(func.count()).select_from(PriceDaily)) or 0
+        first = session.scalar(select(func.min(PriceDaily.date)))
+        last = session.scalar(select(func.max(PriceDaily.date)))
+        metric_rows = session.scalar(select(func.count()).select_from(MetricsDaily)) or 0
+        fundamental_rows = session.scalar(select(func.count()).select_from(Fundamental)) or 0
+        earnings_rows = session.scalar(select(func.count()).select_from(EarningsEvent)) or 0
+        runs = list(session.scalars(select(ResearchRun)))
+
+        data = Table(title="Data", show_header=False)
+        data.add_column("k")
+        data.add_column("v", justify="right")
+        data.add_row("Symbols", f"{len(symbols)}")
+        data.add_row("Price bars", f"{bar_count:,}")
+        data.add_row("Range", f"{first} → {last}" if first else "[red]none[/]")
+        data.add_row("Metrics rows", f"{metric_rows:,}")
+        data.add_row(
+            "Fundamentals",
+            f"{fundamental_rows:,}" if fundamental_rows else "[yellow]none[/]",
+        )
+        data.add_row(
+            "Earnings dates",
+            f"{earnings_rows:,}" if earnings_rows else "[yellow]none[/]",
+        )
+        data.add_row(
+            "Provider",
+            "tiingo" if settings.has_tiingo_credentials else "alpaca (recent years only)",
+        )
+        console.print(data)
+
+        if not bar_count:
+            next_steps.append("screener ingest --symbols SPY,QQQ,AAPL --start 2010-01-01")
+        elif not metric_rows:
+            next_steps.append("screener metrics build")
+        if not fundamental_rows:
+            next_steps.append("screener ingest-fundamentals   # unlocks the value screens")
+        if not earnings_rows:
+            next_steps.append("screener ingest-earnings       # unlocks h6 earnings drift")
+
+        # -- research ------------------------------------------------------
+        if runs:
+            spent: dict[tuple[str, str], set[str]] = {}
+            passed = 0
+            for run in runs:
+                spent.setdefault((run.hypothesis, run.split), set()).add(run.config_hash)
+                if run.criteria_passed:
+                    passed += 1
+
+            research = Table(title="Research")
+            for col in ("Hypothesis", "Split", "Configs", "Budget"):
+                research.add_column(col, justify="left" if col == "Hypothesis" else "right")
+            for (hypothesis, split_name), hashes in sorted(spent.items()):
+                limit = SPLITS[split_name].config_budget if split_name in SPLITS else None
+                research.add_row(
+                    hypothesis, split_name, str(len(hashes)),
+                    "unlimited" if limit is None else f"{len(hashes)}/{limit}",
+                )
+            console.print(research)
+
+            console.print(
+                f"[bold]{len(runs)}[/] recorded run(s); "
+                + (
+                    f"[green]{passed}[/] met every pre-registered criterion."
+                    if passed
+                    else "[yellow]none has met every pre-registered criterion.[/]"
+                )
+            )
+        else:
+            console.print("[yellow]No backtests recorded yet.[/]")
+            next_steps.append("screener research explore --battery all")
+
+    # -- orientation -------------------------------------------------------
+    console.print(
+        "\n[bold]Read before proposing anything:[/] CLAUDE.md, then "
+        "docs/06-DIAGNOSTIC-RESULTS.md and docs/07-STOP-DESIGN-QUESTION.md "
+        "for what the data has already said, and docs/09-REJECTED.md for what "
+        "was deliberately not built and why."
+    )
+
+    if next_steps:
+        console.print("\n[bold]Next:[/]")
+        for step in next_steps:
+            console.print(f"  {step}")
+
+
 @app.command("config")
 def config_cmd() -> None:
     """Show what is configured, without printing any secret.
