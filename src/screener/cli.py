@@ -1145,6 +1145,236 @@ def status_cmd() -> None:
             console.print(f"  {step}")
 
 
+@app.command("news")
+def news_cmd(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all stored."),
+    days: int = typer.Option(3, "--days", "-d", help="Look back this many days."),
+    limit: int = typer.Option(40, "--limit", "-n"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Recent headlines for the symbols you follow.
+
+    News here is CONTEXT, not signal. By publication the move has usually
+    happened, and nothing in this platform can measure whether a headline
+    predicts anything. Its honest use is explaining a move you can already see
+    and flagging that something happened before you size into it -- a stock up
+    9% with no news is a different situation from the same move on a guidance
+    raise.
+
+    No sentiment score is computed. A number derived from headlines would be
+    false precision.
+    """
+    _configure_logging(verbose)
+    from .providers.base import ProviderError
+    from .providers.news import AlpacaNewsProvider, headlines_by_symbol
+
+    try:
+        provider = AlpacaNewsProvider(get_settings())
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    with session_scope() as session:
+        stmt = select(Symbol).order_by(Symbol.ticker)
+        if symbols:
+            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            stmt = stmt.where(Symbol.ticker.in_(wanted))
+        tickers = tuple(s.ticker for s in session.scalars(stmt))
+
+    if not tickers:
+        console.print("[red]No symbols stored.[/] Run 'screener ingest' first.")
+        raise typer.Exit(code=1)
+
+    start = date.today() - timedelta(days=days)
+    try:
+        items = provider.get_news(tickers, start, date.today(), limit=limit)
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+    finally:
+        provider.close()
+
+    if not items:
+        console.print(f"[yellow]No headlines for these symbols in the last {days} day(s).[/]")
+        return
+
+    grouped = headlines_by_symbol(items)
+    table = Table(title=f"Headlines — last {days} day(s)")
+    for col in ("When", "Symbols", "Headline", "Source"):
+        table.add_column(col, overflow="fold" if col == "Headline" else None)
+
+    for item in items:
+        mentioned = ", ".join(item.symbols[:3]) + ("…" if len(item.symbols) > 3 else "")
+        table.add_row(
+            item.created_at.strftime("%m-%d %H:%M"),
+            mentioned,
+            item.headline[:110],
+            item.source,
+        )
+    console.print(table)
+    busiest = sorted(grouped.items(), key=lambda kv: -len(kv[1]))[:5]
+    console.print(
+        "[dim]Most mentioned: "
+        + ", ".join(f"{t} ({len(v)})" for t, v in busiest)
+        + " — mention count is attention, not direction.[/]"
+    )
+
+
+@app.command("option")
+def option_cmd(
+    symbol: str = typer.Argument(..., help="Underlying ticker."),
+    hold: int = typer.Option(10, "--hold", help="Planned holding period in days."),
+    stop_atr: float = typer.Option(2.0, "--stop-atr", help="Stop distance in ATR(14)."),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    target_delta: float = typer.Option(0.75, "--delta", help="Aim for this delta."),
+    feed: str = typer.Option("indicative", "--feed", help="indicative or opra."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Pick the least-bad contract for a swing plan, and price what it costs.
+
+    This does NOT decide whether options are the right vehicle. It answers a
+    narrower question: given an entry, a stop and a holding period, which
+    contract expresses that view with the least friction, and what is the
+    friction?
+
+    The selection rules are deliberately restrictive -- deep in the money,
+    expiry at least twice the hold, never spanning earnings, tight spreads --
+    because the default retail choice of a cheap out-of-the-money option near
+    expiry maximises decay and buys leverage this account size does not need.
+
+    The stock alternative is always shown alongside. That comparison is the
+    point.
+    """
+    _configure_logging(verbose)
+    from .ingest.events import earnings_dates
+    from .options.provider import AlpacaOptionsProvider
+    from .options.select import (
+        SelectionRules,
+        choose_contract,
+        eligible_contracts,
+        plan_option_trade,
+    )
+    from .providers.base import ProviderError
+
+    ticker = symbol.strip().upper()
+    today = date.today()
+
+    with session_scope() as session:
+        sym = session.scalar(select(Symbol).where(Symbol.ticker == ticker))
+        if sym is None:
+            console.print(f"[red]{ticker} not ingested.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+        bar = session.scalars(
+            select(PriceDaily).where(PriceDaily.symbol_id == sym.id)
+            .order_by(PriceDaily.date.desc()).limit(1)
+        ).first()
+        if bar is None:
+            console.print(f"[red]No bars stored for {ticker}.[/]")
+            raise typer.Exit(code=1)
+
+        from .db.models import MetricsDaily
+        metric = session.scalars(
+            select(MetricsDaily).where(MetricsDaily.symbol_id == sym.id)
+            .order_by(MetricsDaily.date.desc()).limit(1)
+        ).first()
+        upcoming = [d for d in earnings_dates(session, sym.id) if d >= today]
+
+    price = float(bar.close)
+    atr = float(metric.atr_14) if metric and metric.atr_14 else price * 0.02
+    stop = price - stop_atr * atr
+    earnings_in = (upcoming[0] - today).days if upcoming else None
+
+    console.print(
+        f"[bold]{ticker}[/] at {price:.2f} · ATR {atr:.2f} · stop {stop:.2f} "
+        f"· hold {hold}d"
+        + (f" · earnings in {earnings_in}d" if earnings_in is not None else "")
+    )
+
+    try:
+        provider = AlpacaOptionsProvider(get_settings())
+        chain = provider.get_chain(
+            ticker, expiry_after=today, expiry_before=today + timedelta(days=180),
+            feed=feed,
+        )
+        provider.close()
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    if not chain:
+        console.print("[yellow]No contracts returned for this underlying.[/]")
+        raise typer.Exit(code=1)
+
+    rules = SelectionRules(target_delta=target_delta)
+    kept, dropped = eligible_contracts(
+        chain, as_of=today, hold_days=hold, earnings_in_days=earnings_in, rules=rules
+    )
+    console.print(
+        f"[dim]{len(chain)} contract(s) in the chain, {len(kept)} eligible.[/]"
+    )
+    if dropped:
+        for reason, count in sorted(dropped.items(), key=lambda kv: -kv[1])[:5]:
+            console.print(f"  [dim]{count:>4} — {reason}[/]")
+
+    contract = choose_contract(
+        chain, as_of=today, hold_days=hold, earnings_in_days=earnings_in, rules=rules
+    )
+    if contract is None:
+        console.print(
+            "\n[yellow]No contract expresses this trade acceptably.[/] That is a "
+            "result, not a failure — trade the stock, or wait."
+        )
+        raise typer.Exit(code=1)
+
+    plan = plan_option_trade(
+        contract, underlying_price=price, stop_price=stop, hold_days=hold,
+        risk_budget=equity * risk_pct, cash_available=equity, as_of=today, rules=rules,
+    )
+
+    table = Table(title=f"{contract.symbol}")
+    table.add_column("k")
+    table.add_column("v", justify="right")
+    table.add_row("Strike / expiry",
+                  f"{contract.strike:.2f} · {contract.expiry} "
+                  f"({contract.days_to_expiry(today)}d)")
+    table.add_row("Bid / ask", f"{contract.bid:.2f} / {contract.ask:.2f}")
+    table.add_row("Spread", f"{contract.spread:.2f} "
+                            f"({(contract.spread_pct or 0):.1%} of mid)")
+    table.add_row("Delta / theta",
+                  f"{contract.delta if contract.delta is not None else '-'} · "
+                  f"{contract.theta if contract.theta is not None else '-'}")
+    table.add_row("Intrinsic / time value",
+                  f"{contract.intrinsic(price):.2f} / {contract.extrinsic(price):.2f}")
+    table.add_row("", "")
+    table.add_row("Contracts", str(plan.contracts))
+    table.add_row("Cost", f"${plan.cost:,.2f}")
+    table.add_row("Loss if stop is hit", f"${plan.stop_loss_estimate:,.2f}")
+    table.add_row("Spread cost (round trip)", f"${plan.spread_cost:,.2f}")
+    table.add_row(f"Decay over {hold}d", f"${plan.decay_cost:,.2f}")
+    table.add_row("Friction before direction", f"{plan.friction_pct:.1%} of cost")
+    table.add_row("Breakeven at expiry", f"{plan.breakeven:.2f}")
+    table.add_row("Effective leverage",
+                  f"{plan.effective_leverage:.1f}x" if plan.effective_leverage else "-")
+    console.print(table)
+
+    console.print(
+        f"[bold]The stock alternative:[/] same ${equity * risk_pct:,.0f} of risk buys "
+        f"[bold]{plan.shares_equivalent}[/] shares at {price:.2f} "
+        f"(${plan.shares_equivalent * price:,.0f}), breakeven {plan.stock_breakeven:.2f} "
+        f"versus {plan.breakeven:.2f} for the option."
+    )
+
+    if plan.rejections:
+        for reason in plan.rejections:
+            console.print(f"[red]Rejected:[/] {reason}")
+    else:
+        console.print(
+            "\n[dim]Quotes on the free tier are indicative, not real-time OPRA. "
+            "Confirm the actual market in your broker before sending anything.[/]"
+        )
+
+
 @app.command("config")
 def config_cmd() -> None:
     """Show what is configured, without printing any secret.
