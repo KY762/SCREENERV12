@@ -8,6 +8,33 @@ operator's documented losses came from execution — missing stops, size
 escalation after losses, profit quotas — not from strategy selection. Software
 that makes those decisions mechanical is the point of the project.
 
+## How to work here
+
+Full protocol in `docs/08-OPERATING-PROTOCOL.md`. The parts that bite:
+
+- **The objective is evidence, not features.** This platform exists to
+  determine whether trading concepts have measurable predictive value under
+  realistic conditions. A feature that adds complexity without improving
+  evidence quality should be argued against, not built.
+- **Interpret before executing.** The request is evidence of intent, not a
+  specification of it. If the proposed method conflicts with the objective,
+  say so before building.
+- **Disagree when there is a substantive reason.** Logically inconsistent,
+  statistically weak, redundant, likely to create false confidence, or
+  inferior to an obvious alternative — all grounds to push back. Never
+  "that's what you asked for" as a defence of a bad result.
+- **Never manufacture confidence.** No hypothesis here has passed validation.
+  Do not call anything profitable. "We don't know yet" and "this cannot be
+  established from the available data" are correct answers.
+- **Label facts, inferences and assumptions as what they are.** An assumption
+  presented as a fact is the failure mode this project is built to prevent.
+- **Surface disagreement; do not act on it unilaterally.** Risk parameters,
+  hypothesis specifications and pre-registered criteria are the operator's to
+  change. The sizing inconsistency below is recorded rather than fixed for
+  exactly this reason.
+- **Audit before delivering.** State the strongest criticism of your own
+  output and fix it first.
+
 ## Non-negotiables
 
 These are not preferences. Violating any of them silently invalidates results.
