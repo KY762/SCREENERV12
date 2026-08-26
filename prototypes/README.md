@@ -1,5 +1,29 @@
 # Interface prototypes
 
+## `swing-deck.html` — current
+
+Built for a 3–15 day holding period, which changes the priorities:
+relative strength, participation, volatility, rotation and CATALYSTS matter;
+book value and long-run profitability do not move a stock in a week.
+
+Three things it does that the earlier prototype did not:
+
+**Asks whether to trade at all, before asking what to trade.** The regime panel
+sits above the candidate list on purpose. Over a two-week hold the tape does a
+lot of the work, and the strongest setup in a hostile market is still a long
+position in a hostile market. It reports conditions, never a forecast -- the
+distinction is stated on the page.
+
+**Counts down to earnings, and lets that veto a trade.** A report can gap a
+stock further than the stop in one session, which makes both the stop and the
+position size wrong. Any earnings date inside the planned hold is a veto in the
+position panel, not a footnote. Dates come from SEC filings, which lag the
+actual announcement -- the page says so.
+
+**Shows sector rotation and macro as relative moves.** Oil's price is not the
+information. Energy outperforming utilities, or high yield lagging Treasuries,
+is the information.
+
 ## `candidate-board.html`
 
 The daily screen, as a self-contained page. Open it in a browser -- no server,
