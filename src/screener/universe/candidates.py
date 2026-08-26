@@ -71,7 +71,7 @@ TRADING_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
     "Consumer discretionary": (
         "F", "GM", "CHWY", "ETSY", "EBAY", "CROX", "SKX", "ANF",
-        "AEO", "URBN", "M", "KSS", "BBWI", "VFC", "RL", "GPS",
+        "AEO", "URBN", "M", "KSS", "BBWI", "VFC", "RL", "GAP",
     ),
     "Travel & transport": (
         "AAL", "DAL", "UAL", "LUV", "JBLU", "CAR", "NCLH", "CCL", "RCL",
