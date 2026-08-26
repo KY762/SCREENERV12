@@ -752,10 +752,9 @@ def ingest_earnings_cmd(
 
 @universe_app.command("coverage")
 def universe_coverage(
-    tickers: str = typer.Option(
-        "TWTR,ATVI,SIVB,FRC,SBNY,CERN,XLNX,MRO,ANF,BBBY",
-        "--tickers",
-        help="Known delisted or acquired symbols to probe.",
+    tickers: str | None = typer.Option(
+        None, "--tickers",
+        help="Override the default probe list. Comma-separated.",
     ),
     provider_name: str = typer.Option("auto", "--provider"),
     start: str = typer.Option("2010-01-01", "--start"),
@@ -763,13 +762,20 @@ def universe_coverage(
 ) -> None:
     """MEASURE SURVIVORSHIP: does the data provider carry delisted companies?
 
-    Every backtest result so far carries an unquantified caveat -- the universe
-    contains only companies that still exist, so any strategy is measured on
-    survivors. This turns that caveat into a number by asking the provider for
-    symbols that are known to have been acquired or to have failed.
+    Every backtest result carries an unquantified caveat -- the universe holds
+    only companies that still exist, so any strategy is measured on survivors.
+    This turns the caveat into a number.
 
-    A provider returning nothing for all of them cannot support an unbiased
-    universe at any price, and every result from it must continue to state so.
+    ACQUISITIONS AND FAILURES ARE REPORTED SEPARATELY, because they bias
+    results in opposite directions and a single percentage hides that. An
+    acquisition usually ends at a premium, so missing them understates
+    returns. A bankruptcy ends near zero, so missing them OVERSTATES returns --
+    and value screens select distressed companies, which is precisely where
+    the missing cases would have been.
+
+    A symbol that is supposedly delisted but still returns recent bars is
+    reported as suspect rather than as coverage: either the probe is wrong or
+    the provider is serving a stale or reused series.
     """
     _configure_logging(verbose)
     from .providers.base import BarRequest, ProviderError
@@ -790,61 +796,113 @@ def universe_coverage(
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=1) from exc
 
-    probes = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    # Split deliberately. These bias results in opposite directions.
+    ACQUIRED = {
+        "TWTR": "acquired 2022", "ATVI": "acquired 2023", "CERN": "acquired 2022",
+        "XLNX": "acquired 2022", "MRO": "acquired 2024", "VMW": "acquired 2023",
+    }
+    FAILED = {
+        "FRC": "failed 2023", "SIVB": "failed 2023", "SBNY": "failed 2023",
+        "BBBY": "bankrupt 2023", "YELL": "bankrupt 2023", "RAD": "bankrupt 2023",
+    }
+    labels = {**ACQUIRED, **FAILED}
+
+    probes = (
+        [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        if tickers else list(labels)
+    )
     start_date = date.fromisoformat(start)
     end_date = date.today()
+    recent_cutoff = end_date - timedelta(days=45)
 
     console.print(f"Probing [bold]{len(probes)}[/] delisted symbol(s) against {choice}...")
 
     table = Table(title=f"Delisted-ticker coverage — {choice}")
-    for col in ("Symbol", "Bars", "First", "Last", "Verdict"):
+    for col in ("Symbol", "Event", "Bars", "First", "Last", "Verdict"):
         table.add_column(col, justify="right" if col == "Bars" else "left")
 
-    found = 0
+    covered: dict[str, list[str]] = {"acquired": [], "failed": []}
+    suspect: list[str] = []
+    absent: list[str] = []
+
     for ticker in probes:
         try:
             frame = provider.get_daily_bars(
                 BarRequest((ticker,), start_date, end_date, "raw")
             )
         except ProviderError as exc:
-            table.add_row(ticker, "-", "-", "-", f"[yellow]error: {str(exc)[:40]}[/]")
+            table.add_row(ticker, labels.get(ticker, "-"), "-", "-", "-",
+                          f"[yellow]error: {str(exc)[:34]}[/]")
             continue
 
+        event = labels.get(ticker, "unknown")
         if frame.empty:
-            table.add_row(ticker, "0", "-", "-", "[red]absent[/]")
+            absent.append(ticker)
+            table.add_row(ticker, event, "0", "-", "-", "[red]absent[/]")
             continue
 
         dates = frame.index.get_level_values("date")
-        found += 1
+        last_bar = max(dates)
+
+        if last_bar >= recent_cutoff:
+            # Still trading, so this is not evidence of delisted coverage.
+            suspect.append(ticker)
+            verdict = "[yellow]still trading — suspect[/]"
+        else:
+            bucket = "failed" if ticker in FAILED else "acquired"
+            covered[bucket].append(ticker)
+            verdict = "[green]delisted series present[/]"
+
         table.add_row(
-            ticker, f"{len(frame):,}", str(min(dates)), str(max(dates)),
-            "[green]present[/]",
+            ticker, event, f"{len(frame):,}", str(min(dates)), str(last_bar), verdict
         )
 
     console.print(table)
     provider.close()
 
-    share = found / len(probes) if probes else 0.0
-    if found == 0:
+    acquired_probes = [t for t in probes if t in ACQUIRED]
+    failed_probes = [t for t in probes if t in FAILED]
+
+    def share(found: list[str], probed: list[str]) -> str:
+        return f"{len(found)}/{len(probed)}" if probed else "0/0"
+
+    console.print(
+        f"\n[bold]Acquisitions:[/] {share(covered['acquired'], acquired_probes)} present"
+    )
+    console.print(
+        f"[bold]Failures:[/]     {share(covered['failed'], failed_probes)} present"
+    )
+    if suspect:
         console.print(
-            "[red bold]No delisted coverage.[/] Every universe built from this "
-            "provider contains only survivors, and every backtest on it is "
-            "inflated by an unknown amount. The caveat stays on every result."
+            f"[yellow]Suspect:[/] {', '.join(suspect)} — still returning recent bars "
+            "despite being delisted. Either the probe is wrong or the provider is "
+            "serving a stale or reused series. Do not count these as coverage."
         )
-    elif share < 0.5:
+
+    if failed_probes and not covered["failed"]:
         console.print(
-            f"[yellow bold]Partial coverage — {found}/{len(probes)}.[/] Better than "
-            "none, but a universe built from this still leans toward survivors."
+            "\n[red bold]No coverage of companies that FAILED.[/] This is the half "
+            "that matters most. A bankruptcy ends near zero, so its absence "
+            "OVERSTATES every backtested return -- and value screens select "
+            "distressed companies, which is exactly where the missing cases "
+            "would have been. The survivorship caveat stays on every result."
+        )
+    elif len(covered["failed"]) < len(failed_probes):
+        console.print(
+            "\n[yellow bold]Partial coverage of failures.[/] Better than none. "
+            "Any cross-sectional result still leans toward survivors by an "
+            "unmeasured amount."
         )
     else:
         console.print(
-            f"[green bold]Coverage present — {found}/{len(probes)}.[/] A delisted-"
-            "inclusive universe is buildable. Rebuild it before trusting any "
-            "cross-sectional result."
+            "\n[green bold]Failures and acquisitions both covered.[/] A "
+            "delisted-inclusive universe is buildable. Rebuild it before "
+            "trusting any cross-sectional result."
         )
+
     console.print(
-        "[dim]Note: absence can also mean the symbol was never covered rather "
-        "than dropped on delisting. Treat this as a floor, not a measurement.[/]"
+        "[dim]Absence can also mean the symbol was never covered rather than "
+        "dropped on delisting. Treat this as a floor, not a measurement.[/]"
     )
 
 
