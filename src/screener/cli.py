@@ -750,6 +750,127 @@ def ingest_earnings_cmd(
         console.print(f"  [yellow]{failure.ticker}[/]: {failure.error}")
 
 
+@universe_app.command("tradeable")
+def universe_tradeable(
+    equity: float = typer.Option(10_000.0, "--equity"),
+    risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    stop_atr: float = typer.Option(2.0, "--stop-atr"),
+    cap_pct: float = typer.Option(0.25, "--cap-pct", help="Concentration cap."),
+    show: str = typer.Option("all", "--show", help="all, good, or tradeable."),
+) -> None:
+    """Which stored symbols this account can actually size a position in.
+
+    Two things make a stock untradeable, both arithmetic, neither about the
+    company:
+
+    TOO FEW SHARES. Risk budget over stop distance. A $900 stock with a $26
+    stop is 3 shares at $10k -- rounding throws away a third of the intended
+    risk and nothing is left to adjust.
+
+    THE CAP BINDING. A low-volatility name has a tight stop, so the same risk
+    buys a position the concentration cap then cuts. The trade ends up risking
+    0.5% when the rule said 1%. Conservative, but the sizing rule has stopped
+    describing what happens.
+
+    The first problem is fixed by a larger account. The second is not -- it
+    depends on volatility against the risk-to-cap ratio, so more money never
+    resolves it. Only a different stock does.
+    """
+    from decimal import Decimal
+
+    from .calc.sizing import RiskLimits
+    from .calc.tradeability import (
+        assess,
+        max_workable_price,
+        min_workable_atr_pct,
+    )
+    from .db.models import MetricsDaily
+
+    limits = RiskLimits(
+        risk_pct_per_trade=Decimal(str(risk_pct)),
+        max_position_pct=Decimal(str(cap_pct)),
+    )
+
+    with session_scope() as session:
+        results = []
+        for symbol in session.scalars(select(Symbol).order_by(Symbol.ticker)):
+            metric = session.scalars(
+                select(MetricsDaily)
+                .where(MetricsDaily.symbol_id == symbol.id, MetricsDaily.atr_14.isnot(None))
+                .order_by(MetricsDaily.date.desc()).limit(1)
+            ).first()
+            bar = session.scalars(
+                select(PriceDaily).where(PriceDaily.symbol_id == symbol.id)
+                .order_by(PriceDaily.date.desc()).limit(1)
+            ).first()
+            if metric is None or bar is None:
+                continue
+            results.append(
+                assess(
+                    symbol.ticker, float(bar.close), float(metric.atr_14),
+                    equity=equity, stop_atr=stop_atr, limits=limits,
+                )
+            )
+
+    if not results:
+        console.print(
+            "[yellow]No symbols with metrics.[/] Run 'screener metrics build' first."
+        )
+        raise typer.Exit(code=1)
+
+    wanted = {
+        "good": {"good"},
+        "tradeable": {"good", "marginal"},
+        "all": {"good", "marginal", "unusable"},
+    }.get(show.strip().lower())
+    if wanted is None:
+        console.print(f"[red]Unknown --show value {show!r}.[/] Expected all, good or tradeable.")
+        raise typer.Exit(code=1)
+
+    order = {"good": 0, "marginal": 1, "unusable": 2}
+    rows = sorted(
+        (r for r in results if r.verdict in wanted),
+        key=lambda r: (order[r.verdict], -r.shares),
+    )
+
+    table = Table(title=f"Tradeable at ${equity:,.0f} · {risk_pct:.1%} risk · {stop_atr}× ATR stop")
+    for col in ("Symbol", "Price", "Stop", "Shares", "Position", "% eq", "Risk", "Verdict"):
+        table.add_column(col, justify="right" if col != "Symbol" else "left")
+
+    colour = {"good": "green", "marginal": "yellow", "unusable": "red"}
+    for r in rows:
+        table.add_row(
+            r.ticker, f"{float(r.price):.2f}", f"{float(r.stop_distance):.2f}",
+            str(r.shares), f"${float(r.position_value):,.0f}",
+            f"{r.pct_of_equity:.0%}",
+            f"{r.effective_risk_pct:.2%}",
+            f"[{colour[r.verdict]}]{r.verdict}[/]"
+            + (" [dim]capped[/]" if r.concentration_capped else ""),
+        )
+    console.print(table)
+
+    counts = {v: sum(1 for r in results if r.verdict == v) for v in order}
+    console.print(
+        f"\n[green]{counts['good']} good[/] · "
+        f"[yellow]{counts['marginal']} marginal[/] · "
+        f"[red]{counts['unusable']} unusable[/] of {len(results)}"
+    )
+
+    ceiling = max_workable_price(0.02, equity=equity, stop_atr=stop_atr, limits=limits)
+    floor = min_workable_atr_pct(equity=equity, stop_atr=stop_atr, limits=limits)
+    console.print(
+        f"[bold]At this account size, look for:[/] ATR above [bold]{floor:.1%}[/] "
+        f"so the cap does not bind, and price below roughly "
+        f"[bold]${ceiling:,.0f}[/] at that volatility so ten shares is reachable."
+    )
+    if counts["good"] < 10:
+        console.print(
+            "[yellow]Most of this universe is too expensive for the account.[/] "
+            "That is a universe problem, not a strategy problem — ingest more "
+            "mid-priced names rather than loosening the risk rules."
+        )
+
+
 @universe_app.command("coverage")
 def universe_coverage(
     tickers: str | None = typer.Option(
