@@ -750,6 +750,78 @@ def ingest_earnings_cmd(
         console.print(f"  [yellow]{failure.ticker}[/]: {failure.error}")
 
 
+@universe_app.command("candidates")
+def universe_candidates(
+    plain: bool = typer.Option(
+        False, "--plain", help="Print a bare comma-separated list, for piping into ingest."
+    ),
+    context: bool = typer.Option(
+        True, "--context/--no-context",
+        help="Include the ETFs the regime panel needs.",
+    ),
+) -> None:
+    """The candidate pool, sized for a small account.
+
+    A POOL, not a screened universe. Nothing here has been checked against
+    today's prices -- that is what 'universe tradeable' is for after ingestion.
+    Selection was on liquidity, a price range where ten shares is reachable,
+    enough volatility that the concentration cap does not bind, and sector
+    spread so the per-sector limit means something.
+
+    Inclusion is not a recommendation. These are instruments this account can
+    express a position in, which is a prerequisite rather than a reason.
+    """
+    from .universe.candidates import (
+        MARKET_CONTEXT,
+        TRADING_CANDIDATES,
+        all_symbols,
+        trading_symbols,
+    )
+
+    symbols = all_symbols() if context else trading_symbols()
+
+    if plain:
+        print(",".join(symbols))
+        return
+
+    table = Table(title="Candidate pool")
+    table.add_column("Sector")
+    table.add_column("N", justify="right")
+    table.add_column("Symbols", overflow="fold")
+    for sector, tickers in TRADING_CANDIDATES.items():
+        table.add_row(sector, str(len(tickers)), " ".join(tickers))
+    if context:
+        table.add_row(
+            "[dim]market context[/]", str(len(MARKET_CONTEXT)),
+            "[dim]" + " ".join(MARKET_CONTEXT) + "[/]",
+        )
+    console.print(table)
+
+    console.print(
+        f"\n[bold]{len(trading_symbols())}[/] tradeable candidates"
+        + (f" plus [bold]{len(MARKET_CONTEXT)}[/] context symbols" if context else "")
+        + f" = [bold]{len(symbols)}[/] to ingest."
+    )
+    console.print(
+        "\n[bold]Load them, then let the data decide:[/]\n"
+        "  screener ingest --symbols $(screener universe candidates --plain) "
+        "--start 2010-01-01\n"
+        "  screener metrics build\n"
+        "  screener universe build\n"
+        "  screener universe tradeable --show good"
+    )
+    console.print(
+        "[dim]On Windows PowerShell the first line is:\n"
+        "  screener ingest --symbols (screener universe candidates --plain) "
+        "--start 2010-01-01[/]"
+    )
+    console.print(
+        "\n[yellow]Tiingo fetches one symbol per request and the free tier caps "
+        "requests per hour.[/] A run that stops partway is expected — re-run the "
+        "same command later and it resumes, because stored bars are skipped."
+    )
+
+
 @universe_app.command("tradeable")
 def universe_tradeable(
     equity: float = typer.Option(10_000.0, "--equity"),
