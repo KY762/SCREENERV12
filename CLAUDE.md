@@ -72,9 +72,26 @@ experiments settle it and have not been run.
 Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
 unrun.
 
-**Every result carries a survivorship caveat**: the universe is today's
-survivors, no delisted companies. `screener universe coverage` measures it;
-that has not been run.
+**Survivorship is measured, and it is asymmetric.** `screener universe
+coverage` on 2026-08-26 against Tiingo: acquisitions **6/6 present**, failures
+**0/6 present** (FRC, BBBY, YELL, RAD absent; SIVB and SBNY still return bars
+dated today despite failing in March 2023 — reused or stale series, not
+coverage). Acquisitions end at a premium and failures end near zero, so the
+data keeps every good ending and loses every bad one. The bias is directional
+and upward on every backtested return. Absence may also mean never-covered,
+so 0/6 is a floor, not a measurement.
+
+Consequence: Round 1's negative h1–h4 results were produced *with* this bias
+helping them, which makes them more credible, not less. Value screens are the
+most exposed thing here — they select distressed companies, which is exactly
+the missing population. Polygon (~$29/mo) is the documented fix
+(`providers/alpaca.py:12`).
+
+**Do not spend validation or test budget until delisted coverage is fixed.**
+Development is unlimited and the bias direction is known, so Round 2 can run
+there. Validation (3 configs) and test (1, once) are enforced against the
+database and never regenerate; spending them on knowingly biased data burns
+them permanently.
 
 Universe as of 2026-08-26: 265 candidates ingested, 263 returned bars, 307
 symbols with metrics (the pool plus the earlier 51). 881,449 daily bars;
