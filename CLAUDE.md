@@ -114,7 +114,16 @@ Each was invisible to a passing test suite and surfaced only on real data.
 - **Regime returns in R, compared against a percentage threshold.** Printed
   "worst −19725.7%".
 - **Shared CLI defaults applied to a hypothesis whose spec differs.** H1 was
-  run with a 2R target it does not have.
+  run with a 2R target it does not have. **Reintroduced for Round 2 and found
+  again on 2026-08-27**: the fix had hardcoded H1 as the sole exception
+  (`r_multiple = None if key == "h1" else 2.0`), so h5–h7 inherited H2–H4's
+  exit rules. H5's first development run therefore carried a 2R target it does
+  not have and a 10-bar time limit against a spec of `hold` — testing the
+  short-horizon momentum docs/03 §H1 already records as much weaker than the
+  12-month form H5 exists to examine. The CLI now defers to
+  `RunConfig.resolved()`, and the resolved values are what get hashed for
+  budget, so a run cannot log a configuration it did not use. **That H5 result
+  is void; re-run it.**
 
 ## Commands
 

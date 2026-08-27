@@ -292,3 +292,43 @@ def test_every_surface_cell_is_recorded_in_the_research_log(loaded):
             )
         )
     assert count == 3
+
+
+def test_round_2_hypotheses_do_not_inherit_round_1_exit_defaults(loaded):
+    """H5 has no profit target and exits on its own hold, H6/H7 exit at 20
+    bars. The CLI used to hardcode `2.0 if key != "h1"` and `10 if key !=
+    "h1"`, so every hypothesis added after H1 silently ran with H2-H4's exit
+    rules. H5 momentum-12-1 under a 10-bar cap is the short-horizon momentum
+    docs/03 records as much weaker -- a different hypothesis than the one
+    being tested, scored against H5's pre-registered criteria."""
+    import json
+
+    from sqlalchemy import select
+
+    from screener.db.models import ResearchRun
+    from screener.db.session import session_scope
+
+    cli, runner = loaded
+    for hypothesis in ("h5", "h6", "h7"):
+        runner.invoke(
+            cli.app,
+            ["backtest", "run", "--hypothesis", hypothesis, "--split",
+             "development", "--random-iterations", "0", "--hold", "7"],
+        )
+
+    with session_scope() as session:
+        stored = {
+            run.hypothesis: json.loads(run.config_json)
+            for run in session.scalars(
+                select(ResearchRun).where(ResearchRun.hypothesis.in_(("h5", "h6", "h7")))
+            )
+        }
+
+    for hypothesis in ("h5", "h6", "h7"):
+        assert stored[hypothesis]["r_multiple"] is None, (
+            f"{hypothesis} must not inherit H2-H4's 2R target"
+        )
+
+    assert stored["h5"]["time_limit"] == 7, "--hold must drive H5's time exit"
+    assert stored["h6"]["time_limit"] == 20
+    assert stored["h7"]["time_limit"] == 20

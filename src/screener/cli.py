@@ -1919,14 +1919,24 @@ def backtest_run(
     chosen = get_split(split)
     console.print(f"[dim]{chosen.describe()}[/]")
 
-    # Defaults follow each hypothesis's own specification rather than one
-    # shared setting. H1 (docs/03) exits on TIME or STOP and has no profit
-    # target; H2/H3/H4 surface over R targets. Applying a 2R target to H1
-    # tests something the specification does not describe.
-    if time_limit is None:
-        time_limit = hold if key == "h1" else 10
-    if r_multiple is None:
-        r_multiple = None if key == "h1" else 2.0
+    # Per-hypothesis defaults live in RunConfig.resolved(), the single place
+    # that knows each specification. They used to be duplicated here with H1
+    # as the only exception, so every hypothesis added afterwards silently
+    # inherited H2-H4's 2R target and a 10-bar time limit. H5 has no profit
+    # target and exits on its own hold; under those shared defaults it tested
+    # the short-horizon momentum docs/03 already records as much weaker than
+    # the 12-month form H5 exists to examine.
+    #
+    # Resolved here rather than at the call site because the config dict below
+    # is what gets hashed for budget and written to config_json. Hashing the
+    # unresolved values would let two runs that differ in effective exit rule
+    # collide on the same hash, and would log a configuration that did not run.
+    from .backtest.runner import RunConfig as _RunConfig
+
+    _spec = _RunConfig(
+        hypothesis=key, r_multiple=r_multiple, time_limit=time_limit, hold=hold
+    ).resolved()
+    r_multiple, time_limit = _spec.r_multiple, _spec.time_limit
 
     config = {
         "hypothesis": key,
