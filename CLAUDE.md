@@ -72,9 +72,15 @@ experiments settle it and have not been run.
 Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
 unrun.
 
-**Every result carries a survivorship caveat**: the 51-symbol universe is
-today's large caps, no delisted companies. `screener universe coverage`
-measures it; that has not been run either.
+**Every result carries a survivorship caveat**: the universe is today's
+survivors, no delisted companies. `screener universe coverage` measures it;
+that has not been run.
+
+Universe as of 2026-08-26: 265 candidates ingested, 263 returned bars, 307
+symbols with metrics (the pool plus the earlier 51). 881,449 daily bars;
+562,535 point-in-time membership rows across 3,938 dates. Two ingest failures
+were both instructive — `GPS` because Gap Inc. now trades as `GAP` (fixed),
+`PSTG` for reasons still unknown.
 
 ## Bugs already found and fixed — do not reintroduce
 
@@ -120,9 +126,13 @@ screener research explore --battery all
 
 ## Open decisions for the operator
 
-- **Sizing is internally inconsistent.** At 1% risk with a 2-ATR stop a
-  position is 25–33% of equity, so the 25% concentration cap binds on almost
-  every trade and four positions exhaust the account. "Max 5 positions" and
-  "5% total open risk" never bind. Options in `docs/07` §5.
+- **Sizing is inconsistent only below 2% ATR.** Position size as a fraction of
+  equity is `0.01 / (2 × ATR_pct)`, so the 25% concentration cap binds exactly
+  when ATR% < 2.0%. That holds for low-volatility mega caps — the slice this
+  note was originally inferred from — and not for the wider pool. Measured on
+  307 ingested symbols (2026-08-26): **185 good, 58 marginal, 64 unusable**,
+  with effective risk on the good set at 0.92–0.99% against an intended 1%.
+  The cap is not binding on the majority of candidates. "Max 5 positions" and
+  "5% total open risk" still never bind. Options in `docs/07` §5.
 - Proposed on arithmetic, not results: 0.5% risk, 20% cap, and an account-level
   drawdown circuit breaker (−8% halve risk, −12% no new entries, −15% stop).
