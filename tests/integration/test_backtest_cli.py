@@ -295,12 +295,16 @@ def test_every_surface_cell_is_recorded_in_the_research_log(loaded):
 
 
 def test_round_2_hypotheses_do_not_inherit_round_1_exit_defaults(loaded):
-    """H5 has no profit target and exits on its own hold, H6/H7 exit at 20
-    bars. The CLI used to hardcode `2.0 if key != "h1"` and `10 if key !=
-    "h1"`, so every hypothesis added after H1 silently ran with H2-H4's exit
-    rules. H5 momentum-12-1 under a 10-bar cap is the short-horizon momentum
-    docs/03 records as much weaker -- a different hypothesis than the one
-    being tested, scored against H5's pre-registered criteria."""
+    """H5 has no profit target and exits on its own hold. The CLI used to
+    hardcode `2.0 if key != "h1"` and `10 if key != "h1"`, so every hypothesis
+    added after H1 silently ran with H2-H4's exit rules. H5 momentum-12-1
+    under a 10-bar cap with a 2R target is the short-horizon momentum docs/03
+    records as much weaker -- a different hypothesis than the one being
+    scored against H5's pre-registered criteria.
+
+    Asserted through the CLI because the bug was in the CLI, not the spec:
+    RunConfig.resolved() was already correct and was being overridden.
+    """
     import json
 
     from sqlalchemy import select
@@ -309,26 +313,34 @@ def test_round_2_hypotheses_do_not_inherit_round_1_exit_defaults(loaded):
     from screener.db.session import session_scope
 
     cli, runner = loaded
-    for hypothesis in ("h5", "h6", "h7"):
-        runner.invoke(
-            cli.app,
-            ["backtest", "run", "--hypothesis", hypothesis, "--split",
-             "development", "--random-iterations", "0", "--hold", "7"],
-        )
+    runner.invoke(
+        cli.app,
+        ["backtest", "run", "--hypothesis", "h5", "--split", "development",
+         "--random-iterations", "0", "--hold", "7"],
+    )
 
     with session_scope() as session:
-        stored = {
-            run.hypothesis: json.loads(run.config_json)
-            for run in session.scalars(
-                select(ResearchRun).where(ResearchRun.hypothesis.in_(("h5", "h6", "h7")))
-            )
-        }
+        run = session.scalars(
+            select(ResearchRun).where(ResearchRun.hypothesis == "h5")
+        ).first()
 
-    for hypothesis in ("h5", "h6", "h7"):
-        assert stored[hypothesis]["r_multiple"] is None, (
-            f"{hypothesis} must not inherit H2-H4's 2R target"
-        )
+    assert run is not None, "H5 run was not recorded"
+    config = json.loads(run.config_json)
+    assert config["r_multiple"] is None, "H5 must not inherit H2-H4's 2R target"
+    assert config["time_limit"] == 7, "--hold must drive H5's time exit"
 
-    assert stored["h5"]["time_limit"] == 7, "--hold must drive H5's time exit"
-    assert stored["h6"]["time_limit"] == 20
-    assert stored["h7"]["time_limit"] == 20
+
+def test_every_hypothesis_resolves_its_own_exit_spec():
+    """The spec table itself, with no data or CLI involved. H6 and H7 cannot
+    be driven through the CLI here -- H6 needs earnings events the fixture
+    does not carry -- but their defaults are the same thing that regressed."""
+    from screener.backtest.runner import RunConfig
+
+    expected = {
+        "h1": (None, 7), "h2": (2.0, 10), "h3": (2.0, 10), "h4": (2.0, 10),
+        "h5": (None, 7), "h6": (None, 20), "h7": (None, 20),
+    }
+    for hypothesis, (r_multiple, time_limit) in expected.items():
+        resolved = RunConfig(hypothesis=hypothesis, hold=7).resolved()
+        assert resolved.r_multiple == r_multiple, hypothesis
+        assert resolved.time_limit == time_limit, hypothesis
