@@ -100,6 +100,15 @@ def assess(
         )
 
     stop_distance = (_d(stop_atr) * atr_d).quantize(Decimal("0.0001"))
+    if stop_distance <= 0:
+        # A positive ATR can still round to zero here. That means the symbol
+        # has no measurable daily range -- repeated identical bars, which is
+        # what a halted or delisted ticker looks like once it stops trading.
+        # There is no stop to size against, so there is no position.
+        return Tradeability(
+            ticker, price_d, zero, 0, zero, 0.0, intended, 0.0, False,
+            "unusable", ["ATR rounds to zero — no measurable daily range"],
+        )
     budget = equity_d * limits.risk_pct_per_trade
     shares = int((budget / stop_distance).to_integral_value(rounding=ROUND_DOWN))
 

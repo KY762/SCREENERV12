@@ -142,3 +142,15 @@ def test_volatility_floor_matches_the_cap():
 
     assert not assess("X", 100.0, 100.0 * floor).concentration_capped
     assert assess("X", 100.0, 100.0 * (floor - 0.005)).concentration_capped
+
+
+def test_atr_that_rounds_to_zero_does_not_divide_by_zero():
+    """A halted or delisted ticker repeats identical bars, so its ATR is
+    positive but vanishingly small. It clears the ``atr > 0`` guard and then
+    quantizes to zero at 4dp, which used to raise DivisionByZero and abort the
+    whole `universe tradeable` scan rather than skipping the one bad symbol."""
+    result = assess("DEAD", 100.0, 1e-9)
+
+    assert result.verdict == "unusable"
+    assert result.shares == 0
+    assert result.stop_distance == Decimal("0")
