@@ -231,3 +231,56 @@ def test_definition_version_is_recorded_with_every_row(session):
 
     row = session.scalars(select(UniverseSnapshot).limit(1)).one()
     assert row.definition_version == "v1"
+
+
+def test_capacity_floor_is_derived_from_position_size_not_convention():
+    """The $20M floor in liquid_us is an institutional convention. At $10,000
+    with a 25% cap, the largest order is $2,500, and 1% participation implies
+    a $250k floor -- two orders of magnitude lower. Hard-coding $20M excludes
+    the small companies the pool was widened to reach."""
+    from screener.universe.definition import capacity_floor
+
+    assert capacity_floor(10_000.0) == pytest.approx(250_000.0)
+
+
+def test_capacity_floor_scales_with_equity():
+    """The same rule that admits a $250k-a-day stock at $10,000 must exclude it
+    at $1,000,000 without anyone editing a threshold. At institutional size it
+    reproduces the institutional number, which is the sanity check."""
+    from screener.universe.definition import capacity_floor
+
+    assert capacity_floor(50_000.0) == pytest.approx(1_250_000.0)
+    assert capacity_floor(1_000_000.0) == pytest.approx(25_000_000.0)
+
+
+def test_capacity_floor_rejects_impossible_inputs():
+    """A zero participation ceiling implies an infinite floor. Returning inf
+    would silently empty the universe instead of failing loudly."""
+    from screener.universe.definition import capacity_floor
+
+    for kwargs in (
+        {"equity": 0.0},
+        {"equity": 10_000.0, "max_position_pct": 0.0},
+        {"equity": 10_000.0, "max_participation_pct": 0.0},
+    ):
+        equity = kwargs.pop("equity")
+        with pytest.raises(ValueError):
+            capacity_floor(equity, **kwargs)
+
+
+def test_reachable_us_does_not_mutate_the_pre_registered_definition():
+    """liquid_us is pre-registered in docs/03 section 0.1. A second question
+    gets a second named definition; retuning the first would make every earlier
+    result incomparable and unreproducible."""
+    from screener.universe.definition import REACHABLE_US, UniverseDefinition
+
+    liquid = UniverseDefinition()
+
+    assert liquid.name == "liquid_us"
+    assert liquid.min_dollar_volume == pytest.approx(20_000_000.0)
+    assert liquid.min_price == pytest.approx(10.00)
+
+    assert REACHABLE_US.name == "reachable_us"
+    assert REACHABLE_US.min_dollar_volume == pytest.approx(250_000.0)
+    assert REACHABLE_US.min_price == pytest.approx(5.00)
+    assert REACHABLE_US.describe() != liquid.describe()

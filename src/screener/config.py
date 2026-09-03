@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     tiingo_api_key: SecretStr | None = None
     tiingo_base_url: str = "https://api.tiingo.com"
 
+    # Polygon. The documented fix for survivorship: it serves bars for tickers
+    # that have since delisted, and can enumerate what delisted in a window.
+    # `universe coverage` on 2026-08-26 found acquisitions 6/6 present and
+    # failures 0/6 on the free feeds -- every good ending kept, every bad one
+    # lost, which biases every backtested return upward.
+    polygon_api_key: SecretStr | None = None
+    polygon_base_url: str = "https://api.polygon.io"
+
     # --- other providers ----------------------------------------------------
     fred_api_key: SecretStr | None = None
     sec_user_agent: str = Field(
@@ -65,6 +73,10 @@ class Settings(BaseSettings):
     @property
     def has_tiingo_credentials(self) -> bool:
         return bool(self.tiingo_api_key)
+
+    @property
+    def has_polygon_credentials(self) -> bool:
+        return bool(self.polygon_api_key)
 
 
 @lru_cache(maxsize=1)
