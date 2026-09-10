@@ -98,8 +98,9 @@ def test_full_pipeline(cli_env, runner, monkeypatch):
 def test_ingest_without_credentials_fails_clearly(cli_env, runner, monkeypatch):
     """A missing key should produce an actionable message, not a stack trace."""
     cli = cli_env
-    monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
-    monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
+    # Blanked, not deleted -- see the note in the Alpaca-only config test.
+    monkeypatch.setenv("ALPACA_API_KEY_ID", "")
+    monkeypatch.setenv("ALPACA_API_SECRET_KEY", "")
 
     from screener import config
     config.get_settings.cache_clear()
@@ -142,7 +143,10 @@ def test_config_names_which_provider_ingest_will_use(cli_env, runner, monkeypatc
 
 
 def test_config_warns_when_only_alpaca_is_available(cli_env, runner, monkeypatch):
-    monkeypatch.delenv("TIINGO_API_KEY", raising=False)
+    # Blanked, not deleted: delenv drops only the process variable and lets the
+    # project .env supply the key again, so on a machine with real credentials
+    # this test asserted against the Tiingo path it was written to exclude.
+    monkeypatch.setenv("TIINGO_API_KEY", "")
     from screener import config
     config.get_settings.cache_clear()
 
