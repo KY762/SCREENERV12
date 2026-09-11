@@ -54,6 +54,18 @@ EXIT_SURFACE = {
     "time_limit": [5, 10, 15, 20],
 }
 
+# Portfolio settings that free an exit comparison from slot competition.
+# Named rather than repeated so the H5 arm cannot silently drift from the
+# Round 1 arms -- if these two sets diverge, the comparison stops being one.
+EXIT_ISOLATED_PORTFOLIO: dict[str, float | int] = {
+    "equity": 5_000_000.0,
+    "max_positions": 60,
+    "max_open_risk_pct": 0.60,
+    "risk_pct_per_trade": 0.0005,
+    "max_position_pct": 0.015,
+    "r_multiple": 0,
+}
+
 BATTERY: tuple[Experiment, ...] = (
     # -- H1, the control -----------------------------------------------------
     Experiment(
@@ -162,19 +174,36 @@ BATTERY: tuple[Experiment, ...] = (
             question="With portfolio competition removed so both arms take the "
                      "same signals, does the stop help or cost?",
             vary={"use_stop": [True, False]},
-            base={
-                "equity": 5_000_000.0,
-                "max_positions": 60,
-                "max_open_risk_pct": 0.60,
-                "risk_pct_per_trade": 0.0005,
-                "max_position_pct": 0.015,
-                "time_limit": 20,
-                "r_multiple": 0,
-            },
+            base={**EXIT_ISOLATED_PORTFOLIO, "time_limit": 20},
             kind="structural",
         )
         for h in ("h1", "h2", "h3", "h4")
     ],
+
+    # H5 gets its own arm rather than joining the loop above, because the loop
+    # pins time_limit at 20 and H5's specification is 21 -- a month, matching
+    # its monthly_rebalance flag. Folding it in would have run momentum 12-1 on
+    # someone else's clock, which is the shared-default mistake that voided its
+    # first two runs.
+    #
+    # The question is sharper here than for Round 1. H5's 21-day development
+    # run is the first configuration in this project with positive expectancy
+    # (+0.055R), and it simultaneously sits at the 38.5th percentile against
+    # random selection -- below random. Either the gain is beta rather than
+    # selection, which docs/03 section H1 predicted and the benchmark is built
+    # to detect, or the stop is destroying an edge the entries do find. The
+    # random benchmark cannot separate those: it trades without a stop while
+    # H5 stops out, so it is not a like-for-like comparison. This arm is.
+    Experiment(
+        name="h5_exit_isolated",
+        hypothesis="h5",
+        question="H5 shows +0.055R yet ranks below random selection. With "
+                 "portfolio competition removed so both arms take the same "
+                 "signals, is that the entries or the exit?",
+        vary={"use_stop": [True, False]},
+        base={**EXIT_ISOLATED_PORTFOLIO, "time_limit": 21},
+        kind="structural",
+    ),
 
     # -- H4, inverse fair value gap -----------------------------------------
     Experiment(
