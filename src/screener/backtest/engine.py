@@ -103,8 +103,21 @@ class ExitRule:
     use_stop: bool = True
 
     def __post_init__(self) -> None:
+        # A target at 0R sits exactly on the entry price, so the next bar whose
+        # high reaches the entry closes the trade at entry minus slippage --
+        # every trade a guaranteed small loss, reported as a "target" exit.
+        # Eight battery experiments passed r_multiple=0 meaning "no target" and
+        # measured that instead, including every *_exit_isolated arm. Negative
+        # multiples are equally meaningless: a target below the entry on a long.
+        if self.r_multiple is not None and self.r_multiple <= 0:
+            object.__setattr__(self, "r_multiple", None)
+
         if not self.use_stop and self.r_multiple is None and self.time_limit is None:
             raise ValueError("an ExitRule with no stop, no target and no time limit never exits")
+
+    @property
+    def has_target(self) -> bool:
+        return self.r_multiple is not None
 
 
 @dataclass(frozen=True)

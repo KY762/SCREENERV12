@@ -464,3 +464,39 @@ def test_raising_the_slot_limit_lets_both_arms_take_the_same_signals():
 
     assert len(constrained.trades) == 5
     assert len(freed.trades) == 10, "with slots free, every signal is taken"
+
+
+def test_a_zero_r_target_is_no_target_not_a_target_at_the_entry():
+    """r_multiple=0 puts the target at entry + 0 x risk -- the entry price
+    itself. The next bar whose high reaches the entry then closes the trade at
+    entry minus slippage, so every trade is a guaranteed small loss reported as
+    a 'target' exit.
+
+    Eight battery experiments passed 0 meaning 'no target', including every
+    *_exit_isolated arm. h7_no_stop measured 1,138 trades, 1,090 of them
+    'target' exits, and a 0% win rate -- which is what this looks like from the
+    outside."""
+    from screener.backtest.engine import ExitRule
+
+    assert ExitRule(r_multiple=0, time_limit=20, use_stop=False).r_multiple is None
+    assert ExitRule(r_multiple=0, time_limit=20, use_stop=True).has_target is False
+    assert ExitRule(r_multiple=2.0, time_limit=20).r_multiple == 2.0
+
+
+def test_a_negative_r_target_is_also_rejected():
+    """A negative multiple puts the target below the entry on a long, which
+    closes instantly at a loss for the same reason."""
+    from screener.backtest.engine import ExitRule
+
+    assert ExitRule(r_multiple=-2.0, time_limit=20).r_multiple is None
+
+
+def test_an_exit_rule_that_never_exits_is_still_refused():
+    """Normalising 0 to None must not open a hole in the existing guard: no
+    stop, no target and no time limit is a position that is never closed."""
+    import pytest as _pytest
+
+    from screener.backtest.engine import ExitRule
+
+    with _pytest.raises(ValueError, match="never exits"):
+        ExitRule(r_multiple=0, time_limit=None, use_stop=False)

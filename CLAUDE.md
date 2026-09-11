@@ -67,7 +67,9 @@ selection from the same universe. Details in `docs/06-DIAGNOSTIC-RESULTS.md`.
 Strongest result so far — `docs/07-STOP-DESIGN-QUESTION.md`: removing the price
 stop moved H3 from −0.121R to +0.485R (5.8 SE). Exit design appears to dominate
 entry selection. Confounded by trade count changing; the `*_exit_isolated`
-experiments settle it and have not been run.
+experiments settle it. **They ran on 2026-09-11 and the run is void** — every
+arm carried `r_multiple=0`, which targets the entry price (see the bug list
+below). The question is still open and the experiment still has to be run.
 
 Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
 unrun. **H5's holding period is 21 days, monthly** (operator decision,
@@ -116,6 +118,16 @@ Each was invisible to a passing test suite and surfaced only on real data.
   risk per share, so an ordinary move read as a loss of many R.
 - **Regime returns in R, compared against a percentage threshold.** Printed
   "worst −19725.7%".
+- **A zero-R target is a target at the entry price.** `r_multiple=0` made
+  `target = fill + 0 x risk`, so the next bar whose high touched the entry
+  closed the trade at entry minus slippage. Every trade a guaranteed small
+  loss, logged as a "target" exit. Found 2026-09-11 in `h7_no_stop`: 1,138
+  trades, 1,090 target exits, **0% win rate**, PF 0.00. Eight experiments
+  passed 0 meaning "no target", including `EXIT_ISOLATED_PORTFOLIO` and so
+  every `*_exit_isolated` arm. **Those results are void.** `h5_no_stop` is the
+  only no-stop experiment unaffected -- it never set `r_multiple`, so
+  `resolved()` left it None. `ExitRule` now normalises any non-positive
+  multiple to None.
 - **Shared CLI defaults applied to a hypothesis whose spec differs.** H1 was
   run with a 2R target it does not have. **Reintroduced for Round 2 and found
   again on 2026-08-27**: the fix had hardcoded H1 as the sole exception
