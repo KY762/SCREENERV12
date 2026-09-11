@@ -59,12 +59,36 @@ EXIT_SURFACE = {
 # Round 1 arms -- if these two sets diverge, the comparison stops being one.
 EXIT_ISOLATED_PORTFOLIO: dict[str, float | int] = {
     "equity": 5_000_000.0,
-    "max_positions": 60,
+    "max_positions": 400,
     "max_open_risk_pct": 0.60,
     "risk_pct_per_trade": 0.0005,
-    "max_position_pct": 0.015,
+    "max_position_pct": 0.002,
     "r_multiple": 0,
 }
+
+# Sixty slots was not enough, and the 2026-09-11 run proves it by trade count:
+#
+#   arm   no-stop   stop    gap
+#   h1       760     862    13%
+#   h2     3,124   5,148    65%
+#   h3     1,970   2,902    47%
+#   h4     2,070   2,571    24%
+#   h5       355     371     4.5%
+#
+# A stop exits early and frees the slot, so the stop arm takes MORE trades.
+# Only h5 -- whose signal density is low enough to fit -- actually compared
+# the same trades. h2, h3 and h4 reproduced the exact confound docs/07 was
+# written about, inside the experiment built to remove it.
+#
+# 400 slots at 0.2% each deploys 80% of equity and carries 20% open risk,
+# both inside their limits, and leaves roughly $10,000 per position at $5M --
+# enough shares that whole-share rounding does not reject a trade. The
+# concentration cap will bind on nearly every position, which is fine here:
+# expectancy is measured in R against realised risk, so a smaller position is
+# the same R. What matters is that the trade is TAKEN.
+#
+# `report.py` now warns whenever a use_stop comparison's arms diverge, so a
+# recurrence is visible in the output rather than needing to be noticed.
 
 BATTERY: tuple[Experiment, ...] = (
     # -- H1, the control -----------------------------------------------------

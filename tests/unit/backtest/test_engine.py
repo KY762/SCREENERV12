@@ -500,3 +500,35 @@ def test_an_exit_rule_that_never_exits_is_still_refused():
 
     with _pytest.raises(ValueError, match="never exits"):
         ExitRule(r_multiple=0, time_limit=None, use_stop=False)
+
+
+def test_explicit_zero_target_does_not_become_the_h2_h4_default():
+    """Two different things look like 'no target' and they resolve differently.
+
+    `r_multiple=None` means unspecified, so h2-h4 get their 2R default.
+    `r_multiple=0` means explicitly no target. If 0 normalised to None and then
+    fell through to the default, the eight experiments that pass 0 meaning
+    'no target' would silently acquire one -- and RunConfig is what gets hashed
+    for budget, so the log would describe a run that did not happen."""
+    from screener.backtest.runner import RunConfig
+
+    for hypothesis in ("h2", "h3", "h4"):
+        assert RunConfig(hypothesis=hypothesis).resolved().r_multiple == 2.0
+        assert RunConfig(hypothesis=hypothesis, r_multiple=0).resolved().r_multiple is None
+
+    assert RunConfig(hypothesis="h1").resolved().r_multiple is None
+    assert RunConfig(hypothesis="h5").resolved().r_multiple is None
+
+
+def test_the_config_and_the_exit_rule_agree_on_the_target():
+    """RunConfig is logged; ExitRule is executed. If they normalise
+    differently the research log records a configuration nobody ran."""
+    from screener.backtest.engine import ExitRule
+    from screener.backtest.runner import RunConfig
+
+    for value in (0, -1.0, 2.0, None):
+        resolved = RunConfig(hypothesis="h5", r_multiple=value, time_limit=21).resolved()
+        rule = ExitRule(
+            r_multiple=resolved.r_multiple, time_limit=21, use_stop=True
+        )
+        assert rule.r_multiple == resolved.r_multiple

@@ -42,6 +42,58 @@ that much is clean. Selection is not.
 per-trade risk until nearly every signal fits, so both arms take the same trades. **Until
 those run, §1 is suggestive, not established.**
 
+## 2a. Those experiments have now run — and only one of them worked
+
+**Date:** 2026-09-11, development split, 307-symbol universe.
+
+Two earlier attempts were void. The first carried `r_multiple=0`, which puts the target on
+the entry price and closed every trade at entry minus slippage; `h7_no_stop` reported 1,138
+trades, 1,090 of them "target" exits, and a 0% win rate, which is what gave it away. The
+second ran after that fix and is the one reported here.
+
+The validity test is the trade count. If the arms took different numbers of trades, the
+isolation failed and the comparison is the same confound as §2.
+
+| Arm | No stop | Stop | Gap |
+| --- | --- | --- | --- |
+| h1 | 760 | 862 | 13% |
+| h2 | 3,124 | 5,148 | **65%** |
+| h3 | 1,970 | 2,902 | **47%** |
+| h4 | 2,070 | 2,571 | **24%** |
+| **h5** | **355** | **371** | **4.5%** |
+
+A stop exits early and frees its slot, so the stop arm takes *more* trades. Sixty slots was
+not enough for h2, h3 or h4 — **their numbers measure exit design and selection together and
+say nothing about the stop.** `max_positions` is now 400 and `report.py` prints an explicit
+ISOLATION FAILED line whenever a `use_stop` comparison's arms diverge, so a recurrence is
+visible in the output instead of having to be noticed by hand.
+
+### The one clean result: H5
+
+Momentum 12-1, 21-day hold, arms within 4.5% on trade count:
+
+| | Stop | No stop |
+| --- | --- | --- |
+| Trades | 371 | 355 |
+| Win rate | 42% | 55% |
+| Expectancy | +0.126R | **+0.249R** |
+| Profit factor | 1.20 | **1.40** |
+| Exits | time 173, stop 172, stop_gap 26 | **100% time** |
+
+**Removing the stop roughly doubles expectancy, with signals genuinely held constant.**
+Both arms are positive. This is the first measurement in the project where the stop question
+is answered without the §2 confound, and it points the same way §1 did.
+
+What it does not establish: one hypothesis, one split, development only, on survivorship-
+biased data. Position sizes are deliberately microscopic to free the slots, so the +4.2%
+return and 1.6% drawdown are artifacts of the setup — only the R-multiples compare. The
+battery's own classifier selected `use_stop=True` as the plateau *centre*, which is the
+conservative pick rather than the better arm; reading that as "the stop won" is a mistake
+made once already in this project.
+
+**§1 remains suggestive. §2a is one clean data point agreeing with it.** Neither changes how
+anyone trades, and the four broken arms need re-running before the pattern means anything.
+
 ### A related discovery about the sizing rules
 
 Making that isolation work surfaced something about the specification itself. At 1% risk

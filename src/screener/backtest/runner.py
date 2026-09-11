@@ -119,11 +119,26 @@ class RunConfig:
                 time_limit = 20
             else:
                 time_limit = 10
+        # Two different things both look like "no target" here, and the
+        # distinction decides the exit rule:
+        #
+        #   r_multiple is None  -- unspecified, so the hypothesis's own default
+        #                          applies (h2-h4 surface over a 2R target).
+        #   r_multiple <= 0     -- explicitly no target. A target at 0R sits on
+        #                          the entry price, so ExitRule normalises it
+        #                          to None; this mirrors that. It must NOT then
+        #                          fall through to the default, or the eight
+        #                          experiments that pass 0 meaning "no target"
+        #                          would silently acquire one.
+        #
+        # Mirrored here rather than left to ExitRule because RunConfig is what
+        # gets hashed for budget and written to config_json, and a log that
+        # records a configuration the engine did not run is the failure this
+        # project has already been bitten by twice.
         r_multiple = self.r_multiple
-        # H1 and the Round 2 hypotheses exit on time or stop. Only the pattern
-        # setups (h2-h4) surface over R targets, because only their
-        # specifications name one.
-        if r_multiple is None and self.hypothesis in ("h2", "h3", "h4"):
+        if r_multiple is not None and r_multiple <= 0:
+            r_multiple = None
+        elif r_multiple is None and self.hypothesis in ("h2", "h3", "h4"):
             r_multiple = 2.0
         return RunConfig(**{
             **self.__dict__,

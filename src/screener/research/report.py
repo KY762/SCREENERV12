@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..backtest.runner import RunConfig
 from ..backtest.splits import Split
 from .battery import ExperimentResult
 
@@ -54,7 +55,12 @@ def to_json(
                 "hypothesis": r.experiment.hypothesis,
                 "kind": r.experiment.kind,
                 "question": r.experiment.question,
+                # Both: what the experiment declared, and what the engine
+                # resolved it to. They differ wherever a hypothesis's own spec
+                # applies or a value is normalised, and a reader six months
+                # from now needs to see which number produced the cells.
                 "base": r.experiment.base,
+                "base_resolved": _as_run(r.experiment),
                 "varied": {k: list(v) for k, v in r.experiment.vary.items()},
                 "configurations_tested": len(r.cells),
                 "verdict": {
@@ -114,10 +120,15 @@ def to_markdown(
         add(f"**Question:** {r.experiment.question}")
         if r.experiment.base:
             add("")
-            add(f"**Held fixed:** {_fmt_params(r.experiment.base)}")
+            add(f"**Held fixed:** {_fmt_params(_as_run(r.experiment))}")
         add("")
         add(f"**Verdict — {r.verdict.shape.upper()}:** {r.verdict.detail}")
         add("")
+
+        divergence = _isolation_warning(r)
+        if divergence:
+            add(divergence)
+            add("")
 
         varied = sorted(r.experiment.vary)
         header = varied + ["Trades", "Win%", "Expectancy", "PF", "MaxDD", "Return", "Exits"]
@@ -166,6 +177,69 @@ def to_markdown(
 
 def _fmt_params(params: dict[str, Any]) -> str:
     return ", ".join(f"`{k}={v}`" for k, v in sorted(params.items()))
+
+
+# Above this spread in trade count, a stop-vs-no-stop comparison is no longer
+# comparing the same trades. 25% is generous: h5's arms differed by 4.5%.
+ISOLATION_TOLERANCE = 0.25
+
+
+def _isolation_warning(result) -> str | None:
+    """Flag a use_stop comparison whose arms did not take the same trades.
+
+    A stop exits early and frees the slot, so the stop arm takes more trades.
+    When that gap is large the comparison measures the exit rule AND which
+    signals each arm had room for -- the confound docs/07 exists to describe.
+    The 2026-09-11 run hit 65% on h2 and nobody would have seen it without
+    reading the trade column by hand.
+
+    Only applies to experiments varying use_stop alone, because that is where
+    the claim "both arms take the same signals" is actually being made. A
+    parameter sweep over hold or time_limit is expected to change trade counts.
+    """
+    if set(result.experiment.vary) != {"use_stop"}:
+        return None
+
+    counts = [cell.outcome.stats.trades for cell in result.cells]
+    if len(counts) < 2 or min(counts) <= 0:
+        return None
+
+    spread = (max(counts) - min(counts)) / max(counts)
+    if spread <= ISOLATION_TOLERANCE:
+        return (
+            f"**Isolation held:** arms differ by {spread:.1%} in trade count "
+            f"({min(counts):,} vs {max(counts):,}), so both took substantially "
+            "the same signals and the difference is the exit rule."
+        )
+
+    return (
+        f"**ISOLATION FAILED — do not read this as an exit-rule result.** The "
+        f"arms differ by {spread:.1%} in trade count ({min(counts):,} vs "
+        f"{max(counts):,}). A stop frees its slot early, so the arms took "
+        "different signals and this measures exit design and selection "
+        "together -- the confound of docs/07. Raise `max_positions` until the "
+        "counts converge."
+    )
+
+
+def _as_run(experiment) -> dict[str, Any]:
+    """The base config as the engine actually ran it, not as it was written.
+
+    `RunConfig.resolved()` applies each hypothesis's own specification and
+    normalises nonsense: `r_multiple=0` becomes None, because a target at 0R
+    sits on the entry price and is not a target. Printing the raw dict made
+    the exit-isolated arms report `r_multiple=0` after that had stopped being
+    true, which describes a run that did not happen.
+
+    Falls back to the raw base rather than failing a report over a key the
+    config does not recognise -- a report that refuses to render is worse than
+    one that renders the input.
+    """
+    try:
+        resolved = RunConfig(hypothesis=experiment.hypothesis, **experiment.base).resolved()
+    except TypeError:
+        return dict(experiment.base)
+    return {key: getattr(resolved, key, experiment.base[key]) for key in experiment.base}
 
 
 def write_report(

@@ -67,9 +67,12 @@ selection from the same universe. Details in `docs/06-DIAGNOSTIC-RESULTS.md`.
 Strongest result so far — `docs/07-STOP-DESIGN-QUESTION.md`: removing the price
 stop moved H3 from −0.121R to +0.485R (5.8 SE). Exit design appears to dominate
 entry selection. Confounded by trade count changing; the `*_exit_isolated`
-experiments settle it. **They ran on 2026-09-11 and the run is void** — every
-arm carried `r_multiple=0`, which targets the entry price (see the bug list
-below). The question is still open and the experiment still has to be run.
+experiments settle it. **Re-run clean on 2026-09-11 — see `docs/07` §2a.** Only
+H5's arms actually took the same trades (355 vs 371, 4.5%); h2/h3/h4 diverged by
+24–65% and measure the old confound again, so `max_positions` is now 400 and the
+report prints ISOLATION FAILED when arms diverge. H5 clean: stop +0.126R,
+no stop **+0.249R**. One hypothesis, development, biased data — suggestive, not
+settled.
 
 Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
 unrun. **H5's holding period is 21 days, monthly** (operator decision,

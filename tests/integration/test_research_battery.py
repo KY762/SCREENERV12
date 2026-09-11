@@ -164,3 +164,61 @@ def test_every_exit_isolated_arm_shares_the_same_portfolio_settings():
         for key, value in EXIT_ISOLATED_PORTFOLIO.items():
             assert experiment.base[key] == value, f"{experiment.name}: {key}"
         assert experiment.vary == {"use_stop": [True, False]}
+
+
+class _FakeStats:
+    def __init__(self, trades: int) -> None:
+        self.trades = trades
+
+
+class _FakeOutcome:
+    def __init__(self, trades: int) -> None:
+        self.stats = _FakeStats(trades)
+
+
+class _FakeCell:
+    def __init__(self, trades: int) -> None:
+        self.outcome = _FakeOutcome(trades)
+
+
+class _FakeResult:
+    def __init__(self, vary: dict, counts: list[int]) -> None:
+        from screener.research.battery import Experiment
+
+        self.experiment = Experiment(
+            name="x", hypothesis="h1", question="?", vary=vary, base={},
+            kind="structural",
+        )
+        self.cells = [_FakeCell(n) for n in counts]
+
+
+def test_a_diverged_stop_comparison_is_reported_as_failed_isolation():
+    """h2's arms differed by 65% in trade count on 2026-09-11 and nothing in
+    the output said so -- it had to be read off the trade column by hand. A
+    stop frees its slot early, so the arms took different signals and the
+    comparison measured exit design and selection together."""
+    from screener.research.report import _isolation_warning
+
+    warning = _isolation_warning(_FakeResult({"use_stop": [True, False]}, [3124, 5148]))
+
+    assert warning is not None
+    assert "ISOLATION FAILED" in warning
+    assert "39.3%" in warning
+
+
+def test_a_converged_stop_comparison_says_isolation_held():
+    """h5's arms differed by 4.5%, which is the case the experiment is for."""
+    from screener.research.report import _isolation_warning
+
+    warning = _isolation_warning(_FakeResult({"use_stop": [True, False]}, [355, 371]))
+
+    assert warning is not None
+    assert "Isolation held" in warning
+
+
+def test_a_parameter_sweep_is_not_flagged():
+    """Varying hold or time_limit is expected to change trade counts. Warning
+    there would train the reader to ignore the warning."""
+    from screener.research.report import _isolation_warning
+
+    assert _isolation_warning(_FakeResult({"hold": [5, 20]}, [1000, 5000])) is None
