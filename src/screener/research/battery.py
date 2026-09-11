@@ -354,7 +354,12 @@ def run_experiment(
             **experiment.base,
             **params,
         }
-        config = RunConfig(**fields)
+        # Resolved here, not left to evaluate(). Signal generation and scoring
+        # must see the same specification: build_candidates reads `hold` as
+        # H1's rebalance interval, and _entry_key caches on it, so an
+        # unresolved config generated signals under one horizon and scored
+        # them under another. resolved() is idempotent.
+        config = RunConfig(**fields).resolved()
         entry_key = _entry_key(config)
         if entry_key not in cache:
             cache[entry_key] = build_candidates(

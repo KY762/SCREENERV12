@@ -344,3 +344,29 @@ def test_every_hypothesis_resolves_its_own_exit_spec():
         resolved = RunConfig(hypothesis=hypothesis, hold=7).resolved()
         assert resolved.r_multiple == r_multiple, hypothesis
         assert resolved.time_limit == time_limit, hypothesis
+
+
+def test_h5_holds_for_a_month_not_a_week_by_default():
+    """H1 and H5 both exit on `hold`, but they are not the same horizon.
+
+    A single shared default of 5 ran momentum 12-1 on a five-day clock, which
+    is the short-horizon momentum docs/03 section H1 records as much weaker
+    than the twelve-month form H5 exists to examine. H5's own
+    `monthly_rebalance` flag says a month; so does the literature.
+    """
+    from screener.backtest.runner import RunConfig
+
+    assert RunConfig(hypothesis="h1").resolved().hold == 5
+    assert RunConfig(hypothesis="h5").resolved().hold == 21
+    assert RunConfig(hypothesis="h5").resolved().time_limit == 21
+
+
+def test_an_explicit_hold_still_overrides_the_specification():
+    """The surface sweeps `hold`. If the per-hypothesis default won over an
+    explicit value, every cell would silently run the same horizon."""
+    from screener.backtest.runner import RunConfig
+
+    swept = RunConfig(hypothesis="h5", hold=63).resolved()
+
+    assert swept.hold == 63
+    assert swept.time_limit == 63

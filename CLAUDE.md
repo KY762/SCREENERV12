@@ -70,7 +70,10 @@ entry selection. Confounded by trade count changing; the `*_exit_isolated`
 experiments settle it and have not been run.
 
 Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
-unrun.
+unrun. **H5's holding period is 21 days, monthly** (operator decision,
+2026-09-11), matching its own `monthly_rebalance` flag and the horizon the
+momentum literature studies. Resolved in `HOLD_DEFAULTS`, not shared with H1,
+which rotates on 5.
 
 **Survivorship is measured, and it is asymmetric.** `screener universe
 coverage` on 2026-08-26 against Tiingo: acquisitions **6/6 present**, failures

@@ -1872,9 +1872,10 @@ def backtest_run(
              "it isolates whether the entry rule or the exit design is losing money.",
     ),
     displacement: float | None = typer.Option(None, "--displacement", help="H2 only, in ATR."),
-    hold: int = typer.Option(
-        5, "--hold",
-        help="H1 hold horizon in days: the time exit, and the rebalance interval.",
+    hold: int | None = typer.Option(
+        None, "--hold",
+        help="Holding period in days. Omit to use the hypothesis's own horizon "
+             "(H1 rotates on 5; H5 momentum 12-1 holds 21, a month).",
     ),
     top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
     stop_atr: float = typer.Option(2.0, "--stop-atr", help="H1 stop, in ATR(14)."),

@@ -40,6 +40,17 @@ HYPOTHESES = ("h1", "h2", "h3", "h4", "h5", "h6", "h7")
 
 ROUND_2 = ("h5", "h6", "h7")
 
+# Holding period per hypothesis, in trading days. H1 rotates on relative
+# strength over days; H5 is momentum 12-1, which the literature holds for
+# months and whose `monthly_rebalance` flag says the same. The pattern
+# hypotheses do not read `hold` at all -- they exit on `time_limit` -- so
+# their entry exists only to keep the mapping total.
+HOLD_DEFAULTS: dict[str, int] = {
+    "h1": 5, "h2": 5, "h3": 5, "h4": 5,
+    "h5": 21,
+    "h6": 5, "h7": 5,
+}
+
 
 @dataclass(frozen=True)
 class RunConfig:
@@ -57,7 +68,8 @@ class RunConfig:
     # rule was never the problem and the exit design is what costs.
     use_stop: bool = True
     displacement: float | None = None
-    hold: int = 5
+    # None means "use this hypothesis's own horizon" -- see HOLD_DEFAULTS.
+    hold: int | None = None
     top_pct: float = 0.10
     stop_atr: float = 2.0
     rs_lookback: int = 63
@@ -89,11 +101,20 @@ class RunConfig:
         H1 (docs/03) exits on time or stop and has no profit target; the
         pattern hypotheses surface over R targets. One shared default would
         test something no specification describes.
+
+        The holding period is resolved here for the same reason. H1 and H5
+        both exit on `hold`, but they are not the same horizon: H1 is a
+        short-term relative-strength rotation, H5 is momentum 12-1, whose
+        literature and whose own `monthly_rebalance` flag both imply a month.
+        A single shared default ran H5 on a five-day clock and measured the
+        short-horizon momentum docs/03 records as much weaker.
         """
+        hold = self.hold if self.hold is not None else HOLD_DEFAULTS[self.hypothesis]
+
         time_limit = self.time_limit
         if time_limit is None:
             if self.hypothesis in ("h1", "h5"):
-                time_limit = self.hold
+                time_limit = hold
             elif self.hypothesis in ("h6", "h7"):
                 time_limit = 20
             else:
@@ -104,7 +125,12 @@ class RunConfig:
         # specifications name one.
         if r_multiple is None and self.hypothesis in ("h2", "h3", "h4"):
             r_multiple = 2.0
-        return RunConfig(**{**self.__dict__, "time_limit": time_limit, "r_multiple": r_multiple})
+        return RunConfig(**{
+            **self.__dict__,
+            "hold": hold,
+            "time_limit": time_limit,
+            "r_multiple": r_multiple,
+        })
 
     def as_dict(self) -> dict[str, Any]:
         """Only the parameters this hypothesis actually reads.
