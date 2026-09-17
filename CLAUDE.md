@@ -35,6 +35,28 @@ Full protocol in `docs/08-OPERATING-PROTOCOL.md`. The parts that bite:
 - **Audit before delivering.** State the strongest criticism of your own
   output and fix it first.
 
+## Review agents
+
+Three auditors live in `.claude/agents/`, one per cluster in the bug log below.
+All three are read-only by design: an auditor that can edit can make a result
+look correct, which is the failure they exist to catch.
+
+- `run-integrity` — does the number come from the configuration being claimed?
+  Run it before committing to `runner.py`, `engine.py`, `battery.py`,
+  `report.py`, `budget.py` or `cli.py`, before writing any result into `docs/`,
+  and before spending validation or test budget. Four of the bugs below were a
+  report describing a run that did not happen.
+- `data-integrity` — the non-negotiables and the arithmetic in the decision
+  path. Run it on any change under `calc/`, `backtest/`, `universe/`, `ingest/`
+  or `providers/`.
+- `evidence-auditor` — attacks a claim before it is believed: could the check
+  have failed, which split, how many comparisons, which way does the known bias
+  point. Run it whenever a run produces a positive number, and before any
+  hypothesis moves between splits.
+
+They do not replace `ruff check src tests` and `pytest`, which are deterministic
+and belong in a hook rather than in anyone's memory.
+
 ## Non-negotiables
 
 These are not preferences. Violating any of them silently invalidates results.
