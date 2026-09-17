@@ -131,6 +131,17 @@ Each was invisible to a passing test suite and surfaced only on real data.
   only no-stop experiment unaffected -- it never set `r_multiple`, so
   `resolved()` left it None. `ExitRule` now normalises any non-positive
   multiple to None.
+- **The same configuration can be logged under two different budget hashes.**
+  `budget.config_hash` hashes the config dict, so `r_multiple: 0` and
+  `r_multiple: null` are different hashes for a run the engine executes
+  identically -- `ExitRule` normalises both to None, and `resolved()` now does
+  too, so rows written before 2026-09-11 carry `0` and rows after carry `null`.
+  On development that costs nothing. On validation the same configuration would
+  consume two of the three slots and `already_run` would not recognise the
+  repeat: non-negotiable #5 failing quietly. Nothing to repair while validation
+  is unspent -- confirm that with
+  `SELECT split, COUNT(*) FROM research_runs WHERE split <> 'development' GROUP BY split;`
+  before spending any of it.
 - **Shared CLI defaults applied to a hypothesis whose spec differs.** H1 was
   run with a 2R target it does not have. **Reintroduced for Round 2 and found
   again on 2026-08-27**: the fix had hardcoded H1 as the sole exception

@@ -94,6 +94,29 @@ made once already in this project.
 **§1 remains suggestive. §2a is one clean data point agreeing with it.** Neither changes how
 anyone trades, and the four broken arms need re-running before the pattern means anything.
 
+### What raising the slot count moved, and what it did not (2026-09-17)
+
+Checked by dumping every battery cell's resolved `RunConfig` **and the `ExitRule` built from
+it** at the revision before the change and at the revision after, then diffing both:
+
+- **`h2/h3/h4_no_stop` — unchanged.** Their only config difference is `r_multiple: 0 -> None`,
+  and `ExitRule` already normalised both to None, so the engine received identical inputs:
+  same 5 slots, 1% risk, 25% cap, same candidates. `_entry_key` excludes `r_multiple`, and
+  neither `engine.py` nor `strategies.py` writes to the shared bar frames, so there is no
+  cross-experiment route either. What changed in those three sections is one line of text --
+  `**Held fixed:** r_multiple=0` now prints `r_multiple=None`, which is exactly what
+  `_as_run()` was added to do.
+- **`h1_exit_isolated` and `h5_exit_isolated` — unchanged.** 760/862 and 355/371 trades
+  already fitted inside 60 slots, so more slots buy them nothing, and expectancy is measured
+  in R against realised risk, so cutting position size does not move it either.
+- **`h2/h3/h4_exit_isolated` — changed, which was the point.** These were the slot-constrained
+  arms (65%, 47% and 24% spread). The trades previously rejected for want of a slot are the
+  entire difference.
+
+The general lesson is worth keeping: **a diff of two report files is not a diff of two
+results.** Printing resolved rather than declared values makes a behaviourally identical run
+appear to have changed. Compare the tables, not the file.
+
 ### A related discovery about the sizing rules
 
 Making that isolation work surfaced something about the specification itself. At 1% risk
