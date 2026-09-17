@@ -54,8 +54,20 @@ look correct, which is the failure they exist to catch.
   point. Run it whenever a run produces a positive number, and before any
   hypothesis moves between splits.
 
-They do not replace `ruff check src tests` and `pytest`, which are deterministic
-and belong in a hook rather than in anyone's memory.
+They do not replace `ruff check src tests` and `pytest`. Those are
+deterministic, so they are enforced by hooks in `.claude/settings.json` rather
+than by anyone's memory:
+
+- After every `Write` or `Edit` to a `.py` file under `src/` or `tests/`,
+  `.claude/hooks/check_edit.py` runs ruff on that file and the two
+  no-lookahead test files. A violation or a failure comes straight back; a
+  broken environment warns instead of blocking, and says the edit was not
+  gated, because a check that cannot run must not report a pass.
+- At session start, `.claude/hooks/session_start.py` fetches origin and refuses
+  to be quiet about a clone that is behind, then prints `screener status`. On
+  2026-09-17 a session came up six commits stale and read a superseded
+  CLAUDE.md as current, reporting the exit-isolated experiments as unrun after
+  they had been run and committed.
 
 ## Non-negotiables
 
