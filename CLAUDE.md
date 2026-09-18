@@ -376,6 +376,15 @@ screener research explore --battery all
   The date-matched one is the better instrument for "did selection add
   anything", but switching what the criteria read is a criteria change.
   Nothing is scored on validation yet either way.
+- **The plateau rule selects configurations that lose to random.** docs/03
+  §0.7 asks only whether a positive cell has positive neighbours. It never
+  consults the random benchmark, so on the 2026-09-18 battery it marks four
+  configurations selectable that sit BELOW random on their own entry dates:
+  `h7_no_stop` (26th), `h6_drift_exits` (34th), `h5_no_stop` (40th),
+  `h7_compression_depth` (44th). The two-arm criterion added the same day does
+  require the winner to beat random, so the two rules now disagree about what
+  "selectable" means. Adding the same requirement to the plateau rule is a
+  change to pre-registered criteria, so it is recorded here, not made.
 - **Raise the trade floor?** Measured (see "Effective sample size"): 200
   effective observations need roughly 260-330 nominal trades at these design
   effects. Whether the pre-registered floor of 200 should become ~300 is a
