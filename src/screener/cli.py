@@ -37,6 +37,18 @@ app.add_typer(backtest_app, name="backtest")
 
 console = Console()
 
+# Verdict shapes, coloured by how selectable they are. Looked up with a default
+# rather than indexed: a new shape should not crash the whole battery on the
+# last line of a thirteen-minute run, which is what adding "separated" and
+# "indistinct" did.
+_SHAPE_COLOUR = {
+    "plateau": "green",     # selectable: positive neighbourhood
+    "separated": "green",   # selectable: two-arm winner that also beat random
+    "spike": "yellow",      # one value working alone is what noise looks like
+    "indistinct": "yellow", # won its A/B but still lost to random
+    "none": "red",          # nothing positive
+}
+
 # Declared at module level because ruff B008 forbids a call in a default, and
 # a list-valued Option needs one.
 VARY_OPTION = typer.Option(
@@ -671,9 +683,7 @@ def research_explore(
     for col in ("Experiment", "Configs", "Shape", "Best", "Selected"):
         table.add_column(col, justify="left" if col == "Experiment" else "right")
     for result in results:
-        colour = {"plateau": "green", "spike": "yellow", "none": "red"}[
-            result.verdict.shape
-        ]
+        colour = _SHAPE_COLOUR.get(result.verdict.shape, "white")
         chosen_cell = result.verdict.recommended
         table.add_row(
             result.experiment.name,
@@ -2260,7 +2270,7 @@ def backtest_surface(
         )
     console.print(table)
 
-    colour = {"plateau": "green", "spike": "yellow", "none": "red"}[verdict.shape]
+    colour = _SHAPE_COLOUR.get(verdict.shape, "white")
     console.print(f"[{colour} bold]{verdict.describe()}[/]")
     console.print(
         f"[dim]{verdict.total_cells} configuration(s) tested to reach this. "

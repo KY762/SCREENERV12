@@ -195,6 +195,57 @@ Each was invisible to a passing test suite and surfaced only on real data.
   The whole run rolled back while reporting success, the same shape as the
   vacuous verification above. The seen-set now grows as the batch is written.
 
+## The stop-design finding is 1 standard error
+
+**2026-09-17, and it supersedes everything above about exit design.** Two-arm
+comparisons never carried an error bar. Now that each arm reports a standard
+error on mean per-trade return, the gaps are:
+
+| arm | gap | standard errors |
+| --- | --- | --- |
+| `h5_exit_isolated` (the clean one, 4.3% divergence) | +0.123R | **0.9** |
+| `h1_exit_isolated` (11.8% divergence) | +0.099R | **1.1** |
+| `h5_rebalance` | +0.202R | 1.2 |
+| `h1_trend_filter` | +0.004R | 0.2 |
+
+Nothing reaches 2. And that SE assumes independent trades, which five
+concurrent positions in correlated large caps are not, so the real figure is
+lower. `h2/h3_exit_isolated` are vetoed separately for failed isolation (27.3%,
+28.9%), and `h4_exit_isolated`'s +0.399R gap has its winner at the 40th
+percentile.
+
+So "removing the stop is worth roughly +0.1R" was never distinguishable from
+noise. It was a difference nobody had put an error bar on, repeated across
+three rounds of increasingly careful measurement, each of which fixed a real
+confound and none of which asked whether the gap was larger than its own
+uncertainty. docs/07's original 5.8 SE belongs to the confounded comparison and
+does not transfer.
+
+## Two benchmarks, and the difference between them is the timing
+
+**Added 2026-09-17.** `random_benchmark` picks its own entry dates, so it scores
+selection AND timing: a strategy whose signals cluster in a bad month loses to
+it while picking perfectly well. `date_matched_benchmark` holds each real
+trade's entry date and length and swaps only the symbol, so what is left is the
+pick. Report both; the gap between them IS the timing contribution.
+
+It mattered immediately. **17 of 27 experiments ranked higher once timing was
+held fixed**, and the count above the 50th went 13 → 16. The largest moves:
+
+| experiment | any day | same days |
+| --- | --- | --- |
+| `h2_exit_isolated` | 23rd | **57th** |
+| `h4_exit_isolated` | 11th | **40th** |
+| `h5_skip_matters` | 45th | 67th |
+| `h6_entry_delay` | 31st | 51st |
+| `h5_exit_isolated` | 73rd | 87th |
+
+`h4_exit_isolated` at the 11th percentile was read here as "89% of random
+selections beat it". Most of that was when it traded, not what it bought.
+Eligibility for the swap is "had a bar that day with enough bars after it",
+NOT point-in-time index membership, which is not threaded into `evaluate()` --
+so the pool can include a name that was listed but out of the universe.
+
 ## What the random-selection percentile keeps showing
 
 Added to the report tables 2026-09-17, because the caveat at the foot of every
@@ -250,6 +301,26 @@ screener research explore --battery all
   "5% total open risk" still never bind. Options in `docs/07` §5.
 - Proposed on arithmetic, not results: 0.5% risk, 20% cap, and an account-level
   drawdown circuit breaker (−8% halve risk, −12% no new entries, −15% stop).
+- **Sign off (or reject) the two-arm criterion.** Implemented 2026-09-17,
+  replacing plateau/spike on two-cell grids, which is a pre-registered-criteria
+  change and therefore yours. An arm is selectable only if it is positive, the
+  gap clears `SEPARATION_Z = 2.0` standard errors, the winner beats random on
+  its own entry dates, and — for `use_stop` arms — isolation held. Shapes are
+  now `separated` / `indistinct` / `none`. Under it, **no two-cell experiment
+  in the battery is selectable**. The constant lives in `backtest/surface.py`
+  so moving it is a visible edit.
+- **Which benchmark the pre-registered criteria score against.**
+  `check_criteria` still takes the uniform percentile, deliberately unchanged.
+  The date-matched one is the better instrument for "did selection add
+  anything", but switching what the criteria read is a criteria change.
+  Nothing is scored on validation yet either way.
+- **Effective sample size.** Five concurrent positions in correlated names are
+  not five independent observations, so every standard error above is
+  optimistic and the ≥200 trade floor may be far too low. Worth measuring
+  before a validation slot is spent on an underpowered test.
+- **The across-hypothesis correction.** Seven hypotheses x 3 validation configs
+  is 21 shots at the bar; several clear by chance. A decision, not code, and it
+  has to be made before any validation is spent or it is post-hoc.
 - **The plateau/spike test may not belong on a two-cell structural question.**
   `docs/03` §0.7 rule 3 rejects a peak whose neighbours fail. On a binary arm
   — `use_stop=True/False`, `trend_filter=True/False` — a winning cell's only

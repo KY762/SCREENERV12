@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,9 @@ import pytest
 
 from screener.backtest.benchmarks import (
     buy_and_hold,
+    date_matched_benchmark,
     random_benchmark,
+    trade_entries,
     trade_returns,
 )
 from screener.backtest.engine import CostModel, Trade
@@ -90,3 +93,90 @@ def test_trade_returns_are_fractional_on_the_entry_price():
         exit_date=date(2020, 1, 5), exit_price=Decimal("110.00"), exit_reason="target",
     )
     assert trade_returns([trade]) == [pytest.approx(0.10)]
+
+
+# --------------------------------------------------------------------------
+# Date-matched benchmark
+#
+# The uniform benchmark picks its own entry dates, so it scores selection AND
+# timing. Holding the calendar fixed is what makes a percentile a statement
+# about the pick.
+# --------------------------------------------------------------------------
+
+def two_names_one_good_day() -> dict[str, pd.DataFrame]:
+    """WINNER doubles on 2020-01-02; LOSER halves. Both trade every day."""
+    index = pd.bdate_range("2020-01-01", periods=4)
+    def frame(opens):
+        return pd.DataFrame(
+            {"open": opens, "high": [max(opens)] * 4, "low": [min(opens)] * 4,
+             "close": opens, "volume": [1e6] * 4},
+            index=index,
+        )
+    return {"WINNER": frame([100.0, 200.0, 200.0, 200.0]),
+            "LOSER": frame([100.0, 50.0, 50.0, 50.0])}
+
+
+def test_the_benchmark_only_buys_on_the_dates_the_strategy_traded():
+    """A one-bar trade entered 2020-01-01 can only draw the two returns
+    available that day (+100% and -50%), never a return from another date."""
+    bench = date_matched_benchmark(
+        two_names_one_good_day(),
+        entries=[(date(2020, 1, 1), 1)],
+        iterations=400, seed=1, costs=NO_COSTS,
+    )
+
+    assert bench.distribution.size == 400
+    assert set(np.round(np.unique(bench.distribution), 6)) == {1.0, -0.5}
+
+
+def test_picking_the_winner_every_time_ranks_above_random():
+    strategy_return = 1.0                      # took WINNER on the good day
+    bench = date_matched_benchmark(
+        two_names_one_good_day(),
+        entries=[(date(2020, 1, 1), 1)],
+        iterations=400, seed=2, costs=NO_COSTS,
+    )
+
+    assert bench.percentile_of(strategy_return) > 40    # beat every LOSER draw
+    assert bench.percentile_of(-0.5) == 0.0             # beat nothing
+
+
+def test_a_trade_with_no_eligible_alternative_is_dropped_not_scored_zero():
+    """Counting an unsampled trade as zero pulls the distribution toward zero,
+    which flatters the strategy. `random_benchmark` divides by n_trades even
+    when it skips a draw; this one divides by what it actually sampled."""
+    bars = two_names_one_good_day()
+    bench = date_matched_benchmark(
+        bars,
+        # Second entry is beyond the data, so no name is eligible for it.
+        entries=[(date(2020, 1, 1), 1), (date(2029, 1, 1), 5)],
+        iterations=200, seed=3, costs=NO_COSTS,
+    )
+
+    assert bench.n_trades == 1, "only the tradeable entry should be counted"
+    assert set(np.round(np.unique(bench.distribution), 6)) == {1.0, -0.5}
+
+
+def test_it_is_reproducible_from_its_seed():
+    args = dict(entries=[(date(2020, 1, 1), 1)], iterations=100, costs=NO_COSTS)
+    a = date_matched_benchmark(two_names_one_good_day(), seed=7, **args)
+    b = date_matched_benchmark(two_names_one_good_day(), seed=7, **args)
+
+    assert np.array_equal(a.distribution, b.distribution)
+
+
+def test_no_entries_is_an_empty_distribution_rather_than_an_error():
+    bench = date_matched_benchmark(two_names_one_good_day(), entries=[], iterations=50)
+    assert bench.distribution.size == 0
+
+
+def test_trade_entries_reports_the_calendar_of_closed_trades_only():
+    closed = Trade(ticker="A", setup="s", entry_date=date(2020, 1, 1),
+                   entry_price=Decimal("100"), shares=1, stop=Decimal("90"),
+                   target=None, risk_dollars=Decimal("10"),
+                   exit_date=date(2020, 1, 3), exit_price=Decimal("110"), bars_held=2)
+    still_open = Trade(ticker="B", setup="s", entry_date=date(2020, 1, 1),
+                       entry_price=Decimal("100"), shares=1, stop=Decimal("90"),
+                       target=None, risk_dollars=Decimal("10"))
+
+    assert trade_entries([closed, still_open]) == [(date(2020, 1, 1), 2)]

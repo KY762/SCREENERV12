@@ -22,11 +22,22 @@ be noise, and it is exactly the part that does not survive out of sample.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
 from .runner import Outcome
+
+# Pre-registered constants, not arguments (non-negotiable #4).
+#
+# How many standard errors the gap between two arms must clear before either is
+# selectable. 2.0 is the conventional two-sided 95% bar; it is stated here so
+# moving it after seeing a number is a visible edit rather than a keyword.
+SEPARATION_Z = 2.0
+# Divergence in trade count above which a use_stop comparison is measuring
+# selection as well as exit design. Mirrors report.py, which prints the warning.
+ISOLATION_TOLERANCE = 0.25
 
 
 @dataclass(frozen=True)
@@ -83,6 +94,112 @@ def _neighbours(
     return out
 
 
+def _compare_arms(cells: list[Cell]) -> SurfaceVerdict:
+    """Verdict for a two-arm structural question.
+
+    REPLACEMENT CRITERION, pending operator sign-off. Three things must hold
+    before one arm is selectable over the other:
+
+    1. The winner is positive.
+    2. The gap between the arms is larger than the noise in the gap. The random
+       benchmark cannot supply this -- it says whether an ARM beats random, not
+       whether one arm beats THE OTHER. Resting on it alone called a +0.004R
+       h1_trend_filter difference "separated". The test is on mean per-trade
+       return, whose standard error each arm carries.
+    3. The winner also beats random selection on its own entry dates, so the
+       gap is not two arms being equally bad in a rising market.
+
+    Plus a veto: a use_stop comparison whose arms took materially different
+    trade counts is not an exit-rule comparison at all, and no amount of
+    separation rescues it. Without the veto h2_exit_isolated came back
+    selectable at 27.3% divergence.
+
+    The standard error assumes independent trades. Concurrent positions in
+    correlated names are not independent, so SEPARATION_Z is optimistic and
+    this stays a reason to pre-register a test, never a result.
+    """
+    ranked = sorted(cells, key=lambda c: -c.expectancy)
+    best, other = ranked[0], ranked[1]
+
+    def rank_of(cell: Cell) -> float | None:
+        pct = getattr(cell.outcome, "date_matched_percentile", None)
+        return pct if pct is not None else cell.outcome.random_percentile
+
+    def arm(cell: Cell) -> str:
+        return ", ".join(f"{k}={v}" for k, v in sorted(cell.params.items())) or "arm"
+
+    best_rank, delta = rank_of(best), best.expectancy - other.expectancy
+    positive = sum(1 for c in cells if c.expectancy > 0)
+    margin = (
+        f"{arm(best)} at {best.expectancy:+.3f}R versus "
+        f"{arm(other)} at {other.expectancy:+.3f}R, a gap of {delta:+.3f}R"
+    )
+
+    def verdict(shape: str, recommended: Cell | None, detail: str) -> SurfaceVerdict:
+        return SurfaceVerdict(
+            shape=shape, best=best, recommended=recommended,
+            positive_cells=positive, total_cells=2, detail=detail,
+        )
+
+    if best.expectancy <= 0:
+        return verdict("none", None, (
+            f"neither arm produced positive expectancy -- {margin}. The "
+            "comparison still says which is less bad, but nothing here is "
+            "selectable."
+        ))
+
+    # Veto: arms that did not take the same trades are not an exit comparison.
+    if set(best.params) == {"use_stop"}:
+        counts = [c.outcome.stats.trades for c in cells]
+        if min(counts) > 0:
+            spread = (max(counts) - min(counts)) / max(counts)
+            if spread > ISOLATION_TOLERANCE:
+                return verdict("indistinct", None, (
+                    f"{margin}, but the arms differ by {spread:.1%} in trade "
+                    f"count ({min(counts):,} vs {max(counts):,}). They did not "
+                    "take the same signals, so this measures exit design and "
+                    "selection together and the gap is not attributable to the "
+                    "exit rule."
+                ))
+
+    # Is the gap bigger than the noise in the gap?
+    z = None
+    se_best = getattr(best.outcome, "mean_return_se", None)
+    se_other = getattr(other.outcome, "mean_return_se", None)
+    mu_best = getattr(best.outcome, "mean_return", None)
+    mu_other = getattr(other.outcome, "mean_return", None)
+    if None not in (se_best, se_other, mu_best, mu_other):
+        se_gap = math.hypot(se_best, se_other)
+        if se_gap > 0:
+            z = (mu_best - mu_other) / se_gap
+
+    if z is not None and z < SEPARATION_Z:
+        return verdict("indistinct", None, (
+            f"{margin}, but that gap is {z:.1f} standard errors on mean "
+            f"per-trade return -- under the {SEPARATION_Z:.0f} required. Two "
+            "arms this close are one resampling away from swapping places."
+        ))
+
+    if best_rank is None or best_rank < 50:
+        rank_txt = (
+            "was not ranked" if best_rank is None
+            else f"sits at the {best_rank:.0f}th percentile"
+        )
+        return verdict("indistinct", None, (
+            f"{margin}. But the winning arm {rank_txt} against random selection "
+            "on its own entry dates, so beating the other arm is not evidence "
+            "of an edge -- both are losing to a coin toss and one loses by less."
+        ))
+
+    strength = f" at {z:.1f} standard errors" if z is not None else ""
+    return verdict("separated", best, (
+        f"{margin}{strength}, and the winning arm beats random selection on its "
+        f"own entry dates at the {best_rank:.0f}th percentile. The standard "
+        "error assumes independent trades, which concurrent positions are not, "
+        "so this is a question worth pre-registering, not a settled result."
+    ))
+
+
 def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
     """Classify the surface and pick a value, per docs/03 0.7.
 
@@ -90,6 +207,15 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
     pre-registered trade-count criterion on its own, and hiding it would make
     the surface look smoother than it is.
     """
+    # A two-cell grid is an A/B, not a surface. The plateau test asks whether a
+    # positive cell has positive NEIGHBOURS, and across two cells the only
+    # neighbour a winner has is the loser -- so SPIKE is returned whenever the
+    # comparison separates at all, which is the thing an A/B is for. Every
+    # *_exit_isolated arm except h5's was unselectable by construction rather
+    # than by evidence. Rule below; docs/03 0.7 rules 3 and 4 do not apply here.
+    if len(cells) == 2:
+        return _compare_arms(cells)
+
     by_key = {cell.key: cell for cell in cells}
     positive = [c for c in cells if c.expectancy > 0]
 

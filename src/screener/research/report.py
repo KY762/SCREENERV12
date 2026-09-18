@@ -38,6 +38,10 @@ def _cell_row(cell) -> dict[str, Any]:
             None if cell.outcome.random_percentile is None
             else round(cell.outcome.random_percentile, 1)
         ),
+        "date_matched_percentile": (
+            None if getattr(cell.outcome, "date_matched_percentile", None) is None
+            else round(cell.outcome.date_matched_percentile, 1)
+        ),
         "exits": stats.exits,
     }
 
@@ -108,8 +112,9 @@ def to_markdown(
     # without the second is how a null gets read as a finding -- the caveat at
     # the foot of this report called percentiles "the comparison that matters"
     # while no table showed one.
-    add("| Experiment | Kind | Configs | Shape | Best expectancy | vs random | Selected |")
-    add("| --- | --- | --- | --- | --- | --- | --- |")
+    add("| Experiment | Kind | Configs | Shape | Best expectancy | "
+        "vs random (same days) | vs random (any day) | Selected |")
+    add("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for r in results:
         best = r.verdict.best
         chosen = r.verdict.recommended
@@ -117,6 +122,7 @@ def to_markdown(
             f"| `{r.experiment.name}` | {r.experiment.kind} | {len(r.cells)} | "
             f"**{r.verdict.shape}** | "
             f"{best.expectancy:+.3f}R | "
+            f"{_fmt_matched(best)} | "
             f"{_fmt_percentile(best)} | "
             f"{_fmt_params(chosen.params) if chosen else '—'} |"
         )
@@ -140,7 +146,8 @@ def to_markdown(
 
         varied = sorted(r.experiment.vary)
         header = varied + [
-            "Trades", "Win%", "Expectancy", "vs random", "PF", "MaxDD", "Return", "Exits"
+            "Trades", "Win%", "Expectancy", "vs random (same days)",
+            "vs random (any day)", "PF", "MaxDD", "Return", "Exits"
         ]
         add("| " + " | ".join(header) + " |")
         add("| " + " | ".join("---" for _ in header) + " |")
@@ -160,6 +167,7 @@ def to_markdown(
                         str(stats.trades),
                         f"{stats.win_rate:.0%}",
                         f"{stats.expectancy_r:+.3f}R",
+                        _fmt_matched(cell),
                         _fmt_percentile(cell),
                         pf,
                         f"{stats.max_drawdown_pct:.1%}",
@@ -184,6 +192,21 @@ def to_markdown(
     add("- Random-selection percentiles, where present, are the comparison that "
         "matters: beating zero is not the test, beating random long exposure is.")
     return "\n".join(lines) + "\n"
+
+
+def _fmt_matched(cell) -> str:
+    """Rank against random symbols on this strategy's OWN entry dates.
+
+    The column to read. `_fmt_percentile` lets the benchmark pick its own
+    dates, so it scores selection and timing together and a strategy can rank
+    badly there for trading in a bad month while picking perfectly well. Here
+    the calendar is identical on both sides.
+    """
+    pct = getattr(getattr(cell, "outcome", None), "date_matched_percentile", None)
+    if pct is None:
+        return "—"
+    rank = f"{round(pct):.0f}{_ordinal_suffix(round(pct))}"
+    return f"{rank} ⚠ below random" if pct < 50 else rank
 
 
 def _fmt_percentile(cell) -> str:

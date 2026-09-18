@@ -10,6 +10,19 @@ trades from the same universe, over the same window, with the same holding
 periods, choosing symbols and dates at random. If the strategy cannot beat that
 distribution, its rules are decoration on top of plain market exposure -- the
 edge, if any, was in being long, not in choosing.
+
+There are two of them, and they answer different questions:
+
+    random_benchmark        symbol AND entry date random. Prices selection and
+                            timing together. A strategy that only traded in
+                            good weeks scores well here for a reason that is
+                            not selection.
+    date_matched_benchmark  entry dates held to the strategy's own, only the
+                            symbol swapped. Timing is now identical on both
+                            sides, so what is left is the pick.
+
+Report both. The gap between them IS the timing contribution, which no single
+number can separate.
 """
 
 from __future__ import annotations
@@ -24,6 +37,91 @@ import numpy as np
 import pandas as pd
 
 from .engine import CostModel, Trade
+
+
+def trade_entries(trades: Sequence[Trade]) -> list[tuple[date, int]]:
+    """(entry date, bars held) for every closed trade -- the calendar to match."""
+    return [
+        (t.entry_date, t.bars_held)
+        for t in trades
+        if t.exit_date is not None and t.bars_held > 0
+    ]
+
+
+def date_matched_benchmark(
+    bars_by_symbol: dict[str, pd.DataFrame],
+    *,
+    entries: Sequence[tuple[date, int]],
+    iterations: int = 1000,
+    seed: int = 0,
+    costs: CostModel | None = None,
+) -> RandomBenchmark:
+    """Mean per-trade return when only the SYMBOL is chosen at random.
+
+    Every real trade contributes its own entry date and holding length. Each
+    iteration buys a different random name on that same day and holds it the
+    same number of bars, so the calendar is identical on both sides and the
+    only difference left is which symbol was picked.
+
+    `random_benchmark` samples entry dates uniformly across the window, which
+    bundles selection with timing: a strategy whose signals cluster in strong
+    weeks beats it without picking anything well, and one whose signals cluster
+    in a drawdown loses to it while picking fine. Neither says what the report
+    claims a percentile says. This is the one to quote for "did selection add
+    anything".
+
+    Eligibility is "had a bar that day, with enough bars after it". That is
+    tradeability as this database sees it, NOT point-in-time index membership,
+    which is not threaded this far down -- so the pool can include a name that
+    was listed but outside the universe on that date.
+
+    A trade with no eligible alternative is dropped from BOTH sides rather than
+    counted as zero: dividing by trades that were never sampled pulls the
+    distribution toward zero and flatters the strategy.
+    """
+    costs = costs or CostModel()
+    slip = costs.slippage_bps / 10_000.0
+    rng = np.random.default_rng(seed)
+
+    frames = {t: f for t, f in bars_by_symbol.items() if len(f) > 1}
+    if not frames or not entries:
+        return RandomBenchmark(iterations, 0, np.array([], dtype="float64"))
+
+    # One aligned matrix of opens, dates x symbols, NaN where a name has no bar
+    # that day. Turns "every eligible symbol on date d" into one vectorised row
+    # lookup instead of a dict probe per symbol per trade.
+    all_dates = sorted({d for f in frames.values() for d in f.index})
+    row_of = {d.date(): i for i, d in enumerate(all_dates)}
+    opens = np.full((len(all_dates), len(frames)), np.nan, dtype="float64")
+    for col, frame in enumerate(frames.values()):
+        idx = np.fromiter((row_of[d.date()] for d in frame.index), dtype="int64",
+                          count=len(frame.index))
+        opens[idx, col] = frame["open"].to_numpy(dtype="float64")
+
+    # Trades sharing a date and horizon draw from the same pool, so build it once.
+    groups: dict[tuple[date, int], int] = {}
+    for entry_date, hold in entries:
+        if hold > 0:
+            groups[(entry_date, hold)] = groups.get((entry_date, hold), 0) + 1
+
+    totals = np.zeros(iterations, dtype="float64")
+    counted = 0
+    for (entry_date, hold), n in groups.items():
+        i = row_of.get(entry_date)
+        if i is None or i + hold >= len(all_dates):
+            continue
+        buy, sell = opens[i], opens[i + hold]
+        usable = np.isfinite(buy) & np.isfinite(sell) & (buy > 0)
+        if not usable.any():
+            continue
+        entry = buy[usable] * (1.0 + slip)
+        pool = (sell[usable] * (1.0 - slip) - entry) / entry
+        totals += rng.choice(pool, size=(iterations, n), replace=True).sum(axis=1)
+        counted += n
+
+    if counted == 0:
+        return RandomBenchmark(iterations, 0, np.array([], dtype="float64"))
+    return RandomBenchmark(iterations, counted, totals / counted)
 
 
 def trade_returns(trades: Sequence[Trade]) -> list[float]:

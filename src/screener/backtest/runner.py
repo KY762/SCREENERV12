@@ -8,6 +8,8 @@ the difference would look like a parameter effect.
 
 from __future__ import annotations
 
+import math
+import statistics
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -20,7 +22,12 @@ from sqlalchemy.orm import Session
 from ..calc.sizing import RiskLimits
 from ..db.models import Symbol
 from ..metrics.compute import load_bars
-from .benchmarks import random_benchmark, trade_returns
+from .benchmarks import (
+    date_matched_benchmark,
+    random_benchmark,
+    trade_entries,
+    trade_returns,
+)
 from .engine import Candidate, CostModel, ExitRule, run_backtest
 from .performance import Stats, by_regime, check_criteria, summarize
 from .splits import Split
@@ -190,7 +197,19 @@ class Outcome:
     regimes: dict[str, Stats]
     candidates: int
     rejected: dict[str, int]
+    # Rank against random symbols on random dates -- selection and timing together.
     random_percentile: float | None
+    # Rank against random symbols on THIS strategy's own entry dates. Timing is
+    # identical on both sides, so this one is about the pick. Quote this.
+    date_matched_percentile: float | None = None
+    # Mean per-trade fractional return and its standard error, in the same unit
+    # as the benchmarks. Carried so a two-arm comparison can size its own noise
+    # instead of asking the random benchmark a question it does not answer.
+    # The SE assumes independent trades; concurrent positions in correlated
+    # names are not independent, so it is optimistic. See CLAUDE.md on
+    # effective sample size.
+    mean_return: float | None = None
+    mean_return_se: float | None = None
     criteria: list = field(default_factory=list)
 
     @property
@@ -289,17 +308,35 @@ def evaluate(
     regimes = by_regime(result.trades, config.equity)
 
     percentile = None
+    date_matched = None
+    mean_return = None
+    mean_return_se = None
+    observed = trade_returns(result.closed_trades)
+    if observed:
+        mean_return = sum(observed) / len(observed)
+        if len(observed) > 1:
+            mean_return_se = statistics.stdev(observed) / math.sqrt(len(observed))
+
     holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
     if holds and random_iterations > 0:
+        mean_return = mean_return if mean_return is not None else 0.0
+
         bench = random_benchmark(
             bars_by_symbol, start=split.start, end=split.end,
             n_trades=len(holds), hold_periods=holds,
             iterations=random_iterations, seed=seed, costs=costs,
         )
-        observed = trade_returns(result.closed_trades)
-        percentile = bench.percentile_of(
-            sum(observed) / len(observed) if observed else 0.0
+        percentile = bench.percentile_of(mean_return)
+
+        # Same trades, same days, different names. The gap between this and the
+        # line above is how much of the rank was timing rather than selection.
+        matched = date_matched_benchmark(
+            bars_by_symbol,
+            entries=trade_entries(result.closed_trades),
+            iterations=random_iterations, seed=seed, costs=costs,
         )
+        if matched.distribution.size:
+            date_matched = matched.percentile_of(mean_return)
 
     return Outcome(
         config=config,
@@ -308,6 +345,13 @@ def evaluate(
         candidates=len(candidates),
         rejected=result.rejected,
         random_percentile=percentile,
+        date_matched_percentile=date_matched,
+        mean_return=mean_return,
+        mean_return_se=mean_return_se,
+        # Deliberately still the uniform percentile: which benchmark the
+        # pre-registered criteria are scored against is a criteria change, and
+        # those are the operator's (non-negotiable #4). Recorded in CLAUDE.md
+        # as an open decision. Nothing is scored on validation yet either way.
         criteria=check_criteria(stats, regimes, percentile),
     )
 
