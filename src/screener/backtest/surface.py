@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
+from . import inference
 from .runner import Outcome
 
 # Pre-registered constants, not arguments (non-negotiable #4).
@@ -105,7 +106,8 @@ def _compare_arms(cells: list[Cell]) -> SurfaceVerdict:
        benchmark cannot supply this -- it says whether an ARM beats random, not
        whether one arm beats THE OTHER. Resting on it alone called a +0.004R
        h1_trend_filter difference "separated". The test is on mean per-trade
-       return, whose standard error each arm carries.
+       return with month-clustered standard errors, and it is PAIRED where the
+       arms took the same signals (use_stop comparisons) -- see below.
     3. The winner also beats random selection on its own entry dates, so the
        gap is not two arms being equally bad in a rising market.
 
@@ -114,9 +116,10 @@ def _compare_arms(cells: list[Cell]) -> SurfaceVerdict:
     separation rescues it. Without the veto h2_exit_isolated came back
     selectable at 27.3% divergence.
 
-    The standard error assumes independent trades. Concurrent positions in
-    correlated names are not independent, so SEPARATION_Z is optimistic and
-    this stays a reason to pre-register a test, never a result.
+    Clustering by entry month charges for trades opened together, not for
+    trades opened apart and held through the same stretch, so the standard
+    errors may still be somewhat optimistic. On the development split this is
+    a reason to pre-register a test, never a result.
     """
     ranked = sorted(cells, key=lambda c: -c.expectancy)
     best, other = ranked[0], ranked[1]
@@ -163,21 +166,43 @@ def _compare_arms(cells: list[Cell]) -> SurfaceVerdict:
                 ))
 
     # Is the gap bigger than the noise in the gap?
-    z = None
-    se_best = getattr(best.outcome, "mean_return_se", None)
-    se_other = getattr(other.outcome, "mean_return_se", None)
-    mu_best = getattr(best.outcome, "mean_return", None)
-    mu_other = getattr(other.outcome, "mean_return", None)
-    if None not in (se_best, se_other, mu_best, mu_other):
-        se_gap = math.hypot(se_best, se_other)
-        if se_gap > 0:
-            z = (mu_best - mu_other) / se_gap
+    #
+    # Exit arms took the same signals, so they are compared PAIRED: each
+    # no-stop trade against its stop twin, same stock, same day. Most of a
+    # trade's return is the stock's own move, which both twins share; an
+    # unpaired test counts that as noise and put h1's exit gap at 1.1 SE when
+    # the paired figure is 2.9. Arms that took different signals -- a filter on
+    # or off, a different rebalance -- have no twins, so they are compared as
+    # two independent means. Both use month-clustered standard errors.
+    z, test = None, None
+    log_best = getattr(best.outcome, "trade_log", ())
+    log_other = getattr(other.outcome, "trade_log", ())
+    if set(best.params) == {"use_stop"} and log_best and log_other:
+        diff = inference.paired(log_best, log_other)
+        if diff.n >= 2 and not math.isnan(diff.se):
+            # A zero SE means every pair differed by the same amount: perfectly
+            # consistent, not unmeasured. Treating 0 as missing once dropped
+            # this through to the unpaired test, which answered the opposite.
+            if diff.se == 0:
+                z = math.copysign(math.inf, diff.mean) if diff.mean else 0.0
+            else:
+                z = diff.mean / diff.se
+            test = f"paired over {diff.n:,} shared signals"
+    if z is None:
+        se_best = getattr(best.outcome, "mean_return_se", None)
+        se_other = getattr(other.outcome, "mean_return_se", None)
+        mu_best = getattr(best.outcome, "mean_return", None)
+        mu_other = getattr(other.outcome, "mean_return", None)
+        if None not in (se_best, se_other, mu_best, mu_other):
+            se_gap = math.hypot(se_best, se_other)
+            if se_gap > 0:
+                z, test = (mu_best - mu_other) / se_gap, "unpaired"
 
     if z is not None and z < SEPARATION_Z:
         return verdict("indistinct", None, (
             f"{margin}, but that gap is {z:.1f} standard errors on mean "
-            f"per-trade return -- under the {SEPARATION_Z:.0f} required. Two "
-            "arms this close are one resampling away from swapping places."
+            f"per-trade return ({test}, month-clustered) -- under the "
+            f"{SEPARATION_Z:.0f} required."
         ))
 
     if best_rank is None or best_rank < 50:
@@ -191,12 +216,11 @@ def _compare_arms(cells: list[Cell]) -> SurfaceVerdict:
             "of an edge -- both are losing to a coin toss and one loses by less."
         ))
 
-    strength = f" at {z:.1f} standard errors" if z is not None else ""
+    strength = f" at {z:.1f} standard errors ({test}, month-clustered)" if z is not None else ""
     return verdict("separated", best, (
         f"{margin}{strength}, and the winning arm beats random selection on its "
-        f"own entry dates at the {best_rank:.0f}th percentile. The standard "
-        "error assumes independent trades, which concurrent positions are not, "
-        "so this is a question worth pre-registering, not a settled result."
+        f"own entry dates at the {best_rank:.0f}th percentile. Development "
+        "split: a question worth pre-registering, not a settled result."
     ))
 
 

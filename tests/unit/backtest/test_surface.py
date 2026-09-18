@@ -282,3 +282,40 @@ def test_the_veto_only_applies_to_use_stop_comparisons():
     )
 
     assert verdict.shape == "separated"
+
+
+def _log(entries):
+    """(ticker, entry date, return) records spread one per month."""
+    from datetime import date
+    return tuple((t, date(2014, 1 + i % 12, 1 + i // 12), r) for i, (t, r) in enumerate(entries))
+
+
+def test_exit_arms_are_compared_paired_not_as_two_independent_means():
+    """h1_exit_isolated read 1.1 SE unpaired and 2.9 paired. Both arms buy the
+    same stock on the same day, so the stock's own move is common to both and
+    cancels in the difference. Here each no-stop trade beats its stop twin by
+    exactly 1% inside +/-20% swings: hopeless unpaired, decisive paired."""
+    swings = [0.20 if i % 2 else -0.20 for i in range(24)]
+    no_stop = arm(0.10, 80.0, se=0.05, mean_return=0.01, trades=24, use_stop=False)
+    stop = arm(0.05, 70.0, se=0.05, mean_return=0.0, trades=24, use_stop=True)
+    no_stop.outcome.trade_log = _log([("X", s + 0.01) for s in swings])
+    stop.outcome.trade_log = _log([("X", s) for s in swings])
+
+    verdict = analyse([no_stop, stop], {"use_stop": [True, False]})
+
+    assert verdict.shape == "separated"
+    assert "paired" in verdict.detail
+
+
+def test_arms_that_took_different_signals_are_not_paired():
+    """A filter on or off selects different stocks; there are no twins to
+    pair, so the comparison falls back to two independent means."""
+    on = arm(0.073, 89.0, se=0.004, mean_return=0.0073, trend_filter=True)
+    off = arm(0.069, 89.0, se=0.004, mean_return=0.0069, trend_filter=False)
+    on.outcome.trade_log = _log([("A", 0.01)] * 12)
+    off.outcome.trade_log = _log([("A", 0.01)] * 12)
+
+    verdict = analyse([on, off], {"trend_filter": [True, False]})
+
+    assert verdict.shape == "indistinct"
+    assert "unpaired" in verdict.detail

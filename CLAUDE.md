@@ -74,12 +74,13 @@ report prints ISOLATION FAILED when arms diverge. H5 clean: stop +0.126R,
 no stop **+0.249R**. One hypothesis, development, biased data — suggestive, not
 settled.
 
-**Weaker again after 2026-09-17.** With the target bug above fixed, holds
-lengthen and h2/h3 fail isolation outright (27.3%, 28.9%). Of the arms that do
-isolate, h4's no-stop **+0.294R sits at the 11th percentile** against random —
-below a coin toss — leaving only h1 (+0.088R, 80th) and h5 (+0.249R, 73rd)
-above random, neither above the 95th. The no-stop effect is substantially
-market exposure, which is what a duration-matched benchmark is for.
+**Re-measured three times on 2026-09-17; the current reading is below, under
+"The stop-design finding, with the right test".** In short: h2/h3 fail
+isolation outright; paired and month-clustered, **h1's no-stop advantage is 2.9
+SE**, h4's 1.9 with its winner below random, h5's 1.5. Two intermediate
+readings from the same day — "h4 at the 11th percentile" (a benchmark that
+scored timing as selection) and "the finding is 1 SE" (an unpaired test) — were
+both wrong and are superseded.
 
 Round 2 has now run on development. **H6 ran for the first time on 2026-09-17**
 and is not the exception it first looked like: `reaction_size` reaches the 89th
@@ -195,31 +196,57 @@ Each was invisible to a passing test suite and surfaced only on real data.
   The whole run rolled back while reporting success, the same shape as the
   vacuous verification above. The seen-set now grows as the batch is written.
 
-## The stop-design finding is 1 standard error
+## The stop-design finding, with the right test: H1 at ~3 SE, H5 short
 
-**2026-09-17, and it supersedes everything above about exit design.** Two-arm
-comparisons never carried an error bar. Now that each arm reports a standard
-error on mean per-trade return, the gaps are:
+**2026-09-17. Supersedes everything above about exit design, including an
+earlier version of this section that said the finding was 1 SE.** That figure
+came from the wrong test and is recorded here so nobody re-derives it.
 
-| arm | gap | standard errors |
-| --- | --- | --- |
-| `h5_exit_isolated` (the clean one, 4.3% divergence) | +0.123R | **0.9** |
-| `h1_exit_isolated` (11.8% divergence) | +0.099R | **1.1** |
-| `h5_rebalance` | +0.202R | 1.2 |
-| `h1_trend_filter` | +0.004R | 0.2 |
+The exit-isolated arms take the same signals and differ only in the exit, so
+the question is whether each no-stop trade beat ITS OWN stop twin — same stock,
+same day. The first error bar put on this compared the arms as two independent
+means, which counts the stock's own move (common to both twins, and most of
+each trade's return) as noise. Paired, and clustered by entry month so
+correlated trades are not counted as independent:
 
-Nothing reaches 2. And that SE assumes independent trades, which five
-concurrent positions in correlated large caps are not, so the real figure is
-lower. `h2/h3_exit_isolated` are vetoed separately for failed isolation (27.3%,
-28.9%), and `h4_exit_isolated`'s +0.399R gap has its winner at the 40th
-percentile.
+| arm | pairs | mean gap / trade | unpaired | paired | **paired, month-clustered** | paired, qtr-clustered |
+| --- | --- | --- | --- | --- | --- | --- |
+| `h1_exit_isolated` | 705 | +0.87% | 1.1 | 3.2 | **2.9** | 3.0 |
+| `h4_exit_isolated` | 2,040 | +0.65% | 2.3 | 3.8 | **1.9** | 1.7 |
+| `h5_exit_isolated` | 352 | +0.64% | 0.9 | 1.8 | **1.5** | 1.5 |
 
-So "removing the stop is worth roughly +0.1R" was never distinguishable from
-noise. It was a difference nobody had put an error bar on, repeated across
-three rounds of increasingly careful measurement, each of which fixed a real
-confound and none of which asked whether the gap was larger than its own
-uncertainty. docs/07's original 5.8 SE belongs to the confounded comparison and
-does not transfer.
+So: **H1's no-stop advantage clears 2 SE under every version of the test.**
+H4's clears only while trades are treated as independent, and its winning arm
+sits at the 40th percentile against random besides. H5's does not clear.
+`h2/h3_exit_isolated` remain vetoed for failed isolation (27.3%, 28.9%) —
+pairing on the shared subset would not repair arms that took different trades.
+
+This is one hypothesis clearing on the development split, with clustering that
+charges for trades opened together but not for trades opened apart and held
+through the same stretch. It is the strongest single result in the project and
+it is still not evidence (docs/03 §0.4). docs/07's original 5.8 SE belongs to
+the confounded comparison and does not transfer.
+
+## Effective sample size
+
+**Measured 2026-09-17** with `screener diagnose sample-size`, on configurations
+declared before they ran. Design effects are modest — the correlation between
+concurrent trades costs 15-40% of nominal N, not the two-thirds that was feared:
+
+| configuration | trades | design effect (month / qtr) | effective N | nominal needed for 200 |
+| --- | --- | --- | --- | --- |
+| h1 plateau centre (hold 10, 2.5 ATR) | 566 | 1.5 / 1.2 | 385-480 | 294 |
+| **h1 selection (126d, top 20%)** | 308 | 1.4 / 1.2 | 227-257 | **271** |
+| h5 specification | 211 | 1.1 / 1.3 | 163-189 | 259 |
+| h4 no stop, 20 bars | 249 | 1.5 / 1.3 | 165-187 | 302 |
+| h6 reaction 0.03 | **96** | 1.4 / 1.6 | **59-68** | 328 |
+
+The pre-registered floor of 200 would need roughly **260-330 nominal trades**
+to mean 200 independent observations. The H1 lead (308) clears that; **H5, H4
+and H6 do not**, and H6's 93rd-percentile result rests on about 60 effective
+observations. Month- and quarter-clustering disagree in both directions; with
+only ~21 quarters the quarterly estimate is noisy, which is why scoring uses
+monthly (`backtest/inference.py`).
 
 ## Survivorship exposure, per hypothesis
 
@@ -339,19 +366,22 @@ screener research explore --battery all
   replacing plateau/spike on two-cell grids, which is a pre-registered-criteria
   change and therefore yours. An arm is selectable only if it is positive, the
   gap clears `SEPARATION_Z = 2.0` standard errors, the winner beats random on
-  its own entry dates, and — for `use_stop` arms — isolation held. Shapes are
-  now `separated` / `indistinct` / `none`. Under it, **no two-cell experiment
-  in the battery is selectable**. The constant lives in `backtest/surface.py`
-  so moving it is a visible edit.
+  its own entry dates, and — for `use_stop` arms — isolation held. The gap is
+  tested PAIRED for `use_stop` arms (same stock, same day) and unpaired
+  otherwise, both with month-clustered standard errors. Shapes are now
+  `separated` / `indistinct` / `none`. The constant lives in
+  `backtest/surface.py` so moving it is a visible edit.
 - **Which benchmark the pre-registered criteria score against.**
   `check_criteria` still takes the uniform percentile, deliberately unchanged.
   The date-matched one is the better instrument for "did selection add
   anything", but switching what the criteria read is a criteria change.
   Nothing is scored on validation yet either way.
-- **Effective sample size.** Five concurrent positions in correlated names are
-  not five independent observations, so every standard error above is
-  optimistic and the ≥200 trade floor may be far too low. Worth measuring
-  before a validation slot is spent on an underpowered test.
+- **Raise the trade floor?** Measured (see "Effective sample size"): 200
+  effective observations need roughly 260-330 nominal trades at these design
+  effects. Whether the pre-registered floor of 200 should become ~300 is a
+  criteria change, so it is recorded rather than made. As things stand the
+  floor would pass H5 (211) and H4 (249) configurations that hold well under
+  200 independent observations.
 - **The across-hypothesis correction.** Seven hypotheses x 3 validation configs
   is 21 shots at the bar; several clear by chance. A decision, not code, and it
   has to be made before any validation is spent or it is post-hoc.

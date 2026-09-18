@@ -124,18 +124,21 @@ def date_matched_benchmark(
     return RandomBenchmark(iterations, counted, totals / counted)
 
 
-def trade_returns(trades: Sequence[Trade]) -> list[float]:
-    """Per-trade fractional return on the entry price.
+def trade_return(trade: Trade) -> float | None:
+    """One trade's fractional return on its entry price, or None if unclosed.
 
     Percent rather than R, because the random benchmark has no stop and
-    therefore no R. Comparisons need a unit both sides can express.
+    therefore no R. Comparisons need a unit both sides can express. The single
+    definition every benchmark and diagnostic uses.
     """
-    out = []
-    for trade in trades:
-        if trade.exit_price is None or trade.entry_price <= 0:
-            continue
-        out.append(float((trade.exit_price - trade.entry_price) / trade.entry_price))
-    return out
+    if trade.exit_price is None or trade.entry_price <= 0:
+        return None
+    return float((trade.exit_price - trade.entry_price) / trade.entry_price)
+
+
+def trade_returns(trades: Sequence[Trade]) -> list[float]:
+    """Per-trade fractional returns for every closed trade."""
+    return [r for r in (trade_return(t) for t in trades) if r is not None]
 
 
 def buy_and_hold(

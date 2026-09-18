@@ -9,7 +9,6 @@ the difference would look like a parameter effect.
 from __future__ import annotations
 
 import math
-import statistics
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -22,11 +21,12 @@ from sqlalchemy.orm import Session
 from ..calc.sizing import RiskLimits
 from ..db.models import Symbol
 from ..metrics.compute import load_bars
+from . import inference
 from .benchmarks import (
     date_matched_benchmark,
     random_benchmark,
     trade_entries,
-    trade_returns,
+    trade_return,
 )
 from .engine import Candidate, CostModel, ExitRule, run_backtest
 from .performance import Stats, by_regime, check_criteria, summarize
@@ -203,13 +203,15 @@ class Outcome:
     # identical on both sides, so this one is about the pick. Quote this.
     date_matched_percentile: float | None = None
     # Mean per-trade fractional return and its standard error, in the same unit
-    # as the benchmarks. Carried so a two-arm comparison can size its own noise
-    # instead of asking the random benchmark a question it does not answer.
-    # The SE assumes independent trades; concurrent positions in correlated
-    # names are not independent, so it is optimistic. See CLAUDE.md on
-    # effective sample size.
+    # as the benchmarks. The SE is clustered by entry month (inference.py):
+    # concurrent positions in correlated names are not independent, and the
+    # iid version overstated the evidence.
     mean_return: float | None = None
     mean_return_se: float | None = None
+    # Every closed trade as (ticker, entry date, return). Kept so two arms that
+    # took the same signals can be compared PAIRED -- same stock, same day,
+    # different exit -- which is the test the exit-isolated arms exist for.
+    trade_log: tuple = ()
     criteria: list = field(default_factory=list)
 
     @property
@@ -273,20 +275,21 @@ def build_candidates(
     )
 
 
-def evaluate(
+def simulate(
     candidates: list[Candidate],
     bars_by_symbol: dict[str, pd.DataFrame],
     config: RunConfig,
     split: Split,
-    *,
-    random_iterations: int = 1000,
-    seed: int = 0,
-) -> Outcome:
-    """Run one configuration and score it against the pre-registered criteria."""
-    config = config.resolved()
-    costs = CostModel(slippage_bps=config.slippage_bps)
+):
+    """Execute one configuration and return the raw backtest, trades included.
 
-    result = run_backtest(
+    The one place a RunConfig becomes risk limits, an exit rule and a cost
+    model. `evaluate` scores the result; diagnostics that need the individual
+    trades -- effective sample size, paired arm comparisons -- call this rather
+    than rebuilding the setup, so the two cannot drift apart.
+    """
+    config = config.resolved()
+    return run_backtest(
         candidates, bars_by_symbol,
         start=split.start, end=split.end,
         starting_equity=config.equity,
@@ -301,8 +304,23 @@ def evaluate(
             time_limit=config.time_limit,
             use_stop=config.use_stop,
         ),
-        costs=costs,
+        costs=CostModel(slippage_bps=config.slippage_bps),
     )
+
+
+def evaluate(
+    candidates: list[Candidate],
+    bars_by_symbol: dict[str, pd.DataFrame],
+    config: RunConfig,
+    split: Split,
+    *,
+    random_iterations: int = 1000,
+    seed: int = 0,
+) -> Outcome:
+    """Run one configuration and score it against the pre-registered criteria."""
+    config = config.resolved()
+    costs = CostModel(slippage_bps=config.slippage_bps)
+    result = simulate(candidates, bars_by_symbol, config, split)
 
     stats = summarize(result)
     regimes = by_regime(result.trades, config.equity)
@@ -311,11 +329,16 @@ def evaluate(
     date_matched = None
     mean_return = None
     mean_return_se = None
-    observed = trade_returns(result.closed_trades)
-    if observed:
-        mean_return = sum(observed) / len(observed)
-        if len(observed) > 1:
-            mean_return_se = statistics.stdev(observed) / math.sqrt(len(observed))
+    log = tuple(
+        (t.ticker, t.entry_date, r)
+        for t in result.closed_trades
+        if (r := trade_return(t)) is not None
+    )
+    if log:
+        clustered = inference.sample(log)
+        mean_return = clustered.mean
+        if not math.isnan(clustered.se):
+            mean_return_se = clustered.se
 
     holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
     if holds and random_iterations > 0:
@@ -348,6 +371,7 @@ def evaluate(
         date_matched_percentile=date_matched,
         mean_return=mean_return,
         mean_return_se=mean_return_se,
+        trade_log=log,
         # Deliberately still the uniform percentile: which benchmark the
         # pre-registered criteria are scored against is a criteria change, and
         # those are the operator's (non-negotiable #4). Recorded in CLAUDE.md

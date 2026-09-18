@@ -8,6 +8,7 @@ before any dashboard exists to hide behind.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, timedelta
 
 import typer
@@ -637,6 +638,103 @@ def diagnose_survivorship(
         "collapse -- fraud, a failed trial, a bank run -- where the stock was "
         "ordinary until it was gone. Evidence for whether a hypothesis could be "
         "validated before coverage is fixed; not a decision to."
+    )
+
+
+@diag_app.command("sample-size")
+def diagnose_sample_size(
+    split: str = typer.Option("development", "--split"),
+) -> None:
+    """How many independent observations the leading results actually hold.
+
+    Standard errors so far divided by trade count as if trades were
+    independent. Concurrent positions in correlated names are not, so this
+    clusters trades by entry month and quarter, reports the design effect and
+    the effective sample, and says how many nominal trades the pre-registered
+    floor of 200 would need in effective terms.
+
+    Then it re-tests the exit comparisons PAIRED -- same stock, same day,
+    different exit -- which is the test those arms were built for and the one
+    the stop-design finding turns on.
+
+    The configurations are declared below, before they run, each chosen for a
+    reason stated beside it. None is chosen for the number it will produce.
+    """
+    from .backtest.runner import RunConfig, build_candidates, load_symbol_bars, simulate
+    from .backtest.splits import get_split
+    from .diagnostics.sample_size import paired_difference, trade_sample
+    from .research.battery import EXIT_ISOLATED_PORTFOLIO
+
+    no_target = {"use_stop": False, "r_multiple": 0}
+    declared: list[tuple[str, str, dict]] = [
+        ("h1 plateau centre", "what h1_exits would select",
+         {"hypothesis": "h1", "hold": 10, "stop_atr": 2.5}),
+        ("h1 selection", "97th percentile same-day; the leading lead",
+         {"hypothesis": "h1", "rs_lookback": 126, "top_pct": 0.2, "hold": 20, "stop_atr": 3.0}),
+        ("h5 specification", "momentum 12-1 as specified",
+         {"hypothesis": "h5"}),
+        ("h6 reaction 0.03", "what h6_reaction_size would select",
+         {"hypothesis": "h6", "reaction_pct": 0.03, "time_limit": 40, **no_target}),
+        ("h4 no stop, 20 bars", "what h4_no_stop would select",
+         {"hypothesis": "h4", "time_limit": 20, **no_target}),
+    ]
+    arms: list[tuple[str, int]] = [("h1", 20), ("h4", 20), ("h5", 21)]
+
+    chosen = get_split(split)
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, None)
+        events = _load_events(session, bars_by_symbol)
+    console.print(f"[dim]{chosen.describe()}[/]")
+
+    def run(fields: dict):
+        config = RunConfig(**fields).resolved()
+        candidates = build_candidates(
+            bars_by_symbol, config,
+            events_by_symbol=events if config.hypothesis == "h6" else None,
+        )
+        return simulate(candidates, bars_by_symbol, config, chosen).closed_trades
+
+    table = Table(title="Effective sample size -- trades are not independent")
+    for col in ("Configuration", "Trades", "Months", "DE month", "N eff",
+                "Quarters", "DE qtr", "N eff", "Needed for 200"):
+        table.add_column(col, justify="left" if col == "Configuration" else "right")
+
+    for label, why, fields in declared:
+        trades = run(fields)
+        m, q = trade_sample(trades, "M"), trade_sample(trades, "Q")
+        worse = max(m.design_effect, q.design_effect)
+        table.add_row(
+            f"{label}\n[dim]{why}[/]", f"{m.n:,}",
+            str(m.clusters), f"{m.design_effect:.1f}", f"{m.effective_n:,.0f}",
+            str(q.clusters), f"{q.design_effect:.1f}", f"{q.effective_n:,.0f}",
+            f"{200 * max(worse, 1.0):,.0f}",
+        )
+    console.print(table)
+
+    paired = Table(title="Exit comparisons, paired: same stock, same day, different exit")
+    for col in ("Arm", "Pairs", "Mean diff", "z unpaired", "z paired",
+                "z paired, month-clustered", "z paired, qtr-clustered"):
+        paired.add_column(col, justify="left" if col == "Arm" else "right")
+
+    for hyp, limit in arms:
+        base = {"hypothesis": hyp, **EXIT_ISOLATED_PORTFOLIO, "time_limit": limit}
+        no_stop = run({**base, "use_stop": False})
+        stop = run({**base, "use_stop": True})
+
+        a, b = trade_sample(no_stop, "M"), trade_sample(stop, "M")
+        unpaired_z = (a.mean - b.mean) / math.hypot(a.iid_se, b.iid_se)
+        pm, pq = paired_difference(no_stop, stop, "M"), paired_difference(no_stop, stop, "Q")
+        paired.add_row(
+            f"{hyp}_exit_isolated", f"{pm.n:,}", f"{pm.mean:+.3%}",
+            f"{unpaired_z:.1f}", f"{pm.z_iid:.1f}",
+            f"{pm.z_cluster:.1f}", f"{pq.z_cluster:.1f}",
+        )
+    console.print(paired)
+    console.print(
+        "\n[dim]DE = design effect, the variance multiplier from within-period "
+        "correlation. N eff = trades / DE, capped at trades. 'Needed for 200' uses "
+        "the worse of the two clusterings. z is mean per-trade return over its "
+        "standard error; 2 is the pre-registered separation bar.[/]"
     )
 
 
