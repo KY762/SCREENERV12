@@ -108,6 +108,10 @@ class RunConfig:
         literature and whose own `monthly_rebalance` flag both imply a month.
         A single shared default ran H5 on a five-day clock and measured the
         short-horizon momentum docs/03 records as much weaker.
+
+        Idempotent: resolving an already-resolved config returns the same
+        config. Callers resolve at more than one layer and must be able to,
+        without the second pass reinterpreting the first pass's output.
         """
         hold = self.hold if self.hold is not None else HOLD_DEFAULTS[self.hypothesis]
 
@@ -126,18 +130,26 @@ class RunConfig:
         #                          applies (h2-h4 surface over a 2R target).
         #   r_multiple <= 0     -- explicitly no target. A target at 0R sits on
         #                          the entry price, so ExitRule normalises it
-        #                          to None; this mirrors that. It must NOT then
-        #                          fall through to the default, or the eight
-        #                          experiments that pass 0 meaning "no target"
-        #                          would silently acquire one.
+        #                          to None at the engine boundary, which is
+        #                          where "no target" has to mean something.
+        #
+        # "No target" canonicalises to 0.0 and NOT to None, because resolved()
+        # has to be a FIXED POINT: battery.py resolves a config to key its
+        # candidate cache, then evaluate() resolves again before running it.
+        # Mapping 0 -> None made the second pass read that None as
+        # "unspecified" and hand h2-h4 their 2R default, so six experiments
+        # declaring no target ran WITH one -- h2/h3/h4 _no_stop and
+        # _exit_isolated, logged as `r_multiple=None` while the engine used
+        # 2.0. Distinguishable in a report only by target exits appearing in a
+        # run that has no target. That is the third time this project has
+        # recorded a configuration it did not run; test_resolved_is_idempotent
+        # is what keeps it from being the fourth.
         #
         # Mirrored here rather than left to ExitRule because RunConfig is what
-        # gets hashed for budget and written to config_json, and a log that
-        # records a configuration the engine did not run is the failure this
-        # project has already been bitten by twice.
+        # gets hashed for budget and written to config_json.
         r_multiple = self.r_multiple
         if r_multiple is not None and r_multiple <= 0:
-            r_multiple = None
+            r_multiple = 0.0
         elif r_multiple is None and self.hypothesis in ("h2", "h3", "h4"):
             r_multiple = 2.0
         return RunConfig(**{

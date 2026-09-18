@@ -81,9 +81,19 @@ def ingest_earnings(
             )
         }
         for filing in filings:
-            if (filing.filed, filing.form) in existing:
+            # `existing` starts as what is already stored and grows as this
+            # batch is added, because the uniqueness that matters is
+            # (symbol_id, filed, form) and a company can file the same form
+            # twice in one day for two different periods -- CRVL filed two
+            # 10-Q/A on 2010-04-09. `earliest_per_period` keeps one filing per
+            # PERIOD, so both survive it, and checking only the stored rows let
+            # them collide inside a single flush. Invisible until the older
+            # filing pages started arriving and made same-day pairs common.
+            key = (filing.filed, filing.form)
+            if key in existing:
                 result.skipped += 1
                 continue
+            existing.add(key)
             session.add(
                 EarningsEvent(
                     symbol_id=symbol.id,

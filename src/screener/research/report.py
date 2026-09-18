@@ -101,8 +101,15 @@ def to_markdown(
 
     add("## Summary")
     add("")
-    add("| Experiment | Kind | Configs | Shape | Best expectancy | Selected |")
-    add("| --- | --- | --- | --- | --- | --- |")
+    # `vs random` sits beside the expectancy it qualifies. Expectancy alone
+    # reads as a result; a positive expectancy below the 50th percentile is
+    # long exposure in a rising market, which is what H5 (+0.055R, 38.5th) and
+    # H6 (+0.255R, 31.3rd) both turned out to be. Printing the first number
+    # without the second is how a null gets read as a finding -- the caveat at
+    # the foot of this report called percentiles "the comparison that matters"
+    # while no table showed one.
+    add("| Experiment | Kind | Configs | Shape | Best expectancy | vs random | Selected |")
+    add("| --- | --- | --- | --- | --- | --- | --- |")
     for r in results:
         best = r.verdict.best
         chosen = r.verdict.recommended
@@ -110,6 +117,7 @@ def to_markdown(
             f"| `{r.experiment.name}` | {r.experiment.kind} | {len(r.cells)} | "
             f"**{r.verdict.shape}** | "
             f"{best.expectancy:+.3f}R | "
+            f"{_fmt_percentile(best)} | "
             f"{_fmt_params(chosen.params) if chosen else '—'} |"
         )
     add("")
@@ -131,7 +139,9 @@ def to_markdown(
             add("")
 
         varied = sorted(r.experiment.vary)
-        header = varied + ["Trades", "Win%", "Expectancy", "PF", "MaxDD", "Return", "Exits"]
+        header = varied + [
+            "Trades", "Win%", "Expectancy", "vs random", "PF", "MaxDD", "Return", "Exits"
+        ]
         add("| " + " | ".join(header) + " |")
         add("| " + " | ".join("---" for _ in header) + " |")
 
@@ -150,6 +160,7 @@ def to_markdown(
                         str(stats.trades),
                         f"{stats.win_rate:.0%}",
                         f"{stats.expectancy_r:+.3f}R",
+                        _fmt_percentile(cell),
                         pf,
                         f"{stats.max_drawdown_pct:.1%}",
                         f"{stats.total_return_pct:+.1%}",
@@ -173,6 +184,29 @@ def to_markdown(
     add("- Random-selection percentiles, where present, are the comparison that "
         "matters: beating zero is not the test, beating random long exposure is.")
     return "\n".join(lines) + "\n"
+
+
+def _fmt_percentile(cell) -> str:
+    """Where this configuration ranks against random selection.
+
+    Marked when it lost to a coin toss, because the number that needs to
+    survive skimming is the one that says a positive expectancy was not
+    selection. "51st" and "26th (below random)" should not read alike.
+
+    `—` means the benchmark did not run (no closed trades, or
+    --random-iterations 0), which is not the same as ranking badly.
+    """
+    percentile = getattr(getattr(cell, "outcome", None), "random_percentile", None)
+    if percentile is None:
+        return "—"
+    rank = f"{round(percentile):.0f}{_ordinal_suffix(round(percentile))}"
+    return f"{rank} ⚠ below random" if percentile < 50 else rank
+
+
+def _ordinal_suffix(n: int) -> str:
+    if 11 <= (n % 100) <= 13:      # 11th, 12th, 13th, not 11st
+        return "th"
+    return {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
 
 def _fmt_params(params: dict[str, Any]) -> str:

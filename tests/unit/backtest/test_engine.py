@@ -478,8 +478,12 @@ def test_a_zero_r_target_is_no_target_not_a_target_at_the_entry():
     outside."""
     from screener.backtest.engine import ExitRule
 
-    assert ExitRule(r_multiple=0, time_limit=20, use_stop=False).r_multiple is None
+    # `has_target`, not the stored value, is what decides whether a target is
+    # built. The value is left as written so the executed rule and the logged
+    # config say the same thing.
+    assert ExitRule(r_multiple=0, time_limit=20, use_stop=False).has_target is False
     assert ExitRule(r_multiple=0, time_limit=20, use_stop=True).has_target is False
+    assert ExitRule(r_multiple=2.0, time_limit=20).has_target is True
     assert ExitRule(r_multiple=2.0, time_limit=20).r_multiple == 2.0
 
 
@@ -488,7 +492,7 @@ def test_a_negative_r_target_is_also_rejected():
     closes instantly at a loss for the same reason."""
     from screener.backtest.engine import ExitRule
 
-    assert ExitRule(r_multiple=-2.0, time_limit=20).r_multiple is None
+    assert ExitRule(r_multiple=-2.0, time_limit=20).has_target is False
 
 
 def test_an_exit_rule_that_never_exits_is_still_refused():
@@ -509,12 +513,21 @@ def test_explicit_zero_target_does_not_become_the_h2_h4_default():
     `r_multiple=0` means explicitly no target. If 0 normalised to None and then
     fell through to the default, the eight experiments that pass 0 meaning
     'no target' would silently acquire one -- and RunConfig is what gets hashed
-    for budget, so the log would describe a run that did not happen."""
+    for budget, so the log would describe a run that did not happen.
+
+    Explicit zero stays 0 rather than becoming None, because None is the
+    spelling that falls through to the default. Asserting `is None` here is
+    what let that happen twice: resolving the result a second time -- which
+    battery.py and evaluate() between them do -- turned it back into 2.0.
+    """
+    from screener.backtest.engine import ExitRule
     from screener.backtest.runner import RunConfig
 
     for hypothesis in ("h2", "h3", "h4"):
         assert RunConfig(hypothesis=hypothesis).resolved().r_multiple == 2.0
-        assert RunConfig(hypothesis=hypothesis, r_multiple=0).resolved().r_multiple is None
+        explicit_off = RunConfig(hypothesis=hypothesis, r_multiple=0).resolved()
+        assert not ExitRule(r_multiple=explicit_off.r_multiple).has_target
+        assert not ExitRule(r_multiple=explicit_off.resolved().r_multiple).has_target
 
     assert RunConfig(hypothesis="h1").resolved().r_multiple is None
     assert RunConfig(hypothesis="h5").resolved().r_multiple is None

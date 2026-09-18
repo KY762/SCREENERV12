@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 
 TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
+# Older filings do not live in the submissions document. See
+# `older_submission_pages`.
+OLDER_SUBMISSIONS_URL = "https://data.sec.gov/submissions/{name}"
 COMPANY_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
 # Balance-sheet and income tags needed for value and quality screens. Several
@@ -185,10 +188,30 @@ class EdgarProvider:
         if cik is None:
             raise ProviderError(f"EDGAR does not list a CIK for {ticker}")
         payload = self._get(SUBMISSIONS_URL.format(cik=cik))
-        return [
-            f for f in parse_submissions(ticker, payload, forms)
-            if start <= f.filed <= end
-        ]
+        filings = parse_submissions(ticker, payload, forms)
+        # `filings.recent` is not the filing history, only the newest page of
+        # it. Anything older has to be fetched per page, or the early part of
+        # the window comes back empty and reads as "this company filed
+        # nothing" rather than "this provider did not look".
+        for name in older_submission_pages(payload, start, end):
+            filings.extend(
+                parse_submissions(
+                    ticker, self._get(OLDER_SUBMISSIONS_URL.format(name=name)), forms
+                )
+            )
+
+        seen: set[str] = set()
+        out: list[Filing] = []
+        for filing in sorted(filings, key=lambda f: f.filed):
+            if not start <= filing.filed <= end:
+                continue
+            # Pages are not documented as disjoint, and one filing counted
+            # twice would look like two separate announcements.
+            if filing.accession and filing.accession in seen:
+                continue
+            seen.add(filing.accession)
+            out.append(filing)
+        return out
 
     def get_company_facts(self, ticker: str) -> list[Fact]:
         """Every reported financial fact EDGAR holds for this registrant.
@@ -240,16 +263,24 @@ def parse_ticker_map(payload: dict) -> dict[str, str]:
 def parse_submissions(
     ticker: str, payload: dict, forms: tuple[str, ...] = EARNINGS_FORMS
 ) -> list[Filing]:
-    """Parse the recent-filings block.
+    """Parse a filings block, whether it is the recent one or an older page.
 
     EDGAR stores it column-wise -- parallel arrays rather than a list of
     records -- so the columns are zipped back together here.
+
+    Two shapes arrive at this function. The submissions document nests the
+    newest page under `filings.recent`; an older page is a bare document whose
+    columns sit at the top level. Same columns either way.
     """
-    recent = ((payload or {}).get("filings") or {}).get("recent") or {}
-    filed = recent.get("filingDate") or []
-    form_types = recent.get("form") or []
-    periods = recent.get("reportDate") or []
-    accessions = recent.get("accessionNumber") or []
+    payload = payload or {}
+    block = ((payload.get("filings") or {}).get("recent")) or {}
+    if not block and payload.get("filingDate"):
+        block = payload
+
+    filed = block.get("filingDate") or []
+    form_types = block.get("form") or []
+    periods = block.get("reportDate") or []
+    accessions = block.get("accessionNumber") or []
 
     out: list[Filing] = []
     for i, form in enumerate(form_types):
@@ -275,6 +306,43 @@ def parse_submissions(
             )
         )
     return sorted(out, key=lambda f: f.filed)
+
+
+def older_submission_pages(payload: dict, start: date, end: date) -> list[str]:
+    """Names of the older filing pages whose range overlaps [start, end].
+
+    `filings.recent` holds roughly the latest thousand filings of EVERY form,
+    Form 4 insider reports included, so for an active large cap it can be only
+    a couple of years deep. Everything before that is listed in
+    `filings.files`, one entry per page, each declaring the range it covers.
+
+    Reading only `recent` is silent rather than loud: the early part of a long
+    window simply returns nothing, which is indistinguishable from a company
+    that filed nothing. Measured on this universe on 2026-09-17 -- 10,391
+    events ingested, but only 1,218 inside the 2010-2015 development split,
+    across 92 of 271 symbols -- and h6's first battery run scored +0.203R on
+    45 trades before anyone asked why there were only 45.
+
+    Only overlapping pages are fetched; a page entirely outside the window is
+    a request that buys nothing.
+    """
+    files = ((payload or {}).get("filings") or {}).get("files") or []
+    names: list[str] = []
+    for entry in files:
+        try:
+            name = str(entry["name"])
+            covers_from = date.fromisoformat(entry["filingFrom"])
+            covers_to = date.fromisoformat(entry["filingTo"])
+        except (KeyError, TypeError, ValueError):
+            # A page whose range will not parse is fetched rather than
+            # skipped: missing filings is the failure that just cost a run.
+            name = str(entry.get("name") or "").strip() if isinstance(entry, dict) else ""
+            if name:
+                names.append(name)
+            continue
+        if covers_to >= start and covers_from <= end:
+            names.append(name)
+    return names
 
 
 def earliest_per_period(filings: list[Filing]) -> list[Filing]:

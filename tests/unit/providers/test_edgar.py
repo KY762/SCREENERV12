@@ -16,6 +16,7 @@ from screener.providers.base import ProviderError
 from screener.providers.edgar import (
     EdgarProvider,
     earliest_per_period,
+    older_submission_pages,
     parse_company_facts,
     parse_submissions,
     parse_ticker_map,
@@ -253,3 +254,128 @@ def test_a_record_missing_a_filing_date_is_dropped():
 def test_empty_facts_payload_is_handled():
     assert parse_company_facts("AAPL", {}) == []
     assert parse_company_facts("AAPL", {"facts": {}}) == []
+
+
+# --------------------------------------------------------------------------
+# Older filing pages
+#
+# `filings.recent` is one page, not the history. Reading only that page fails
+# silently -- the early part of a window returns nothing, which looks exactly
+# like a company that filed nothing.
+# --------------------------------------------------------------------------
+
+PAGED_SUBMISSIONS = {
+    "filings": {
+        "recent": {
+            "filingDate": ["2024-02-01"],
+            "form": ["8-K"],
+            "reportDate": ["2023-12-30"],
+            "accessionNumber": ["recent-1"],
+        },
+        "files": [
+            {"name": "CIK0000320193-submissions-001.json",
+             "filingFrom": "2014-01-02", "filingTo": "2019-12-31"},
+            {"name": "CIK0000320193-submissions-002.json",
+             "filingFrom": "1996-01-02", "filingTo": "2001-12-31"},
+        ],
+    },
+}
+
+OLDER_PAGE = {
+    "filingDate": ["2015-04-27", "2015-07-21"],
+    "form": ["8-K", "8-K"],
+    "reportDate": ["2015-03-28", "2015-06-27"],
+    "accessionNumber": ["old-1", "old-2"],
+}
+
+
+def test_an_older_page_parses_with_its_columns_at_the_top_level():
+    """The submissions document nests the newest page under filings.recent; an
+    older page is a bare document. Same columns, different depth."""
+    filings = parse_submissions("AAPL", OLDER_PAGE)
+
+    assert [f.accession for f in filings] == ["old-1", "old-2"]
+    assert filings[0].filed == date(2015, 4, 27)
+
+
+def test_only_pages_overlapping_the_window_are_requested():
+    """Every page is a request against a rate-limited API, and a page ending in
+    2001 holds nothing for a 2010-2015 study."""
+    names = older_submission_pages(
+        PAGED_SUBMISSIONS, date(2010, 1, 1), date(2015, 12, 31)
+    )
+
+    assert names == ["CIK0000320193-submissions-001.json"]
+
+
+def test_a_page_whose_range_will_not_parse_is_fetched_anyway():
+    """Missing filings is the failure that cost a run. An unreadable range is
+    a reason to look, not a reason to skip."""
+    payload = {"filings": {"files": [
+        {"name": "unparseable.json", "filingFrom": "", "filingTo": "nonsense"},
+    ]}}
+
+    assert older_submission_pages(payload, date(2010, 1, 1), date(2015, 1, 1)) == [
+        "unparseable.json"
+    ]
+
+
+def test_no_files_block_asks_for_nothing():
+    assert older_submission_pages(SUBMISSIONS, date(2010, 1, 1), date(2020, 1, 1)) == []
+    assert older_submission_pages({}, date(2010, 1, 1), date(2020, 1, 1)) == []
+
+
+def _paged_provider():
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "company_tickers" in url:
+            return httpx.Response(200, json=TICKER_MAP)
+        if url.endswith("CIK0000320193.json"):
+            return httpx.Response(200, json=PAGED_SUBMISSIONS)
+        if url.endswith("CIK0000320193-submissions-001.json"):
+            return httpx.Response(200, json=OLDER_PAGE)
+        return httpx.Response(404, json={})
+
+    return EdgarProvider(
+        Settings(sec_user_agent="SCREENERV12 me@example.com"),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+
+def test_history_older_than_the_recent_page_is_actually_returned():
+    """The regression this exists for: 10,391 events ingested but only 1,218
+    inside the 2010-2015 split, because everything older than the recent page
+    was never requested."""
+    with _paged_provider() as provider:
+        filings = provider.get_filings("AAPL", date(2010, 1, 1), date(2015, 12, 31))
+
+    assert [f.accession for f in filings] == ["old-1", "old-2"]
+
+
+def test_a_filing_on_two_pages_is_counted_once():
+    """Pages are not documented as disjoint, and the same filing twice would
+    read as two separate announcements."""
+    import httpx
+
+    overlapping = dict(OLDER_PAGE)
+    overlapping["accessionNumber"] = ["recent-1", "old-2"]
+    overlapping["filingDate"] = ["2024-02-01", "2015-07-21"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "company_tickers" in url:
+            return httpx.Response(200, json=TICKER_MAP)
+        if url.endswith("CIK0000320193.json"):
+            return httpx.Response(200, json=PAGED_SUBMISSIONS)
+        return httpx.Response(200, json=overlapping)
+
+    provider = EdgarProvider(
+        Settings(sec_user_agent="SCREENERV12 me@example.com"),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    with provider:
+        filings = provider.get_filings("AAPL", date(2010, 1, 1), date(2024, 12, 31))
+
+    assert [f.accession for f in filings] == ["old-2", "recent-1"]

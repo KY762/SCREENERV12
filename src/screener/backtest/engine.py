@@ -109,15 +109,19 @@ class ExitRule:
         # Eight battery experiments passed r_multiple=0 meaning "no target" and
         # measured that instead, including every *_exit_isolated arm. Negative
         # multiples are equally meaningless: a target below the entry on a long.
-        if self.r_multiple is not None and self.r_multiple <= 0:
-            object.__setattr__(self, "r_multiple", None)
-
-        if not self.use_stop and self.r_multiple is None and self.time_limit is None:
+        #
+        # The value is NOT rewritten to None here. `has_target` is the single
+        # predicate that decides whether a target exists, so 0 means "no
+        # target" identically in the config that gets logged and in the rule
+        # that gets executed. Rewriting it made the two disagree, and a second
+        # pass over RunConfig.resolved() then read the resulting None as
+        # "unspecified" and handed h2-h4 their 2R default back.
+        if not self.use_stop and not self.has_target and self.time_limit is None:
             raise ValueError("an ExitRule with no stop, no target and no time limit never exits")
 
     @property
     def has_target(self) -> bool:
-        return self.r_multiple is not None
+        return self.r_multiple is not None and self.r_multiple > 0
 
 
 @dataclass(frozen=True)
@@ -358,7 +362,7 @@ def run_backtest(
 
             target = (
                 _money(fill + Decimal(str(exit_rule.r_multiple)) * (fill - stop))
-                if exit_rule.r_multiple is not None
+                if exit_rule.has_target
                 else None
             )
             trade = Trade(

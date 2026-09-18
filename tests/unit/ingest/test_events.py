@@ -64,6 +64,26 @@ def test_reingesting_writes_nothing_new(session):  # noqa: F811
     assert second.results[0].skipped == 1
 
 
+def test_the_same_form_filed_twice_in_one_day_is_stored_once(session):  # noqa: F811
+    """Uniqueness is (symbol_id, filed, form), and a company can file one form
+    twice in a day for two different periods -- CRVL filed two 10-Q/A on
+    2010-04-09. `earliest_per_period` keeps one per PERIOD, so both reach the
+    writer, and checking only the already-stored rows let them collide inside a
+    single flush. The whole 307-symbol run rolled back on it."""
+    symbol = add_symbol(session, "AAA")
+    provider = FakeEdgar({"AAA": [
+        filing("2010-04-09", form="10-Q/A", period="2009-09-30"),
+        filing("2010-04-09", form="10-Q/A", period="2009-12-31"),
+    ]})
+
+    summary = ingest_earnings(session, provider, ["AAA"], date(2010, 1, 1), date(2010, 12, 31))
+    session.flush()
+
+    assert summary.written == 1
+    assert summary.results[0].skipped == 1
+    assert earnings_dates(session, symbol.id) == [date(2010, 4, 9)]
+
+
 def test_one_failing_symbol_does_not_stop_the_others(session):  # noqa: F811
     add_symbol(session, "AAA")
     add_symbol(session, "BBB")

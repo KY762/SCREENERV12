@@ -74,8 +74,19 @@ report prints ISOLATION FAILED when arms diverge. H5 clean: stop +0.126R,
 no stop **+0.249R**. One hypothesis, development, biased data — suggestive, not
 settled.
 
-Round 2 (h5 momentum 12-1, h6 earnings drift, h7 range expansion) is built and
-unrun. **H5's holding period is 21 days, monthly** (operator decision,
+**Weaker again after 2026-09-17.** With the target bug above fixed, holds
+lengthen and h2/h3 fail isolation outright (27.3%, 28.9%). Of the arms that do
+isolate, h4's no-stop **+0.294R sits at the 11th percentile** against random —
+below a coin toss — leaving only h1 (+0.088R, 80th) and h5 (+0.249R, 73rd)
+above random, neither above the 95th. The no-stop effect is substantially
+market exposure, which is what a duration-matched benchmark is for.
+
+Round 2 has now run on development. **H6 ran for the first time on 2026-09-17**
+and is not the exception it first looked like: `reaction_size` reaches the 89th
+percentile but is non-monotonic across adjacent thresholds (85.7 → 26.0 → 88.7
+→ 81.0, and the no-filter cell scores 85.7, so the filter is not what produces
+it), while `drift_exits` and `entry_delay` sit below random. **H5's holding
+period is 21 days, monthly** (operator decision,
 2026-09-11), matching its own `monthly_rebalance` flag and the horizon the
 momentum literature studies. Resolved in `HOLD_DEFAULTS`, not shared with H1,
 which rotates on 5.
@@ -153,6 +164,54 @@ Each was invisible to a passing test suite and surfaced only on real data.
   `RunConfig.resolved()`, and the resolved values are what get hashed for
   budget, so a run cannot log a configuration it did not use. **That H5 result
   is void; re-run it.**
+- **`resolved()` was not idempotent, so "no target" grew a target.** Found
+  2026-09-17. `battery.py` resolves a config to key its candidate cache and
+  `evaluate()` resolves it again before running, so `resolved()` runs twice.
+  It mapped explicit `r_multiple=0` to None on the first pass, and the second
+  pass read that None as *unspecified* and applied h2–h4's 2R default. Six
+  experiments that declare no target ran with one — `h2/h3/h4_no_stop` and
+  `h2/h3/h4_exit_isolated` — while logging `r_multiple=None`. The only visible
+  symptom was `target` exits appearing in a run with no target. **Third time
+  this project has recorded a configuration it did not run.** Fixed by making
+  "no target" canonicalise to `0.0`, which is a fixed point, and by making
+  `has_target` the single predicate both layers read, so the logged config and
+  the executed rule cannot disagree. `test_resolved_is_idempotent` pins it.
+- **EDGAR's `filings.recent` is one page, not the filing history.** Found
+  2026-09-17. It holds roughly the latest thousand filings of *every* form,
+  Form 4s included, so for an active large cap it can be only a couple of
+  years deep; older filings live in `filings.files` and were never fetched.
+  The early part of a window silently returned nothing, which is
+  indistinguishable from a company that filed nothing: 10,391 events ingested
+  but only **1,218 inside the 2010–2015 split, across 92 of 271 symbols**.
+  H6's first battery scored +0.203R on 45 trades on that. After paging:
+  **4,786 events across 208 symbols**, and the year counts went flat
+  (876/739/755/775/801/840) instead of starved early — the flatness is the
+  check that it worked.
+- **A duplicate key rolled back a 307-symbol ingest, and it exited 0.** Found
+  2026-09-17. Uniqueness is `(symbol_id, filed, form)`; the writer compared
+  new filings against stored rows but never against each other, and a company
+  can file one form twice in a day for two periods (CRVL, two `10-Q/A` on
+  2010-04-09 — `earliest_per_period` collapses by PERIOD, so both survive).
+  The whole run rolled back while reporting success, the same shape as the
+  vacuous verification above. The seen-set now grows as the batch is written.
+
+## What the random-selection percentile keeps showing
+
+Added to the report tables 2026-09-17, because the caveat at the foot of every
+battery called percentiles "the comparison that matters" while no table printed
+one. Expectancy alone had been read as a result three times.
+
+The benchmark samples **matched holding periods**, so it prices the market
+exposure a configuration takes. Removing a stop lengthens holds, and in a
+2010–2015 bull market that earns — which is why expectancy and percentile are
+so often anti-correlated here. `h4_exit_isolated` has the largest no-stop
+expectancy of any isolated arm, **+0.294R, at the 11th percentile**: 89% of
+random selections beat it. Read without the percentile it is the best exit
+result in the battery; read with it, it is beta.
+
+Of the isolated exit arms only **h1 (80th)** and **h5 (73rd)** beat random, and
+neither clears the 95th. H6's headline numbers — +0.255R `entry_delay`, +0.161R
+`drift_exits` — sit at the **31st and 26th**.
 
 ## Commands
 
@@ -191,3 +250,15 @@ screener research explore --battery all
   "5% total open risk" still never bind. Options in `docs/07` §5.
 - Proposed on arithmetic, not results: 0.5% risk, 20% cap, and an account-level
   drawdown circuit breaker (−8% halve risk, −12% no new entries, −15% stop).
+- **The plateau/spike test may not belong on a two-cell structural question.**
+  `docs/03` §0.7 rule 3 rejects a peak whose neighbours fail. On a binary arm
+  — `use_stop=True/False`, `trend_filter=True/False` — a winning cell's only
+  neighbour is the losing one, so SPIKE is the verdict whenever the comparison
+  separates at all, which is what an A/B is supposed to do. Every
+  `*_exit_isolated` arm except h5's is therefore unselectable by construction
+  rather than by evidence. `battery.py` already separates structural from
+  parameter questions; the verdict machinery does not. Pre-registered criteria
+  are the operator's to change, so this is recorded, not fixed.
+- **Earnings coverage is 208 of 271 symbols in-window, not 271.** The rest have
+  no CIK on EDGAR or listed after 2015. Whether H6 can be asked anything on 208
+  symbols is a judgement about the hypothesis, not about the data layer.

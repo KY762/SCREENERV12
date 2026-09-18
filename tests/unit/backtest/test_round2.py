@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from screener.backtest.engine import ExitRule
 from screener.backtest.runner import HYPOTHESES, RunConfig, build_candidates
 from screener.backtest.strategies import (
     canonical_momentum_candidates,
@@ -163,6 +164,39 @@ def test_h5_and_h7_carry_no_profit_target_by_default():
     for hypothesis in ("h5", "h6", "h7"):
         assert RunConfig(hypothesis=hypothesis).resolved().r_multiple is None
     assert RunConfig(hypothesis="h2").resolved().r_multiple == 2.0
+
+
+def test_resolved_is_idempotent():
+    """battery.py resolves a config to key its candidate cache and evaluate()
+    resolves it again before running, so resolved() must be a fixed point.
+
+    It was not. `r_multiple=0` meaning "explicitly no target" resolved to None,
+    and the second pass read that None as "unspecified" and applied h2-h4's 2R
+    default. Six experiments declaring no target ran with one -- h2/h3/h4
+    _no_stop and _exit_isolated in the 2026-09-17 battery -- and logged
+    `r_multiple=None` while the engine used 2.0.
+    """
+    for hypothesis in HYPOTHESES:
+        for r_multiple in (None, 0, -1.0, 2.0, 3.0):
+            once = RunConfig(hypothesis=hypothesis, r_multiple=r_multiple).resolved()
+            twice = once.resolved()
+            assert twice == once, (
+                f"{hypothesis} r_multiple={r_multiple!r}: "
+                f"{once.r_multiple!r} -> {twice.r_multiple!r}"
+            )
+
+
+def test_an_explicit_no_target_never_acquires_one():
+    """The distinction resolved() has to keep: unspecified takes the
+    hypothesis default, explicitly-zero stays off. ExitRule is what turns the
+    canonical 0 back into None for the engine."""
+    for hypothesis in HYPOTHESES:
+        config = RunConfig(hypothesis=hypothesis, r_multiple=0).resolved()
+        assert not ExitRule(
+            r_multiple=config.r_multiple,
+            time_limit=config.time_limit,
+            use_stop=config.use_stop,
+        ).has_target
 
 
 def test_config_hash_ignores_parameters_a_hypothesis_never_reads():
