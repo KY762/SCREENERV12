@@ -221,6 +221,40 @@ confound and none of which asked whether the gap was larger than its own
 uncertainty. docs/07's original 5.8 SE belongs to the confounded comparison and
 does not transfer.
 
+## Survivorship exposure, per hypothesis
+
+**Measured 2026-09-17** with `screener diagnose survivorship`. Failures are
+absent and acquisitions present, so a rule that buys recent losers has had its
+worst outcomes removed. The diagnostic ranks every signal's trailing return
+against the cross-section on its signal date; random selection lands in the
+bottom decile 10% of the time (1.00x).
+
+| | trend filter on (as run) | trend filter off |
+| --- | --- | --- |
+| H1 | 0.00x | **0.08x** |
+| H5 | 0.00x | **0.11x** |
+| H2 | 0.00x | 0.74x |
+| H4 | 0.01x | 0.91x |
+| H7 | 0.02x | 0.95x |
+| H3 | 0.02x | **1.28x** |
+
+Two findings, not one. **The trend filter is what protects H2/H3/H4/H7** —
+their own selection is roughly random with respect to distress, and H3 seeks it.
+**H1 and H5 avoid distress intrinsically**, still near zero with the filter off,
+so their protection is structural rather than a setting. Momentum-rule results
+are much less damaged by the missing failures than the blanket caveat implies.
+
+**What this does not cover, and it matters for momentum specifically.** It
+bounds the slow-decline channel only: a sudden collapse (fraud, failed trial,
+bank run) is invisible to trailing return. And it measures the missing
+FAILURES, which is one of two survivorship channels. The other is the universe
+itself — today's large caps, selected on having succeeded by 2026. A 2012 stock
+with strong momentum that later stagnated out of large-cap status is absent
+without ever having failed. That channel enriches the universe for momentum
+that *persisted*, which flatters exactly the rules this table clears.
+It is not measured here, and it cuts against validating momentum before
+coverage is fixed.
+
 ## Two benchmarks, and the difference between them is the timing
 
 **Added 2026-09-17.** `random_benchmark` picks its own entry dates, so it scores

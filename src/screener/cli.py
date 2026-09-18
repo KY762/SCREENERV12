@@ -553,6 +553,93 @@ def diagnose_signals(
         console.print(f"  [{colour}]{result.summary()}[/]")
 
 
+@diag_app.command("survivorship")
+def diagnose_survivorship(
+    split: str = typer.Option("development", "--split"),
+    lookbacks: str = typer.Option("126,252", "--lookback",
+                                  help="Trailing-return windows in bars, comma-separated."),
+    hypotheses: str = typer.Option("h1,h2,h3,h4,h5,h6,h7", "--hypotheses"),
+) -> None:
+    """How often each hypothesis buys the population the data is missing.
+
+    Failures are absent from the universe and acquisitions are present, so a
+    rule that buys recent losers has had its worst outcomes removed. This
+    ranks every candidate's trailing return against the cross-section on its
+    signal date and reports how often each rule lands in the bottom decile.
+    Random selection lands there 10% of the time.
+
+    Measures the RULE, from every signal it fires, not the portfolio -- slot
+    limits and cash would otherwise decide what counts as the rule's taste.
+    Uses each hypothesis's own specification defaults.
+    """
+    from .backtest.runner import RunConfig, build_candidates, load_symbol_bars
+    from .backtest.splits import get_split
+    from .diagnostics.survivorship import measure, trailing_return_deciles
+
+    chosen = get_split(split)
+    windows = [int(x) for x in lookbacks.split(",") if x.strip()]
+    keys = [h.strip().lower() for h in hypotheses.split(",") if h.strip()]
+
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, None)
+        events = _load_events(session, bars_by_symbol) if "h6" in keys else None
+
+    console.print(f"[dim]{chosen.describe()}[/]")
+    console.print(f"[dim]{len(bars_by_symbol)} symbols. Ranking trailing returns...[/]")
+    deciles = {w: trailing_return_deciles(bars_by_symbol, w) for w in windows}
+
+    table = Table(title="Share of signals landing in the bottom decile of trailing return")
+    table.add_column("Hypothesis")
+    table.add_column("Signals", justify="right")
+    for w in windows:
+        table.add_column(f"Bottom {w}d", justify="right")
+        table.add_column("vs random", justify="right")
+    table.add_column(f"Top {windows[0]}d", justify="right")
+    table.add_column("Median decile", justify="right")
+
+    for key in keys:
+        config = RunConfig(hypothesis=key).resolved()
+        try:
+            candidates = build_candidates(
+                bars_by_symbol, config,
+                events_by_symbol=events if key == "h6" else None,
+            )
+        except ValueError as exc:
+            table.add_row(key.upper(), "—", *(["[dim]skipped[/]", ""] * len(windows)),
+                          "", f"[dim]{exc}[/]")
+            continue
+
+        results = [
+            measure(key, candidates, deciles[w], lookback=w,
+                    start=chosen.start, end=chosen.end)
+            for w in windows
+        ]
+        cells = []
+        for r in results:
+            ratio = r.relative_to_random
+            colour = "green" if ratio < 1.0 else ("red" if ratio > 1.0 else "white")
+            cells += [f"{r.bottom_decile:.1%}", f"[{colour}]{ratio:.2f}x[/]"]
+        head = results[0]
+        table.add_row(
+            key.upper(), f"{head.ranked:,}", *cells,
+            f"{head.top_decile:.1%}", f"{head.median_decile:.1f}",
+        )
+
+    console.print(table)
+    console.print(
+        "\n[dim]Random selection lands in the bottom decile 10% of the time (1.00x). "
+        "Below 1.00x, the rule avoids recent losers and was less likely to have "
+        "bought the failures this universe is missing.[/]"
+    )
+    console.print(
+        "[yellow]An inference, and a partial one.[/] It sees the slow decline, "
+        "which trailing return registers in advance. It does not see a sudden "
+        "collapse -- fraud, a failed trial, a bank run -- where the stock was "
+        "ordinary until it was gone. Evidence for whether a hypothesis could be "
+        "validated before coverage is fixed; not a decision to."
+    )
+
+
 research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
 app.add_typer(research_app, name="research")
 
