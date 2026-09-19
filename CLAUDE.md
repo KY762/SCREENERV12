@@ -195,6 +195,47 @@ Each was invisible to a passing test suite and surfaced only on real data.
   2010-04-09 — `earliest_per_period` collapses by PERIOD, so both survive).
   The whole run rolled back while reporting success, the same shape as the
   vacuous verification above. The seen-set now grows as the batch is written.
+- **The budget counted evidential runs but did not bind them.** Found
+  2026-09-18. `budget.check` limited how MANY configurations a hypothesis
+  could spend on validation and test, never WHICH, so a slot could go to a
+  configuration picked after looking. Evidential runs now require a signed
+  pre-registration naming their exact hash (see "Pre-registration" below).
+  The same review found three holes in the hash itself, all in
+  `backtest run`'s hand-built config dict:
+  - **`equity` was not hashed.** A second validation run at a different
+    account size looked like a reproduction of the first and cost nothing:
+    unlimited looks at the split by changing one number.
+  - **`hold` was hashed as typed.** `--hold 5` and no `--hold` (the same H1
+    run) hashed differently and would have spent two slots.
+  - **`r_multiple or None` re-collapsed the canonical no-target `0.0` to
+    None**, the value that re-resolves to h2–h4's 2R default. The
+    idempotency bug above, back in a new file, and caught on the day it was
+    written by `test_resolving_twice_changes_nothing`. `time_limit or None`
+    did the same to 0 ("no time exit").
+  All four are fixed by `backtest/preregistration.evidential_config`, the one
+  function that builds a run's identity for both the CLI and pre-registrations.
+  Development hashes shifted as a result; development is unlimited, and no
+  validation or test row existed to repair.
+
+## Pre-registration
+
+**Added 2026-09-18.** A validation or test run is refused unless a SIGNED file
+in `preregistrations/` names its exact configuration. Each file is Markdown:
+prose for the reasoning, plus one ```toml block the code binds to. It allows at
+most the split's budget of configurations, one file per hypothesis, and an
+optional `[decision]` bar that `backtest run` applies and counts toward
+pass/fail. A malformed file fails the whole load rather than being skipped,
+because a registration that silently fails to load is a guard that fails open.
+`screener prereg show` lists status, hashes, and spend. Only the operator
+signs.
+
+`preregistrations/H1.md` is a **draft**, and its drafter recommends not signing
+it. It fixes the `h1_exits` plateau centre (hold 10, stop 2.5 ATR, 63-day
+lookback, top 10%) and records that this configuration **fails regime
+robustness on development**: 1 of 3 regimes positive, worst −22.1%. All of its
+edge comes from the 2013–14 bull market, and it trailed SPY (+52.9% vs
++81.2%). Its value is that the configuration is now fixed before any further
+decision about regimes, coverage, or holds can reshape it.
 
 ## The stop-design finding, with the right test: H1 at ~3 SE, H5 short
 
@@ -242,9 +283,12 @@ concurrent trades costs 15-40% of nominal N, not the two-thirds that was feared:
 | h6 reaction 0.03 | **96** | 1.4 / 1.6 | **59-68** | 328 |
 
 The pre-registered floor of 200 would need roughly **260-330 nominal trades**
-to mean 200 independent observations. The H1 lead (308) clears that; **H5, H4
-and H6 do not**, and H6's 93rd-percentile result rests on about 60 effective
-observations. Month- and quarter-clustering disagree in both directions; with
+to mean 200 independent observations. H5, H4 and H6 do not reach that, and
+H6's 93rd-percentile result rests on about 60 effective observations. The
+`h1_selection` configuration (308 trades) does reach it, but it was
+called "the H1 lead" on 2026-09-17 in error: it is that surface's plateau
+centre, with **profit factor 1.099, below the 1.20 bar**. The 97th percentile
+belonged to the peak, which the plateau rule rejects. Month- and quarter-clustering disagree in both directions; with
 only ~21 quarters the quarterly estimate is noisy, which is why scoring uses
 monthly (`backtest/inference.py`).
 
@@ -336,6 +380,9 @@ screener universe build
 screener universe coverage          # survivorship measurement
 screener ingest-earnings            # SEC EDGAR filing dates
 screener diagnose redundancy | signals
+screener diagnose survivorship      # per-hypothesis exposure to missing failures
+screener diagnose sample-size       # effective N; paired exit comparisons
+screener prereg show                # what validation/test may be spent on
 screener backtest run --hypothesis h5 --split development
 screener backtest surface --hypothesis h5 --vary hold=21,63,126
 screener research explore --battery all
@@ -376,6 +423,16 @@ screener research explore --battery all
   The date-matched one is the better instrument for "did selection add
   anything", but switching what the criteria read is a criteria change.
   Nothing is scored on validation yet either way.
+- **The regime criterion demands every regime in a split be positive.**
+  docs/03 §0.6 says "positive in ≥ 3 of 5 buckets", but `REGIMES` puts
+  exactly three buckets in each split, so "≥ 3 positive" in practice means all
+  of them. On validation that includes the 2018-Q4 correction: a long-only rule
+  must finish net positive through a quarter when the S&P fell about 14%. The
+  spec and the code also disagree on the buckets themselves (the spec lists
+  corrections in 2015-08 and 2016-01 that the code doesn't define). This must
+  be resolved before any validation is spent. The resolution is also being
+  made after seeing H1 fail this criterion on development
+  (`preregistrations/H1.md` §4), and that should be written down with it.
 - **The plateau rule selects configurations that lose to random.** docs/03
   §0.7 asks only whether a positive cell has positive neighbours. It never
   consults the random benchmark, so on the 2026-09-18 battery it marks four

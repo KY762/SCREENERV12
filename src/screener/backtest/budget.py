@@ -31,6 +31,14 @@ class BudgetExceeded(RuntimeError):
     """Raised instead of running. The budget is not advisory."""
 
 
+class NotPreregistered(BudgetExceeded):
+    """An evidential run whose configuration no signed pre-registration names.
+
+    The count limit alone let a slot be spent on a configuration chosen after
+    looking; this is what makes the choice have to come first.
+    """
+
+
 def config_hash(config: dict[str, Any]) -> str:
     """Stable hash of a configuration dict, key order independent."""
     payload = json.dumps(config, sort_keys=True, default=str)
@@ -81,9 +89,31 @@ def status(
 
 
 def check(
-    session: Session, hypothesis: str, split: Split, config: dict[str, Any]
+    session: Session, hypothesis: str, split: Split, config: dict[str, Any],
+    *, registry=None,
 ) -> BudgetStatus:
-    """Raise ``BudgetExceeded`` if this run would exceed the split's budget."""
+    """Raise if this run would exceed the split's budget, or if an evidential
+    run's configuration is not in a signed pre-registration.
+
+    `registry` defaults to the pre-registrations on disk. It is a parameter
+    so tests can state which configurations are registered; there is no value
+    that switches the requirement off.
+    """
+    if split.carries_evidence:
+        from .preregistration import load
+
+        registry = registry if registry is not None else load()
+        if not registry.authorizes(hypothesis, split, config):
+            drafts = [p.path.name for p in registry.for_hypothesis(hypothesis)
+                      if not p.signed]
+            hint = (f" {', '.join(drafts)} exists but is a draft; only the operator "
+                    "signs one." if drafts else
+                    " Write one in preregistrations/ before touching this split.")
+            raise NotPreregistered(
+                f"{hypothesis} has no signed pre-registration naming this "
+                f"configuration for the {split.name} split.{hint}"
+            )
+
     current = status(session, hypothesis, split, config)
     if current.limit is None or current.already_run:
         return current

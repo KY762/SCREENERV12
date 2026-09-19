@@ -738,6 +738,56 @@ def diagnose_sample_size(
     )
 
 
+prereg_app = typer.Typer(
+    help="Pre-registrations: which configurations an evidential split may be spent on.",
+    no_args_is_help=True,
+)
+app.add_typer(prereg_app, name="prereg")
+
+
+@prereg_app.command("show")
+def prereg_show() -> None:
+    """Every pre-registration, its status, and the configurations it binds.
+
+    Validation and test runs are refused unless their configuration hash
+    appears here under a SIGNED pre-registration. Loading fails loudly on a
+    malformed file rather than skipping it.
+    """
+    from .backtest import budget
+    from .backtest.preregistration import PREREGISTRATION_DIR, load
+    from .backtest.splits import get_split
+
+    try:
+        registry = load()
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    if not registry.entries:
+        console.print(f"[yellow]No pre-registrations in {PREREGISTRATION_DIR}.[/] "
+                      "Every validation and test run will be refused.")
+        return
+
+    with session_scope() as session:
+        for p in registry.entries:
+            state = (f"[green]signed[/] by {p.signed_by} on {p.signed_on}"
+                     if p.signed else "[yellow]draft -- authorizes nothing[/]")
+            console.print(f"\n[bold]{p.hypothesis.upper()}[/]  {p.path.name}  {state}")
+            for split_name, configs in p.configurations.items():
+                if not configs:
+                    continue
+                split = get_split(split_name)
+                for c in configs:
+                    run = budget.status(session, p.hypothesis, split, c)
+                    shown = {k: v for k, v in c.items()
+                             if v is not None and k not in ("hypothesis",)}
+                    console.print(
+                        f"  {split_name:10} {budget.config_hash(c)[:12]}  "
+                        f"{'[red]SPENT[/]' if run.already_run else 'unspent'}  "
+                        f"[dim]{shown}[/]"
+                    )
+
+
 research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
 app.add_typer(research_app, name="research")
 
@@ -2134,21 +2184,16 @@ def backtest_run(
     ).resolved()
     r_multiple, time_limit = _spec.r_multiple, _spec.time_limit
 
-    config = {
-        "hypothesis": key,
-        "symbols": symbols or "all",
-        "universe": universe_name,
-        "r_multiple": r_multiple or None,
-        "time_limit": time_limit or None,
-        "slippage_bps": slippage_bps,
-        "trend_filter": trend_filter,
-        "use_stop": use_stop,
-        "displacement": displacement,
-        "hold": hold,
-        "top_pct": top_pct,
-        "stop_atr": stop_atr if key == "h1" else None,
-        "rs_lookback": rs_lookback if key == "h1" else None,
-    }
+    # Built by the same function a pre-registration uses, so a registered
+    # configuration and the run that spends it cannot hash differently.
+    from .backtest.preregistration import evidential_config
+
+    config = evidential_config(
+        key, symbols=symbols, universe=universe_name, equity=equity,
+        r_multiple=r_multiple, time_limit=time_limit, slippage_bps=slippage_bps,
+        trend_filter=trend_filter, use_stop=use_stop, displacement=displacement,
+        hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+    )
 
     with session_scope() as session:
         if chosen.carries_evidence:
@@ -2225,6 +2270,7 @@ def backtest_run(
         regimes = by_regime(result.trades, equity)
 
         percentile = None
+        same_day = None
         holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
         if holds and random_iterations > 0:
             bench = random_benchmark(
@@ -2238,7 +2284,37 @@ def backtest_run(
             percentile = bench.percentile_of(mean_return)
             console.print(f"[dim]{bench.describe(mean_return)}[/]")
 
+            # Same trades, same days, different names: the rank that is about
+            # the pick rather than the calendar.
+            from .backtest.benchmarks import date_matched_benchmark, trade_entries
+
+            matched = date_matched_benchmark(
+                bars_by_symbol, entries=trade_entries(result.closed_trades),
+                iterations=random_iterations, seed=seed,
+                costs=CostModel(slippage_bps=slippage_bps),
+            )
+            if matched.distribution.size:
+                same_day = matched.percentile_of(mean_return)
+                console.print(f"[dim]same days, random names: {same_day:.1f}th percentile[/]")
+
         criteria = check_criteria(stats, regimes, percentile)
+
+        # A signed pre-registration may add bars of its own. They count toward
+        # pass/fail exactly like performance.py's, because the operator signed
+        # them before the split was touched.
+        if chosen.carries_evidence:
+            from .backtest.performance import CriterionResult
+            from .backtest.preregistration import load as _load_prereg
+
+            prereg = _load_prereg().authorizing(key, chosen, config)
+            if prereg and prereg.min_date_matched_percentile is not None:
+                floor = prereg.min_date_matched_percentile
+                criteria.append(CriterionResult(
+                    "preregistered_same_day",
+                    same_day is not None and same_day >= floor,
+                    "not run" if same_day is None else f"{same_day:.1f}th pct",
+                    f">= {floor:.0f}th pct ({prereg.path.name})",
+                ))
         passed = all(c.passed for c in criteria)
 
         budget.record(

@@ -131,8 +131,34 @@ def test_evidential_split_requires_explicit_confirmation(loaded):
     assert "--confirm-spend" in result.output
 
 
-def test_test_split_budget_is_spent_once_and_then_refuses(loaded):
+def _register(tmp_path, monkeypatch, hypothesis: str, test_r: float) -> None:
+    """A signed pre-registration naming one test-split configuration."""
+    body = "\n".join([
+        f"# {hypothesis}",
+        "",
+        "```toml",
+        f'hypothesis = "{hypothesis}"',
+        'status = "signed"',
+        'signed_by = "test"',
+        'signed_on = "2026-09-18"',
+        "",
+        "[[test]]",
+        f"r_multiple = {test_r}",
+        "```",
+        "",
+    ])
+    (tmp_path / f"{hypothesis.upper()}.md").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("SCREENER_PREREGISTRATION_DIR", str(tmp_path))
+
+
+def test_the_test_split_runs_its_one_registered_configuration_and_nothing_else(
+    loaded, tmp_path, monkeypatch
+):
+    """The test budget is one configuration, a registration may name at most
+    one, and anything unregistered is refused -- so a second configuration is
+    stopped before the count is even consulted. The count stays as a backstop."""
     cli, runner = loaded
+    _register(tmp_path, monkeypatch, "h3", 2.0)
     base = ["backtest", "run", "--hypothesis", "h3", "--split", "test",
             "--random-iterations", "0", "--confirm-spend"]
 
@@ -141,11 +167,23 @@ def test_test_split_budget_is_spent_once_and_then_refuses(loaded):
 
     second = runner.invoke(cli.app, [*base, "--r-multiple", "1.5"])
     assert second.exit_code == 1
-    assert "already spent" in second.output
+    assert "no signed pre-registration" in second.output
 
 
-def test_identical_configuration_can_be_reproduced(loaded):
+def test_an_evidential_run_without_a_registration_is_refused(loaded, tmp_path, monkeypatch):
     cli, runner = loaded
+    monkeypatch.setenv("SCREENER_PREREGISTRATION_DIR", str(tmp_path))   # empty
+    result = runner.invoke(cli.app, [
+        "backtest", "run", "--hypothesis", "h2", "--split", "validation",
+        "--random-iterations", "0", "--confirm-spend",
+    ])
+    assert result.exit_code == 1
+    assert "no signed pre-registration" in result.output
+
+
+def test_identical_configuration_can_be_reproduced(loaded, tmp_path, monkeypatch):
+    cli, runner = loaded
+    _register(tmp_path, monkeypatch, "h4", 2.0)
     args = ["backtest", "run", "--hypothesis", "h4", "--split", "test",
             "--random-iterations", "0", "--confirm-spend", "--r-multiple", "2.0"]
 
