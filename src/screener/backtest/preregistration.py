@@ -225,6 +225,21 @@ class Registry:
     def authorizes(self, hypothesis: str, split: Split, config: dict[str, Any]) -> bool:
         return self.authorizing(hypothesis, split, config) is not None
 
+    def family(self, split: Split) -> list[tuple[str, dict[str, Any]]]:
+        """Every (hypothesis, configuration) a signed registration names on
+        this split: the family Holm's correction runs over.
+
+        Drafts are not in it. So the family has to be CLOSED -- every
+        hypothesis for the round signed -- before the first run on the split:
+        signing another afterwards would change the bar tests already run were
+        held to. Recorded in CLAUDE.md as the procedure; the count is here.
+        """
+        return [(p.hypothesis, c) for p in self.entries if p.signed
+                for c in p.configurations.get(split.name, [])]
+
+    def family_size(self, split: Split) -> int:
+        return len(self.family(split))
+
     def for_hypothesis(self, hypothesis: str) -> list[Preregistration]:
         return [p for p in self.entries if p.hypothesis == hypothesis]
 

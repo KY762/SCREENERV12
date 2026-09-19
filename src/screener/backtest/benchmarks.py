@@ -169,6 +169,27 @@ class RandomBenchmark:
             return float("nan")
         return float((self.distribution < observed).mean() * 100.0)
 
+    def p_value(self, observed: float) -> float:
+        """One-sided chance that random selection does at least this well.
+
+        (1 + draws at or above the observed) / (1 + draws) -- the standard
+        correction for a Monte Carlo test (Davison & Hinkley 1997, ch. 4). A
+        percentile of 100 reads as "p = 0"; nothing measured with a finite
+        number of random draws can say that, and a multiple-testing correction
+        divides by exactly these small numbers. The +1 also sets the
+        resolution floor: with N draws no p-value below 1/(N+1) can be stated,
+        so a bar of p < 0.002 needs well over 500 draws to be testable at all.
+        """
+        n = self.distribution.size
+        if n == 0:
+            return float("nan")
+        at_least = int((self.distribution >= observed).sum())
+        return (1 + at_least) / (1 + n)
+
+    def smallest_p(self) -> float:
+        """The finest p-value this many draws can resolve."""
+        return 1.0 / (1 + self.distribution.size) if self.distribution.size else float("nan")
+
     def describe(self, observed: float) -> str:
         pct = self.percentile_of(observed)
         return (

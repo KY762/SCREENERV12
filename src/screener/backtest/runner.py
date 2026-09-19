@@ -29,8 +29,16 @@ from .benchmarks import (
     trade_return,
 )
 from .engine import Candidate, CostModel, ExitRule, run_backtest
-from .performance import Stats, by_regime, check_criteria, summarize
-from .splits import Split
+from .performance import (
+    FAMILY_WISE_ALPHA,
+    RegimeResult,
+    Stats,
+    by_regime,
+    check_criteria,
+    split_regime_count,
+    summarize,
+)
+from .splits import Split, regime_for
 from .strategies import (
     TrendFilter,
     always_in_universe,
@@ -217,6 +225,14 @@ class Outcome:
     # took the same signals can be compared PAIRED -- same stock, same day,
     # different exit -- which is the test the exit-isolated arms exist for.
     trade_log: tuple = ()
+    # One-sided p against random names on the same days: the number the
+    # pre-registered vs-random criterion and the Holm correction read.
+    same_day_p: float | None = None
+    # Trades divided by the month-clustered design effect: how many independent
+    # observations the run actually holds. The trade-count criterion reads this.
+    effective_trades: float | None = None
+    # Per regime bucket: return, and whether it beat random names on its days.
+    regime_results: dict = field(default_factory=dict)
     criteria: list = field(default_factory=list)
 
     @property
@@ -322,67 +338,119 @@ def evaluate(
     *,
     random_iterations: int = 1000,
     seed: int = 0,
+    alpha: float = FAMILY_WISE_ALPHA,
 ) -> Outcome:
     """Run one configuration and score it against the pre-registered criteria."""
+    result = simulate(candidates, bars_by_symbol, config, split)
+    return score(
+        result, bars_by_symbol, config, split, candidates=len(candidates),
+        random_iterations=random_iterations, seed=seed, alpha=alpha,
+    )
+
+
+def score(
+    result,
+    bars_by_symbol: dict[str, pd.DataFrame],
+    config: RunConfig,
+    split: Split,
+    *,
+    candidates: int = 0,
+    random_iterations: int = 1000,
+    seed: int = 0,
+    alpha: float = FAMILY_WISE_ALPHA,
+) -> Outcome:
+    """Everything the pre-registered criteria read, computed in one place.
+
+    `screener backtest run`, the battery and every diagnostic score through
+    here. Until 2026-09-19 the run command computed its own criteria beside
+    this function, and the two had already drifted: one had the date-matched
+    benchmark and clustered errors, the other did not.
+    """
     config = config.resolved()
     costs = CostModel(slippage_bps=config.slippage_bps)
-    result = simulate(candidates, bars_by_symbol, config, split)
-
     stats = summarize(result)
-    regimes = by_regime(result.trades, config.equity)
+    regime_stats = by_regime(result.trades, config.equity)
 
-    percentile = None
-    date_matched = None
-    mean_return = None
-    mean_return_se = None
     log = tuple(
         (t.ticker, t.entry_date, r)
         for t in result.closed_trades
         if (r := trade_return(t)) is not None
     )
+    mean_return = mean_return_se = effective = None
     if log:
         clustered = inference.sample(log)
         mean_return = clustered.mean
         if not math.isnan(clustered.se):
             mean_return_se = clustered.se
+        if not math.isnan(clustered.effective_n):
+            effective = clustered.effective_n
 
+    percentile = date_matched = same_day_p = None
+    regime_results: dict[str, RegimeResult] = {
+        name: RegimeResult(name, s.trades, s.total_return_pct, None)
+        for name, s in regime_stats.items()
+    }
     holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
     if holds and random_iterations > 0:
-        mean_return = mean_return if mean_return is not None else 0.0
-
+        observed = mean_return if mean_return is not None else 0.0
         bench = random_benchmark(
             bars_by_symbol, start=split.start, end=split.end,
             n_trades=len(holds), hold_periods=holds,
             iterations=random_iterations, seed=seed, costs=costs,
         )
-        percentile = bench.percentile_of(mean_return)
+        percentile = bench.percentile_of(observed)
 
         # Same trades, same days, different names. The gap between this and the
         # line above is how much of the rank was timing rather than selection.
         matched = date_matched_benchmark(
-            bars_by_symbol,
-            entries=trade_entries(result.closed_trades),
+            bars_by_symbol, entries=trade_entries(result.closed_trades),
             iterations=random_iterations, seed=seed, costs=costs,
         )
         if matched.distribution.size:
-            date_matched = matched.percentile_of(mean_return)
+            date_matched = matched.percentile_of(observed)
+            same_day_p = matched.p_value(observed)
+
+        # The same question inside each regime: did the picks beat random
+        # names bought on those days? Asks about selection in a falling market
+        # rather than whether a long-only rule made money in one.
+        for name, rstats in regime_stats.items():
+            inside = [t for t in result.closed_trades
+                      if regime_for(t.entry_date) == name and trade_return(t) is not None]
+            if not inside:
+                continue
+            regime_mean = sum(trade_return(t) for t in inside) / len(inside)
+            regime_bench = date_matched_benchmark(
+                bars_by_symbol, entries=trade_entries(inside),
+                iterations=random_iterations, seed=seed, costs=costs,
+            )
+            regime_results[name] = RegimeResult(
+                name, rstats.trades, rstats.total_return_pct,
+                regime_bench.percentile_of(regime_mean)
+                if regime_bench.distribution.size else None,
+            )
 
     return Outcome(
         config=config,
         stats=stats,
-        regimes=regimes,
-        candidates=len(candidates),
+        regimes=regime_stats,
+        candidates=candidates,
         rejected=result.rejected,
         random_percentile=percentile,
         date_matched_percentile=date_matched,
         mean_return=mean_return,
         mean_return_se=mean_return_se,
         trade_log=log,
-        # Deliberately still the uniform percentile: which benchmark the
-        # pre-registered criteria are scored against is a criteria change, and
-        # those are the operator's (non-negotiable #4). Recorded in CLAUDE.md
-        # as an open decision. Nothing is scored on validation yet either way.
-        criteria=check_criteria(stats, regimes, percentile),
+        same_day_p=same_day_p,
+        effective_trades=effective,
+        regime_results=regime_results,
+        criteria=check_criteria(
+            stats,
+            effective_trades=effective,
+            regimes=regime_results,
+            regime_buckets_in_split=split_regime_count(split.start, split.end),
+            same_day_p=same_day_p,
+            alpha=alpha,
+        ),
     )
 
 

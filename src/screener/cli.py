@@ -2151,9 +2151,8 @@ def backtest_run(
     """
     _configure_logging(verbose)
     from .backtest import budget
-    from .backtest.benchmarks import buy_and_hold, random_benchmark, trade_returns
-    from .backtest.engine import CostModel, ExitRule, run_backtest
-    from .backtest.performance import by_regime, check_criteria, summarize
+    from .backtest.benchmarks import buy_and_hold
+    from .backtest.engine import CostModel
     from .backtest.runner import HYPOTHESES
     from .backtest.splits import get_split
     from .metrics.compute import load_bars
@@ -2260,59 +2259,58 @@ def backtest_run(
 
         console.print(f"{len(candidates):,} candidate signal(s) before portfolio limits.")
 
-        result = run_backtest(
-            candidates, bars_by_symbol,
-            start=chosen.start, end=chosen.end,
-            starting_equity=equity,
-            exit_rule=ExitRule(
-                r_multiple=r_multiple or None,
-                time_limit=time_limit or None,
-                use_stop=use_stop,
-            ),
-            costs=CostModel(slippage_bps=slippage_bps),
+        # The same execution and scoring path the battery uses. This command
+        # used to build its own exit rule and compute its own criteria, and the
+        # two copies had already drifted.
+        from .backtest.performance import FAMILY_WISE_ALPHA
+        from .backtest.preregistration import load as _load_prereg
+        from .backtest.runner import score, simulate
+
+        result = simulate(candidates, bars_by_symbol, run_config, chosen)
+
+        # Holm across the family of registered tests on this split. A single
+        # run is held to Holm's first and strictest step, 5% / m; if it clears
+        # that it clears Holm whatever the rest of the family does. The final
+        # family verdict is `screener prereg family`.
+        registry = _load_prereg() if chosen.carries_evidence else None
+        family = registry.family_size(chosen) if registry else 0
+        alpha = FAMILY_WISE_ALPHA / max(family, 1)
+
+        outcome = score(
+            result, bars_by_symbol, run_config, chosen, candidates=len(candidates),
+            random_iterations=random_iterations, seed=seed, alpha=alpha,
         )
+        stats, regimes = outcome.stats, outcome.regimes
+        criteria = list(outcome.criteria)
 
-        stats = summarize(result)
-        regimes = by_regime(result.trades, equity)
-
-        percentile = None
-        same_day = None
-        holds = [t.bars_held for t in result.closed_trades if t.bars_held > 0]
-        if holds and random_iterations > 0:
-            bench = random_benchmark(
-                bars_by_symbol, start=chosen.start, end=chosen.end,
-                n_trades=len(holds), hold_periods=holds,
-                iterations=random_iterations, seed=seed,
-                costs=CostModel(slippage_bps=slippage_bps),
+        if outcome.random_percentile is not None:
+            console.print(
+                f"[dim]random names, any day: {outcome.random_percentile:.1f}th percentile[/]"
             )
-            observed = trade_returns(result.closed_trades)
-            mean_return = sum(observed) / len(observed) if observed else 0.0
-            percentile = bench.percentile_of(mean_return)
-            console.print(f"[dim]{bench.describe(mean_return)}[/]")
-
-            # Same trades, same days, different names: the rank that is about
-            # the pick rather than the calendar.
-            from .backtest.benchmarks import date_matched_benchmark, trade_entries
-
-            matched = date_matched_benchmark(
-                bars_by_symbol, entries=trade_entries(result.closed_trades),
-                iterations=random_iterations, seed=seed,
-                costs=CostModel(slippage_bps=slippage_bps),
+        if outcome.date_matched_percentile is not None:
+            console.print(
+                f"[dim]random names, same days: {outcome.date_matched_percentile:.1f}th "
+                f"percentile, one-sided p = {outcome.same_day_p:.4f}[/]"
             )
-            if matched.distribution.size:
-                same_day = matched.percentile_of(mean_return)
-                console.print(f"[dim]same days, random names: {same_day:.1f}th percentile[/]")
-
-        criteria = check_criteria(stats, regimes, percentile)
+        if outcome.effective_trades is not None:
+            console.print(
+                f"[dim]{stats.trades:,} trades hold about {outcome.effective_trades:,.0f} "
+                "independent observations (month-clustered)[/]"
+            )
+        if chosen.carries_evidence:
+            console.print(
+                f"[dim]Holm family on {chosen.name}: {family} registered test(s); "
+                f"this run is held to p <= {alpha:.4g}[/]"
+            )
 
         # A signed pre-registration may add bars of its own. They count toward
         # pass/fail exactly like performance.py's, because the operator signed
         # them before the split was touched.
-        if chosen.carries_evidence:
+        if registry is not None:
             from .backtest.performance import CriterionResult
-            from .backtest.preregistration import load as _load_prereg
 
-            prereg = _load_prereg().authorizing(key, chosen, config)
+            prereg = registry.authorizing(key, chosen, config)
+            same_day = outcome.date_matched_percentile
             if prereg and prereg.min_date_matched_percentile is not None:
                 floor = prereg.min_date_matched_percentile
                 criteria.append(CriterionResult(
@@ -2329,7 +2327,8 @@ def backtest_run(
             profit_factor=stats.profit_factor,
             max_drawdown_pct=stats.max_drawdown_pct,
             total_return_pct=stats.total_return_pct,
-            random_percentile=percentile, criteria_passed=passed,
+            random_percentile=outcome.random_percentile,
+            same_day_p=outcome.same_day_p, criteria_passed=passed,
         )
 
     console.print(f"\n[bold]{stats.describe()}[/]")
@@ -2357,12 +2356,16 @@ def backtest_run(
 
     if regimes:
         table = Table(title="By regime")
-        for col in ("Regime", "Trades", "Expectancy", "Return"):
+        for col in ("Regime", "Trades", "Expectancy", "Return", "vs random, same days"):
             table.add_column(col, justify="right" if col != "Regime" else "left")
         for name, bucket in regimes.items():
+            rr = outcome.regime_results.get(name)
+            rank = ("--" if rr is None or rr.same_day_percentile is None
+                    else f"{rr.same_day_percentile:.0f}th"
+                    + (" beat" if rr.beat_random else " lost"))
             table.add_row(
                 name, str(bucket.trades),
-                f"{bucket.expectancy_r:+.3f}R", f"{bucket.total_return_pct:+.1%}",
+                f"{bucket.expectancy_r:+.3f}R", f"{bucket.total_return_pct:+.1%}", rank,
             )
         console.print(table)
 

@@ -2,6 +2,10 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: screener-postgres
+    # Come back with Docker. Twice (2026-09-18, 2026-09-19) the VM stopped under
+    # this container -- Windows sleep or a Docker Desktop restart -- and with the
+    # default policy of "no" it stayed down until someone noticed a hung command.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: screener
       POSTGRES_PASSWORD: screener

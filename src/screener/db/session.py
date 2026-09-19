@@ -47,7 +47,29 @@ def session_scope() -> Iterator[Session]:
         session.close()
 
 
+# Columns added after a table first shipped. `create_all` never alters an
+# existing table, so each is added here, idempotently, on `db init`. No Alembic
+# directory exists in this repository despite the docstring below once saying
+# so; this list is the migration path until one does.
+_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # 2026-09-19: one-sided p against random names on the same days. The Holm
+    # correction over validation needs every run's p-value as recorded, not
+    # re-derived later from a different seed.
+    ("research_runs", "same_day_p", "DOUBLE PRECISION"),
+)
+
+
 def create_all(engine: Engine) -> None:
-    """Create tables directly. For tests and first-run bootstrap; production
-    schema changes go through Alembic migrations."""
+    """Create missing tables, then add any column listed in _ADDED_COLUMNS
+    that an existing table lacks. Safe to re-run."""
+    from sqlalchemy import inspect, text
+
     Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, column, sql_type in _ADDED_COLUMNS:
+            if not inspector.has_table(table):
+                continue
+            present = {c["name"] for c in inspector.get_columns(table)}
+            if column not in present:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))

@@ -241,7 +241,29 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
         return _compare_arms(cells)
 
     by_key = {cell.key: cell for cell in cells}
-    positive = [c for c in cells if c.expectancy > 0]
+
+    # Operator decision, 2026-09-19: a plateau may only be built from, and may
+    # only select, configurations that BEAT RANDOM names bought on the same
+    # days -- the standard the two-arm rule already applied. Without it the
+    # rule selected h7_no_stop (26th percentile) and h6_drift_exits (34th):
+    # profitable in a rising market, worse than a coin toss at picking.
+    #
+    # Where nothing was benchmarked (`backtest surface` runs without one by
+    # default) the surface falls back to expectancy alone and says so, rather
+    # than selecting nothing for a reason the reader cannot see.
+    benchmarked = any(_rank(c) is not None for c in cells)
+
+    def qualifies(cell: Cell) -> bool:
+        if cell.expectancy <= 0:
+            return False
+        if not benchmarked:
+            return True
+        rank = _rank(cell)
+        return rank is not None and rank > 50.0
+
+    positive = [c for c in cells if qualifies(c)]
+    standard = ("positive and beat random on the same days" if benchmarked
+                else "positive (no random benchmark run; expectancy alone)")
 
     if not positive:
         return SurfaceVerdict(
@@ -251,7 +273,7 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
             positive_cells=0,
             total_cells=len(cells),
             detail=(
-                f"no configuration of {len(cells)} produced positive expectancy. "
+                f"no configuration of {len(cells)} was {standard}. "
                 "Per docs/03 0.7 rule 4 this is evidence against the hypothesis, "
                 "not an invitation to widen the search."
             ),
@@ -269,7 +291,7 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
             by_key.get(tuple(sorted(n.items()))) for n in neighbours
         ]
         found = [c for c in found if c is not None]
-        if found and all(c.expectancy > 0 for c in found):
+        if found and all(qualifies(c) for c in found):
             plateau_members.append(cell)
 
     if not plateau_members:
@@ -280,8 +302,8 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
             positive_cells=len(positive),
             total_cells=len(cells),
             detail=(
-                f"{len(positive)} of {len(cells)} cells positive, but no positive cell "
-                "has positive neighbours. One value working while its neighbours fail "
+                f"{len(positive)} of {len(cells)} cells were {standard}, but none has "
+                "neighbours that also were. One value working while its neighbours fail "
                 "is what noise looks like. Per docs/03 0.7 rule 3, the peak is not "
                 "selectable."
             ),
@@ -294,7 +316,7 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
             by_key.get(tuple(sorted(n.items())))
             for n in _neighbours(cell.params, varied)
         ]
-        supported = sum(1 for c in neighbours if c is not None and c.expectancy > 0)
+        supported = sum(1 for c in neighbours if c is not None and qualifies(c))
         distance_from_middle = sum(
             abs(values.index(cell.params[name]) - (len(values) - 1) / 2)
             for name, values in varied.items()
@@ -309,13 +331,19 @@ def analyse(cells: list[Cell], varied: dict[str, list[Any]]) -> SurfaceVerdict:
         positive_cells=len(positive),
         total_cells=len(cells),
         detail=(
-            f"{len(plateau_members)} of {len(positive)} positive cells sit inside a "
-            f"positive neighbourhood. Selected the plateau centre "
+            f"{len(plateau_members)} of {len(positive)} qualifying cells sit inside a "
+            f"qualifying neighbourhood ({standard}). Selected the plateau centre "
             f"({_format(centre.params)}, {centre.expectancy:+.3f}R) rather than the "
             f"peak ({_format(best.params)}, {best.expectancy:+.3f}R) -- the peak's "
             "margin over its neighbours is the part least likely to survive."
         ),
     )
+
+
+def _rank(cell: Cell) -> float | None:
+    """Rank against random: same-day where it was computed, else any-day."""
+    same = getattr(cell.outcome, "date_matched_percentile", None)
+    return same if same is not None else getattr(cell.outcome, "random_percentile", None)
 
 
 def _format(params: dict[str, Any]) -> str:

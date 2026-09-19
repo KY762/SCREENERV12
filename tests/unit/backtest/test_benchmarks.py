@@ -180,3 +180,36 @@ def test_trade_entries_reports_the_calendar_of_closed_trades_only():
                        target=None, risk_dollars=Decimal("10"))
 
     assert trade_entries([closed, still_open]) == [(date(2020, 1, 1), 2)]
+
+
+# --------------------------------------------------------------------------
+# p-values
+#
+# A multiple-testing correction divides the significance level by the number
+# of tests. That only works if the benchmark can state a small p honestly.
+# --------------------------------------------------------------------------
+
+def test_a_result_beyond_every_draw_is_not_p_zero():
+    """Beating all 99 draws is p = 1/100, not 0: a finite Monte Carlo cannot
+    rule out that a larger sample would have produced one that beat it."""
+    from screener.backtest.benchmarks import RandomBenchmark
+
+    bench = RandomBenchmark(99, 10, np.linspace(-0.01, 0.01, 99))
+    assert bench.p_value(1.0) == pytest.approx(1 / 100)
+    assert bench.smallest_p() == pytest.approx(1 / 100)
+
+
+def test_p_value_counts_ties_against_the_strategy():
+    """Ambiguity resolves against us (non-negotiable #6)."""
+    from screener.backtest.benchmarks import RandomBenchmark
+
+    bench = RandomBenchmark(3, 10, np.array([0.0, 0.0, 0.0]))
+    assert bench.p_value(0.0) == pytest.approx(1.0)
+
+
+def test_p_value_and_percentile_agree_away_from_the_tails():
+    from screener.backtest.benchmarks import RandomBenchmark
+
+    draws = np.linspace(0.0, 1.0, 1000)
+    bench = RandomBenchmark(1000, 10, draws)
+    assert bench.p_value(0.9) == pytest.approx(1 - bench.percentile_of(0.9) / 100, abs=0.002)

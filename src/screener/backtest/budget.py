@@ -140,6 +140,7 @@ def record(
     max_drawdown_pct: float | None = None,
     total_return_pct: float | None = None,
     random_percentile: float | None = None,
+    same_day_p: float | None = None,
     criteria_passed: bool | None = None,
     notes: str | None = None,
 ) -> ResearchRun:
@@ -155,6 +156,7 @@ def record(
         max_drawdown_pct=max_drawdown_pct,
         total_return_pct=total_return_pct,
         random_percentile=random_percentile,
+        same_day_p=same_day_p,
         criteria_passed=criteria_passed,
         notes=notes,
     )

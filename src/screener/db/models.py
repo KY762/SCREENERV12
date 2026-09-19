@@ -354,6 +354,9 @@ class ResearchRun(Base):
     max_drawdown_pct: Mapped[float | None] = mapped_column(Float)
     total_return_pct: Mapped[float | None] = mapped_column(Float)
     random_percentile: Mapped[float | None] = mapped_column(Float)
+    # One-sided p against random names bought on the same days. What the Holm
+    # correction over the validation family is computed from.
+    same_day_p: Mapped[float | None] = mapped_column(Float)
     criteria_passed: Mapped[bool | None] = mapped_column(Boolean)
     notes: Mapped[str | None] = mapped_column(Text)
 
