@@ -47,13 +47,18 @@ HYPOTHESES = ("h1", "h2", "h3", "h4", "h5", "h6", "h7")
 
 ROUND_2 = ("h5", "h6", "h7")
 
-# Holding period per hypothesis, in trading days. H1 rotates on relative
-# strength over days; H5 is momentum 12-1, which the literature holds for
-# months and whose `monthly_rebalance` flag says the same. The pattern
-# hypotheses do not read `hold` at all -- they exit on `time_limit` -- so
-# their entry exists only to keep the mapping total.
+# Holding period per hypothesis, in trading days. H5 is momentum 12-1, which
+# the literature holds for months and whose `monthly_rebalance` flag says the
+# same. The pattern hypotheses do not read `hold` at all -- they exit on
+# `time_limit` -- so their entry exists only to keep the mapping total.
+#
+# H1 was 5 until 2026-09-18, when the operator narrowed it to swing holds of
+# 10-20 trading days with 20 as the default (docs/03 §H1 amendment). Made
+# AFTER seeing development results, where 3- and 5-day holds sat near zero
+# expectancy; Jegadeesh & Titman (1993) also find the momentum return absent in
+# the month after ranking. The 3/5-day runs already logged remain counted.
 HOLD_DEFAULTS: dict[str, int] = {
-    "h1": 5, "h2": 5, "h3": 5, "h4": 5,
+    "h1": 20, "h2": 5, "h3": 5, "h4": 5,
     "h5": 21,
     "h6": 5, "h7": 5,
 }
@@ -175,7 +180,7 @@ class RunConfig:
         """
         data = dict(self.__dict__)
         relevant = {
-            "h1": ("stop_atr", "rs_lookback", "top_pct", "hold"),
+            "h1": ("stop_atr", "rs_lookback", "top_pct", "hold", "entry_delay"),
             "h5": ("stop_atr", "top_pct", "mom_lookback", "mom_skip", "monthly_rebalance"),
             "h6": ("stop_atr", "reaction_pct", "entry_delay"),
             "h7": ("squeeze_percentile", "squeeze_window", "breakout_window"),
@@ -243,6 +248,7 @@ def build_candidates(
             bars_by_symbol, trend=trend, rebalance_days=config.hold,
             top_pct=config.top_pct, stop_atr=config.stop_atr,
             lookback=config.rs_lookback, universe=universe,
+            entry_delay=config.entry_delay,
         )
     if config.hypothesis == "h5":
         return canonical_momentum_candidates(

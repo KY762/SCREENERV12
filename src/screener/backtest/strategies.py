@@ -153,14 +153,28 @@ def relative_strength_candidates(
     rebalance_days: int = 5,
     universe: UniverseMask = always_in_universe,
     sectors: Mapping[str, str] | None = None,
+    entry_delay: int = 1,
 ) -> list[Candidate]:
     """H1 -- the control. Rank by volatility-adjusted RS, take the top slice.
 
     Ranking happens across the cross-section as of each rebalance date using
-    only that date's values, and execution is the next session's open. This is
-    the hypothesis every other one has to beat; if it cannot be beaten, the
-    added complexity earned nothing.
+    only that date's values. This is the hypothesis every other one has to
+    beat; if it cannot be beaten, the added complexity earned nothing.
+
+    `entry_delay` is how many sessions after the ranking the position is bought
+    at the open: 1 is the next open, the original behaviour. Operator decision
+    2026-09-18: when the wait is longer, the name is RE-CHECKED at the last
+    close before the buy -- it must still rank in the top slice and still pass
+    the trend filter on that day, or the trade is skipped. The re-check uses
+    that close and nothing later, so a delayed entry knows no more than a
+    ranking on the re-check day would.
+
+    That makes the delay a change to which stocks are bought as well as when:
+    names that fall out of the slice while waiting are dropped. A delay
+    experiment therefore measures waiting plus re-selection, not waiting alone.
     """
+    if entry_delay < 1:
+        raise ValueError("entry_delay is sessions after the ranking; 1 is the next open")
     trend = trend if trend is not None else TrendFilter()
     sectors = sectors or {}
     benchmark_bars = bars_by_symbol.get(benchmark)
@@ -188,8 +202,13 @@ def relative_strength_candidates(
     calendar = sorted({day for s in rs_by_symbol.values() for day in s.index})
     candidates: list[Candidate] = []
 
-    for i in range(0, len(calendar) - 1, max(rebalance_days, 1)):
-        day = calendar[i]
+    # The top slice on a given day, as {ticker: rank value}. Cached because a
+    # delayed entry re-ranks on its re-check day, and many candidates share one.
+    slices: dict[pd.Timestamp, dict[str, float]] = {}
+
+    def top_slice(day: pd.Timestamp) -> dict[str, float]:
+        if day in slices:
+            return slices[day]
         scored: list[tuple[float, str]] = []
         for ticker, series in rs_by_symbol.items():
             if day not in series.index:
@@ -202,21 +221,34 @@ def relative_strength_candidates(
                 if day not in trend_series.index or not bool(trend_series.loc[day]):
                     continue
             scored.append((float(value), ticker))
-
-        if not scored:
-            continue
         scored.sort(reverse=True)
-        take = max(1, int(len(scored) * top_pct))
+        take = max(1, int(len(scored) * top_pct)) if scored else 0
+        slices[day] = {ticker: value for value, ticker in scored[:take]}
+        return slices[day]
 
-        for rank_value, ticker in scored[:take]:
+    for i in range(0, len(calendar) - 1, max(rebalance_days, 1)):
+        day = calendar[i]
+        ranked = top_slice(day)
+        if not ranked:
+            continue
+
+        for ticker, rank_value in sorted(ranked.items(), key=lambda kv: -kv[1]):
             bars = bars_by_symbol[ticker]
             position = bars.index.get_indexer([day])[0]
-            if position < 0 or position + 1 >= len(bars.index):
+            if position < 0 or position + entry_delay >= len(bars.index):
                 continue
-            atr_value = atr_by_symbol[ticker].loc[day]
+            # The last close before the buy. For a one-session delay it is the
+            # ranking day itself, so nothing about the original rule changes.
+            check_day = bars.index[position + entry_delay - 1]
+            if entry_delay > 1:
+                still = top_slice(check_day)
+                if ticker not in still:
+                    continue
+                rank_value = still[ticker]
+            atr_value = atr_by_symbol[ticker].get(check_day, float("nan"))
             if pd.isna(atr_value) or atr_value <= 0:
                 continue
-            entry_day = bars.index[position + 1].date()
+            entry_day = bars.index[position + entry_delay].date()
             if not universe(ticker, entry_day):
                 continue
             # docs/03 H1: "Stop at entry - k x ATR(14)". A DISTANCE, not a

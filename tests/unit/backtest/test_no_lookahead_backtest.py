@@ -142,3 +142,21 @@ def test_backtest_is_deterministic():
     first = _run(full, candidates, date(2030, 1, 1))
     second = _run(full, candidates, date(2030, 1, 1))
     assert [t.__dict__ for t in first.trades] == [t.__dict__ for t in second.trades]
+
+
+def test_a_delayed_and_rechecked_entry_is_unchanged_by_truncating_the_future():
+    """The re-check re-ranks on a later day. It must use that day's close and
+    nothing after it, or truncation moves trades that had already settled."""
+    cutoff = date(2016, 6, 1)
+    full = universe()
+    kw = dict(trend=TrendFilter(), top_pct=0.5, entry_delay=6, rebalance_days=5)
+
+    all_trades = _run(full, relative_strength_candidates(full, **kw), date(2030, 1, 1)).trades
+    partial_bars = truncate(full, cutoff)
+    partial_trades = _run(
+        partial_bars, relative_strength_candidates(partial_bars, **kw), cutoff
+    ).trades
+
+    settled = comparable(all_trades, cutoff)
+    assert settled
+    assert settled == comparable(partial_trades, cutoff)

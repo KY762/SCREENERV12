@@ -2125,6 +2125,11 @@ def backtest_run(
     top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
     stop_atr: float = typer.Option(2.0, "--stop-atr", help="H1 stop, in ATR(14)."),
     rs_lookback: int = typer.Option(63, "--rs-lookback", help="H1 relative-strength window."),
+    entry_delay: int = typer.Option(
+        1, "--entry-delay",
+        help="Sessions after the signal to buy at the open; 1 is the next open. "
+             "H1 re-checks the ranking and trend at the last close before the buy.",
+    ),
     random_iterations: int = typer.Option(1000, "--random-iterations"),
     seed: int = typer.Option(0, "--seed"),
     confirm: bool = typer.Option(
@@ -2193,6 +2198,7 @@ def backtest_run(
         r_multiple=r_multiple, time_limit=time_limit, slippage_bps=slippage_bps,
         trend_filter=trend_filter, use_stop=use_stop, displacement=displacement,
         hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+        entry_delay=entry_delay,
     )
 
     with session_scope() as session:
@@ -2240,7 +2246,7 @@ def backtest_run(
             time_limit=time_limit, slippage_bps=slippage_bps,
             trend_filter=trend_filter, use_stop=use_stop,
             displacement=displacement, hold=hold, top_pct=top_pct,
-            stop_atr=stop_atr, rs_lookback=rs_lookback,
+            stop_atr=stop_atr, rs_lookback=rs_lookback, entry_delay=entry_delay,
         ).resolved()
 
         events = _load_events(session, bars_by_symbol) if key == "h6" else None

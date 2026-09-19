@@ -394,7 +394,10 @@ def test_h5_holds_for_a_month_not_a_week_by_default():
     """
     from screener.backtest.runner import RunConfig
 
-    assert RunConfig(hypothesis="h1").resolved().hold == 5
+    # H1 is 20 since the 2026-09-18 amendment (docs/03 §H1): a swing rotation.
+    # Still a separate default from H5's -- the point of this test is that
+    # the two are not one shared value.
+    assert RunConfig(hypothesis="h1").resolved().hold == 20
     assert RunConfig(hypothesis="h5").resolved().hold == 21
     assert RunConfig(hypothesis="h5").resolved().time_limit == 21
 

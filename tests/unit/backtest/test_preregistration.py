@@ -43,9 +43,24 @@ stop_atr = 2.5
 # -- the run identity -------------------------------------------------------
 
 def test_an_omitted_hold_and_its_default_are_one_configuration():
-    """The CLI hashed `hold` as typed, so `--hold 5` and no `--hold` -- the
-    same H1 run -- spent two budget slots."""
-    assert config_hash(evidential_config("h1")) == config_hash(evidential_config("h1", hold=5))
+    """The CLI hashed `hold` as typed, so `--hold N` and no `--hold` -- the
+    same H1 run when N is the default -- spent two budget slots. Written
+    against the constant, not a literal, because the default has moved once."""
+    from screener.backtest.runner import HOLD_DEFAULTS
+
+    default = HOLD_DEFAULTS["h1"]
+    explicit = evidential_config("h1", hold=default)
+    assert config_hash(evidential_config("h1")) == config_hash(explicit)
+
+
+def test_entry_delay_is_always_part_of_an_h1_identity():
+    """Including it only when it differs from 1 would keep old hashes, but the
+    moment the default moved, two different runs would share one."""
+    assert evidential_config("h1")["entry_delay"] == 1
+    assert config_hash(evidential_config("h1", entry_delay=1)) != config_hash(
+        evidential_config("h1", entry_delay=3)
+    )
+    assert evidential_config("h2")["entry_delay"] is None, "h2 never reads it"
 
 
 def test_account_size_is_part_of_the_identity():

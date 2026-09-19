@@ -61,6 +61,7 @@ RUN_DEFAULTS: dict[str, Any] = {
     "top_pct": 0.10,
     "stop_atr": 2.0,
     "rs_lookback": 63,
+    "entry_delay": 1,
 }
 
 EVIDENTIAL_SPLITS = ("validation", "test")
@@ -114,6 +115,9 @@ def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
         "top_pct": float(opts["top_pct"]),
         "stop_atr": float(opts["stop_atr"]) if key == "h1" else None,
         "rs_lookback": int(opts["rs_lookback"]) if key == "h1" else None,
+        # Always present for the hypotheses that read it, including at 1, so
+        # moving the default later cannot give two different runs one hash.
+        "entry_delay": int(opts["entry_delay"]) if key in ("h1", "h6") else None,
     }
 
 

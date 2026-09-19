@@ -216,10 +216,29 @@ Baseline ranks on `RS_adj` alone; composite ranking is a development-split struc
 `rvol`? Does an equal-weighted composite of all three beat any single one?
 
 **Parameter surfaces (development split):** RS lookback ∈ {21, 42, 63, 126, 252}; selection cutoff ∈
-{top 5%, 10%, 20%}; hold ∈ {3, 5, 10, 20} days; ATR stop multiple ∈ {1.0 … 3.0 step 0.25}.
+{top 5%, 10%, 20%}; hold ∈ {10, 20} days (default 20); ATR stop multiple ∈ {1.0 … 3.0 step 0.25}.
 
 ### Entry
-Next session's open.
+The open `entry_delay` sessions after the ranking (default 1: the next session's open). When the
+delay is longer than one session, the name is re-checked at the last close before the buy and
+skipped unless it still ranks in the selection cutoff and still passes the trend filter.
+
+> **Amendment, 2026-09-18 (operator decision).** Two changes to H1, both made **after** the
+> development battery had been seen:
+>
+> 1. **Hold narrowed from {3, 5, 10, 20} to {10, 20}, default 20** (previously 5), to make H1 a
+>    swing rotation of roughly 2–4 weeks. On development, 3- and 5-day holds had expectancy near
+>    zero and ranked at the 66th–71st percentile against random, while 10–20 days ranked at the
+>    85th–96th. Jegadeesh & Titman (1993) independently find the momentum return absent in the
+>    month after ranking, which argues against the shortest holds for reasons that predate this
+>    data. **The 3- and 5-day configurations already run stay counted as trials**, and narrowing a
+>    grid after seeing it is recorded here as exactly that.
+> 2. **Entry delay added**, with a re-check on the buy day. Tested on development as a structural
+>    question at delays {1, 3, 6} (`h1_entry_delay`). Because a delayed name can be dropped at the
+>    re-check, the experiment measures waiting and re-selection together, not waiting alone.
+>
+> The draft pre-registration (`preregistrations/H1.md`) fixed its configuration from the 4 × 5
+> hold × stop grid as it was run on 2026-09-18, before this amendment, and keeps it.
 
 ### Exit
 - Time exit at the hold horizon, market-on-open

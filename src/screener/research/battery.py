@@ -97,13 +97,19 @@ BATTERY: tuple[Experiment, ...] = (
         hypothesis="h1",
         question="Is there any hold horizon and stop width at which momentum "
                  "rotation is profitable?",
-        vary={"hold": [3, 5, 10, 20], "stop_atr": [1.0, 1.5, 2.0, 2.5, 3.0]},
+        # 3 and 5 dropped 2026-09-18 by operator decision (docs/03 §H1
+        # amendment), after this surface had been run with them. Those runs
+        # stay counted. With two holds instead of four the neighbourhoods
+        # change, so the plateau centre this surface now selects need not be
+        # the hold=10 / 2.5 ATR centre selected from the 4 x 5 grid -- and
+        # preregistrations/H1.md keeps the one selected before the change.
+        vary={"hold": [10, 20], "stop_atr": [1.0, 1.5, 2.0, 2.5, 3.0]},
     ),
     Experiment(
         name="h1_no_stop",
         hypothesis="h1",
         question="Is the STOP what loses the money? Same entries, no stop.",
-        vary={"hold": [5, 10, 20, 40]},
+        vary={"hold": [10, 20, 40]},      # 5 dropped 2026-09-18, as above
         base={"use_stop": False},
         kind="structural",
     ),
@@ -114,6 +120,21 @@ BATTERY: tuple[Experiment, ...] = (
                  "holding exits fixed?",
         vary={"rs_lookback": [21, 63, 126, 252], "top_pct": [0.05, 0.10, 0.20]},
         base={"hold": 20, "stop_atr": 3.0},
+    ),
+    Experiment(
+        name="h1_entry_delay",
+        hypothesis="h1",
+        question="Does waiting after the ranking help? Momentum's return is "
+                 "reported absent in the weeks after ranking (Jegadeesh & "
+                 "Titman 1993). Delayed names are re-checked at the last close "
+                 "before the buy and dropped if they no longer rank or trend, so "
+                 "this measures waiting AND re-selection together.",
+        # 1 is the control (next open, the original rule); 6 skips a full
+        # trading week, like J&T's skip-a-week variant. Operator-approved
+        # values, 2026-09-18.
+        vary={"entry_delay": [1, 3, 6]},
+        base={"hold": 20, "stop_atr": 3.0},
+        kind="structural",
     ),
     Experiment(
         name="h1_trend_filter",
