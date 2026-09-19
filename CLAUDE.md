@@ -113,8 +113,17 @@ so 0/6 is a floor, not a measurement.
 Consequence: Round 1's negative h1–h4 results were produced *with* this bias
 helping them, which makes them more credible, not less. Value screens are the
 most exposed thing here — they select distressed companies, which is exactly
-the missing population. Polygon (~$29/mo) is the documented fix
-(`providers/alpaca.py:12`).
+the missing population.
+
+**The "$29 Polygon fix" recorded here and in `providers/alpaca.py:12` was
+wrong, checked 2026-09-19.** Polygon (now Massive) sells history by depth: $29
+buys 5 years, which reaches about 2021 and touches neither the 2010-2015
+development split nor 2016-2019 validation; $79 buys 10 years, still cutting
+into validation and its warm-up; only $199 covers the window. The fix bought
+instead is **EODHD at $19.99 for one month** — US history mostly from 2000,
+delisted tickers included — plus the free point-in-time index membership
+above, which fixes the second survivorship channel that no price feed
+addresses.
 
 **Do not spend validation or test budget until delisted coverage is fixed.**
 Development is unlimited and the bias direction is known, so Round 2 can run
@@ -225,6 +234,48 @@ Each was invisible to a passing test suite and surfaced only on real data.
   function that builds a run's identity for both the CLI and pre-registrations.
   Development hashes shifted as a result; development is unlimited, and no
   validation or test row existed to repair.
+
+## The 2026-09-19 decisions
+
+Five open decisions, closed by the operator on 2026-09-19 after research into
+what each would cost and what it would buy. All were taken **before any
+validation or test run existed**, which is what makes them pre-registration
+rather than revision.
+
+**1. The criteria now all measure picking.** Recorded in docs/03 §0.6 with
+what each was and why it changed: the trade floor counts **effective**
+observations; "vs random" is a one-sided p against random names bought on the
+**same days**, at a family-wise 5% corrected by **Holm**; regime robustness
+asks whether the picks **beat random in ≥ 2 of a split's 3 buckets** rather
+than whether a long-only rule made money through the 2018-Q4 correction. The
+plateau rule may only select cells that beat random.
+
+**2. Holm's family must be closed before the first validation run.** Signing
+another registration afterwards changes the bar earlier runs were held to.
+`screener prereg family` reports it; a single run is held to Holm's first and
+strictest step, 5% ÷ m.
+
+**3. The universe is point-in-time S&P 500 membership** (`sp500_pit`), not 307
+of today's large caps. Free, MIT-licensed, vendored to `data/reference/`. It
+measures the hole it fills: **719 companies were in the index across
+2010-2019, this database has bars for 106**, and 303 of the missing are no
+longer in the index. Caveat in `universe/sp500.py`: the membership is
+point-in-time but the *symbols are not* (Yahoo's 2010 membership is filed
+under `AABA`), so a renamed company can drop out by renaming rather than by
+survival.
+
+**4. The delisted-price fix is EODHD at $19.99 for one month**, not Polygon at
+$29/month. The plan on record could not have worked: Polygon (now Massive)
+sells history by depth — $29 buys 5 years, reaching about 2021, past the
+2010-2015 development split entirely; $79 buys 10 years, which still cuts into
+validation; only $199 covers it. EODHD's All World plan carries US history
+mostly from 2000 with delisted tickers included. Adapter and settings are in
+place; `EODHD_API_KEY` in `.env` is what it waits on.
+
+**5. Intraday data is not needed.** Every hypothesis here runs on daily bars.
+
+Still open, and recorded rather than decided: whether the remaining validation
+slots are ever spent, and the sizing/circuit-breaker items below.
 
 ## Pre-registration
 
@@ -452,11 +503,11 @@ screener research explore --battery all
   otherwise, both with month-clustered standard errors. Shapes are now
   `separated` / `indistinct` / `none`. The constant lives in
   `backtest/surface.py` so moving it is a visible edit.
-- **Which benchmark the pre-registered criteria score against.**
-  `check_criteria` still takes the uniform percentile, deliberately unchanged.
-  The date-matched one is the better instrument for "did selection add
-  anything", but switching what the criteria read is a criteria change.
-  Nothing is scored on validation yet either way.
+- ~~Which benchmark the criteria score against~~ — **decided 2026-09-19**:
+  the same-day (date-matched) one, as a p-value. See docs/03 §0.6.
+- ~~The regime criterion demands every regime in a split be positive~~ —
+  **decided 2026-09-19**: beat random in ≥ 2 of the split's 3 buckets, keeping
+  the −15% floor. Original note kept for the record:
 - **The regime criterion demands every regime in a split be positive.**
   docs/03 §0.6 says "positive in ≥ 3 of 5 buckets", but `REGIMES` puts
   exactly three buckets in each split, so "≥ 3 positive" in practice means all
@@ -467,6 +518,9 @@ screener research explore --battery all
   be resolved before any validation is spent. The resolution is also being
   made after seeing H1 fail this criterion on development
   (`preregistrations/H1.md` §4), and that should be written down with it.
+- ~~The plateau rule selects configurations that lose to random~~ —
+  **decided 2026-09-19**: it may only select cells that beat random. Original
+  note kept for the record:
 - **The plateau rule selects configurations that lose to random.** docs/03
   §0.7 asks only whether a positive cell has positive neighbours. It never
   consults the random benchmark, so on the 2026-09-18 battery it marks four
@@ -476,15 +530,17 @@ screener research explore --battery all
   require the winner to beat random, so the two rules now disagree about what
   "selectable" means. Adding the same requirement to the plateau rule is a
   change to pre-registered criteria, so it is recorded here, not made.
+- ~~Raise the trade floor?~~ — **decided 2026-09-19**: the floor is 200
+  EFFECTIVE observations. Original note kept for the record:
 - **Raise the trade floor?** Measured (see "Effective sample size"): 200
   effective observations need roughly 260-330 nominal trades at these design
   effects. Whether the pre-registered floor of 200 should become ~300 is a
   criteria change, so it is recorded rather than made. As things stand the
   floor would pass H5 (211) and H4 (249) configurations that hold well under
   200 independent observations.
-- **The across-hypothesis correction.** Seven hypotheses x 3 validation configs
-  is 21 shots at the bar; several clear by chance. A decision, not code, and it
-  has to be made before any validation is spent or it is post-hoc.
+- ~~The across-hypothesis correction~~ — **decided 2026-09-19**: Holm at a
+  family-wise 5% across the registered validation tests, with the family
+  closed before the first run.
 - **The plateau/spike test may not belong on a two-cell structural question.**
   `docs/03` §0.7 rule 3 rejects a peak whose neighbours fail. On a binary arm
   — `use_stop=True/False`, `trend_filter=True/False` — a winning cell's only
