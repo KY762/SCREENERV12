@@ -141,8 +141,20 @@ def ingest(
     settings = get_settings()
     choice = provider_name.strip().lower()
     if choice == "auto":
-        choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
+        # EODHD first since 2026-09-19: it is the only configured source that
+        # serves companies which have since delisted, and a universe built
+        # from survivors is the bias the project cannot measure its way out of.
+        if settings.has_eodhd:
+            choice = "eodhd"
+        else:
+            choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
 
+    if choice == "eodhd" and not settings.has_eodhd:
+        console.print(
+            "[red]EODHD API key missing.[/] Set EODHD_API_KEY in .env "
+            "(the 'EOD Historical Data - All World' plan -- see .env.example)."
+        )
+        raise typer.Exit(code=1)
     if choice == "tiingo" and not settings.has_tiingo_credentials:
         console.print(
             "[red]Tiingo API key missing.[/] Set TIINGO_API_KEY in .env "
@@ -161,7 +173,10 @@ def ingest(
     end_date = date.fromisoformat(end) if end else date.today()
 
     try:
-        if choice == "tiingo":
+        if choice == "eodhd":
+            from .providers.eodhd import EodhdProvider
+            provider = EodhdProvider(settings)
+        elif choice == "tiingo":
             from .providers.tiingo import TiingoProvider
             provider = TiingoProvider(settings)
         elif choice == "alpaca":
@@ -169,7 +184,8 @@ def ingest(
             provider = AlpacaProvider(settings)
         else:
             console.print(
-                f"[red]Unknown provider {provider_name!r}.[/] Expected auto, tiingo or alpaca."
+                f"[red]Unknown provider {provider_name!r}.[/] "
+                "Expected auto, eodhd, tiingo or alpaca."
             )
             raise typer.Exit(code=1)
     except ProviderError as exc:
@@ -2012,9 +2028,23 @@ def config_cmd() -> None:
         "[green]ready[/]" if tiingo else "[yellow]deep history unavailable[/]",
     )
 
+    eodhd = settings.has_eodhd
+    table.add_row(
+        "EODHD_API_KEY",
+        "set" if eodhd else "not set",
+        "[green]ready -- delisted coverage[/]" if eodhd
+        else "[yellow]delisted companies unavailable[/]",
+    )
+
     console.print(table)
 
-    if tiingo:
+    if eodhd:
+        console.print(
+            "[green]'screener ingest' will use EODHD[/] -- the only configured source "
+            "that serves companies which have since delisted. A universe of survivors "
+            "is the one bias no amount of care in the backtest can remove."
+        )
+    elif tiingo:
         console.print(
             "[green]'screener ingest' will use Tiingo[/] -- history back to the 1990s."
         )

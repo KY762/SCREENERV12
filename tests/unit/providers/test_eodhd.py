@@ -57,9 +57,41 @@ def test_one_unparseable_bar_does_not_lose_the_symbol():
     assert len(frame) == 1
 
 
-def test_us_tickers_are_addressed_with_their_exchange_suffix():
+def test_class_shares_use_a_dash_not_a_dot():
+    """Measured against the API on 2026-09-19: BRK-B.US returns data, BF.B is
+    a 404, and BRK.B returns 200 with an empty list -- the silent form, which
+    reads as 'this company never traded'."""
     assert _us("aapl") == "AAPL.US"
-    assert _us("BRK.B") == "BRK.B", "an explicit suffix is left alone"
+    assert _us("BRK.B") == "BRK-B.US"
+    assert _us("BF.B") == "BF-B.US"
+    assert _us("AAPL.US") == "AAPL.US", "an explicit suffix is left alone"
+
+
+def test_one_unknown_ticker_does_not_abandon_the_others():
+    """A single 404 on BF.B aborted an 866-symbol ingest and was then reported
+    against every symbol in it."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "MISSING" in str(request.url):
+            return httpx.Response(404, text="Ticker Not Found.")
+        return httpx.Response(200, json=BARS)
+
+    with provider(handler) as p:
+        frame = p.get_daily_bars(BarRequest(
+            symbols=("AAPL", "MISSING", "MSFT"),
+            start=date(2015, 1, 1), end=date(2015, 12, 31),
+        ))
+
+    assert sorted(frame.index.get_level_values("symbol").unique()) == ["AAPL", "MSFT"]
+
+
+def test_a_quota_or_auth_failure_still_stops_everything():
+    """Those are about the run, not about one ticker; continuing would write a
+    partial history and call it complete."""
+    with provider(lambda r: httpx.Response(429, json={"error": "quota"})) as p:
+        with pytest.raises(ProviderError, match="quota"):
+            p.get_daily_bars(BarRequest(
+                symbols=("AAPL", "MSFT"), start=date(2015, 1, 1), end=date(2015, 12, 31)
+            ))
 
 
 def test_a_delisted_ticker_returns_its_real_history():
@@ -119,6 +151,10 @@ def test_a_refusal_raises_rather_than_returning_nothing(status, message):
             ))
 
 
-def test_no_key_is_a_clear_refusal():
+@pytest.mark.parametrize("key", [None, "", "   "])
+def test_no_key_is_a_clear_refusal(key):
+    """Explicit rather than a bare Settings(), which would read the real .env.
+    An empty EODHD_API_KEY= line parses to SecretStr("") -- not None -- and
+    would otherwise send an empty token and fail later as a 401."""
     with pytest.raises(ProviderError, match="EODHD_API_KEY"):
-        EodhdProvider(Settings())
+        EodhdProvider(Settings(eodhd_api_key=key))

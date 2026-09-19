@@ -49,6 +49,10 @@ BARS_PATH = "/api/eod/{symbol}"
 SYMBOLS_PATH = "/api/exchange-symbol-list/{exchange}"
 
 
+class SymbolNotFound(ProviderError):
+    """EODHD has no such ticker. About one symbol, not about the run."""
+
+
 @dataclass(frozen=True)
 class DelistedTicker:
     """A symbol EODHD no longer lists. `name` is often all that survives."""
@@ -100,6 +104,8 @@ class EodhdProvider:
                     "EODHD says this data is outside the plan (402). The All World "
                     "plan is the one with delisted US history."
                 )
+            if response.status_code == 404:
+                raise SymbolNotFound(f"EODHD has no ticker at {path}")
             if response.status_code == 429:
                 # Raise rather than back off: a silent wait turns a quota
                 # problem into a run that looks slow instead of one that
@@ -133,11 +139,21 @@ class EodhdProvider:
             raise ProviderError(
                 f"EODHD adapter stores raw prices only, got {request.adjustment!r}"
             )
-        frames = [
-            _rows_to_frame(symbol, self._fetch_symbol(symbol, request.start, request.end))
-            for symbol in request.symbols
-        ]
-        frames = [f for f in frames if not f.empty]
+        frames = []
+        for symbol in request.symbols:
+            try:
+                rows = self._fetch_symbol(symbol, request.start, request.end)
+            except SymbolNotFound:
+                # One unknown ticker is data about that ticker, not a reason to
+                # abandon the other 865. A single 404 on BF.B aborted the first
+                # full ingest and was then reported against every symbol.
+                log.warning("eodhd: no such ticker %s", symbol)
+                continue
+            frame = _rows_to_frame(symbol, rows)
+            if frame.empty:
+                log.warning("eodhd: %s returned no bars in the window", symbol)
+                continue
+            frames.append(frame)
         return pd.concat(frames) if frames else _empty_bars()
 
     def _fetch_symbol(self, symbol: str, start: date, end: date) -> list[dict]:
@@ -182,9 +198,24 @@ class EodhdProvider:
 # -- parsing (pure, so the format is pinned without a network) ---------------
 
 def _us(symbol: str) -> str:
-    """EODHD addresses US tickers as SYMBOL.US."""
+    """EODHD addresses US tickers as SYMBOL.US, with a DASH for share classes.
+
+    `BRK.B` is `BRK-B.US`. Measured 2026-09-19, and the failure modes differ
+    in a way that matters:
+
+        BRK-B.US   200 with data      correct
+        BF.B       404                loud, and it aborted an 866-symbol run
+        BRK.B      200 with []        SILENT -- reads as "no history exists"
+
+    The silent one is why the mapping is explicit rather than "leave anything
+    with a dot alone": a wrong ticker form that returns success with no rows
+    is indistinguishable from a company that never traded, which is the exact
+    conclusion this provider was bought to stop the project reaching.
+    """
     symbol = symbol.strip().upper()
-    return symbol if "." in symbol else f"{symbol}.US"
+    if symbol.endswith(".US"):
+        return symbol
+    return f"{symbol.replace('.', '-')}.US"
 
 
 def _empty_bars() -> pd.DataFrame:
