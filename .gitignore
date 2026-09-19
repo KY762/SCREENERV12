@@ -34,3 +34,10 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Reference datasets the research depends on are versioned with it: the
+# point-in-time S&P 500 membership defines the universe, and an upstream
+# update must show up as a change here rather than silently restating what
+# was tested. Everything else under data/ stays ignored.
+!data/reference/
+!data/reference/**

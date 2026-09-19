@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import date, timedelta
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -552,6 +553,61 @@ def diagnose_signals(
             "yellow" if "jointly" in result.verdict else "green"
         )
         console.print(f"  [{colour}]{result.summary()}[/]")
+
+
+@universe_app.command("sp500")
+def universe_sp500(
+    file: str = typer.Option(
+        "data/reference/sp500_historical_components.csv", "--file",
+        help="The vendored membership CSV.",
+    ),
+    name: str = typer.Option("sp500_pit", "--name"),
+    start: str = typer.Option("2009-01-01", "--start", help="Earliest snapshot to load."),
+    end: str | None = typer.Option(None, "--end"),
+) -> None:
+    """Load point-in-time S&P 500 membership from the vendored dataset.
+
+    The universe becomes "what was in the index on each date" rather than
+    today's large caps -- a universe chosen by who is large NOW is a
+    survivorship filter on the universe itself, and it flatters momentum
+    rules most, because it is pre-filtered to momentum that persisted.
+
+    Creates a symbol row for every historical member, including ones with no
+    price data. What is missing then becomes countable rather than invisible.
+    """
+    from .universe.sp500 import load, parse
+
+    path = Path(file)
+    if not path.exists():
+        console.print(f"[red]{path} not found.[/] It is vendored in the repository; "
+                      "restore it from git or re-download it from github.com/fja05680/sp500.")
+        raise typer.Exit(code=1)
+
+    snapshots = parse(path)
+    if not snapshots:
+        console.print(f"[red]{path} parsed to no snapshots.[/]")
+        raise typer.Exit(code=1)
+
+    # definition_version is a 20-character column, so this is the source tag
+    # plus the vendored file's date -- enough to tell two loads apart.
+    vendored_on = date.fromtimestamp(path.stat().st_mtime).isoformat()
+    version = f"sp500@{vendored_on}"
+    with session_scope() as session:
+        result = load(
+            session, snapshots, name=name, version=version,
+            start=date.fromisoformat(start),
+            end=date.fromisoformat(end) if end else None,
+        )
+    console.print(f"[green]{name}[/]: {result.describe()}")
+    console.print(
+        "[yellow]Community-maintained, not a vetted commercial dataset.[/] Built by "
+        "hand from Wikipedia, MIT-licensed, with probable gaps before 2001. Spot-check "
+        "it against known index changes before an evidential run leans on it."
+    )
+    console.print(
+        "[dim]Most of these symbols have no bars yet. 'screener universe coverage' "
+        "measures the gap; EODHD is what fills it.[/]"
+    )
 
 
 @diag_app.command("survivorship")

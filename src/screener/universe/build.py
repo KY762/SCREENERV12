@@ -145,11 +145,29 @@ def build_universe(
 def universe_members(
     session: Session, name: str, on_date: date
 ) -> list[str]:
-    """Tickers eligible on a specific date. This is what a backtest must call."""
+    """Tickers eligible on a specific date. This is what a backtest must call.
+
+    Resolved AS OF the date: the membership recorded on `on_date` if there is
+    one, otherwise the most recent before it. A universe built here stores a
+    row per trading day and always hits the first case. An index membership
+    list stores a row only on the days membership CHANGED, and resolving it
+    by exact date would report an empty universe on every other day.
+
+    Never looks forward. A date before the first recorded membership returns
+    nothing, which is correct: the universe was not defined yet.
+    """
+    effective = session.scalar(
+        select(UniverseSnapshot.date)
+        .where(UniverseSnapshot.name == name, UniverseSnapshot.date <= on_date)
+        .order_by(UniverseSnapshot.date.desc())
+        .limit(1)
+    )
+    if effective is None:
+        return []
     rows = session.execute(
         select(Symbol.ticker)
         .join(UniverseSnapshot, UniverseSnapshot.symbol_id == Symbol.id)
-        .where(UniverseSnapshot.name == name, UniverseSnapshot.date == on_date)
+        .where(UniverseSnapshot.name == name, UniverseSnapshot.date == effective)
         .order_by(Symbol.ticker)
     ).all()
     return [r[0] for r in rows]
