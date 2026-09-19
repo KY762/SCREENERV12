@@ -1,9 +1,9 @@
 # Development-split battery — development
 
-**Generated:** 2026-09-18 18:17 Eastern Daylight Time
+**Generated:** 2026-09-18 23:40 Eastern Daylight Time
 **Window:** 2010-01-01 → 2015-12-31
 **Symbols:** 307  
-**Configurations tested:** 188
+**Configurations tested:** 180
 
 Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md §0.4). Nothing here confirms a hypothesis; it can only rule things out and suggest what to confirm elsewhere.
 
@@ -11,9 +11,10 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 
 | Experiment | Kind | Configs | Shape | Best expectancy | vs random (same days) | vs random (any day) | Selected |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `h1_exits` | parameter | 20 | **plateau** | +0.194R | 89th | 94th | `hold=10`, `stop_atr=2.5` |
-| `h1_no_stop` | structural | 4 | **plateau** | +0.298R | 66th | 64th | `hold=10` |
+| `h1_exits` | parameter | 10 | **plateau** | +0.194R | 89th | 94th | `hold=10`, `stop_atr=2.0` |
+| `h1_no_stop` | structural | 3 | **plateau** | +0.298R | 66th | 64th | `hold=20` |
 | `h1_selection` | parameter | 12 | **plateau** | +0.146R | 97th | 95th | `rs_lookback=126`, `top_pct=0.2` |
+| `h1_entry_delay` | structural | 3 | **plateau** | +0.069R | 79th | 82nd | `entry_delay=1` |
 | `h1_trend_filter` | structural | 2 | **indistinct** | +0.073R | 89th | 89th | — |
 | `h2_exits` | parameter | 20 | **none** | -0.052R | 55th | 61st | — |
 | `h2_no_stop` | structural | 4 | **spike** | +0.457R | 61st | 69th | — |
@@ -21,7 +22,7 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 | `h3_exits` | parameter | 20 | **none** | -0.048R | 15th ⚠ below random | 30th ⚠ below random | — |
 | `h3_no_stop` | structural | 4 | **spike** | +0.033R | 3rd ⚠ below random | 3rd ⚠ below random | — |
 | `h3_lookback` | structural | 4 | **none** | -0.009R | 2nd ⚠ below random | 15th ⚠ below random | — |
-| `h1_exit_isolated` | structural | 2 | **separated** | +0.088R | 85th | 80th | `use_stop=False` |
+| `h1_exit_isolated` | structural | 2 | **indistinct** | +0.205R | 94th | 92nd | — |
 | `h2_exit_isolated` | structural | 2 | **indistinct** | +0.150R | 57th | 23rd ⚠ below random | — |
 | `h3_exit_isolated` | structural | 2 | **indistinct** | +0.265R | 8th ⚠ below random | 13th ⚠ below random | — |
 | `h4_exit_isolated` | structural | 2 | **indistinct** | +0.294R | 40th ⚠ below random | 11th ⚠ below random | — |
@@ -43,7 +44,7 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 
 **Question:** Is there any hold horizon and stop width at which momentum rotation is profitable?
 
-**Verdict — PLATEAU:** 7 of 12 positive cells sit inside a positive neighbourhood. Selected the plateau centre (hold=10, stop_atr=2.5, +0.067R) rather than the peak (hold=20, stop_atr=1.0, +0.194R) -- the peak's margin over its neighbours is the part least likely to survive.
+**Verdict — PLATEAU:** 10 of 10 positive cells sit inside a positive neighbourhood. Selected the plateau centre (hold=10, stop_atr=2.0, +0.055R) rather than the peak (hold=20, stop_atr=1.0, +0.194R) -- the peak's margin over its neighbours is the part least likely to survive.
 
 | hold | stop_atr | Trades | Win% | Expectancy | vs random (same days) | vs random (any day) | PF | MaxDD | Return | Exits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -57,10 +58,6 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 | 10 | 2.0 | 556 | 49% | +0.055R | 92nd | 93rd | 1.15 | 31.5% | +42.1% | time 369, stop 161, stop_gap 26 |
 | 10 | 1.5 | 510 | 42% | +0.053R | 86th | 89th | 1.15 | 39.0% | +34.9% | time 271, stop 205, stop_gap 34 |
 | 10 | 3.0 | 568 | 52% | +0.038R | 91st | 93rd | 1.13 | 21.9% | +25.2% | time 463, stop 89, stop_gap 16 |
-| 5 | 3.0 | 1141 | 50% | +0.002R | 64th | 69th | 1.07 | 25.6% | +16.7% | time 1052, stop 77, stop_gap 12 |
-| 5 | 2.5 | 1139 | 50% | +0.002R | 68th | 71st | 1.06 | 30.4% | +16.4% | time 997, stop 120, stop_gap 22 |
-
-*8 further configuration(s) omitted from this table; all are present in the JSON.*
 
 ## `h1_no_stop` — H1
 
@@ -68,14 +65,13 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 
 **Held fixed:** `use_stop=False`
 
-**Verdict — PLATEAU:** 4 of 4 positive cells sit inside a positive neighbourhood. Selected the plateau centre (hold=10, +0.005R) rather than the peak (hold=40, +0.298R) -- the peak's margin over its neighbours is the part least likely to survive.
+**Verdict — PLATEAU:** 3 of 3 positive cells sit inside a positive neighbourhood. Selected the plateau centre (hold=20, +0.122R) rather than the peak (hold=40, +0.298R) -- the peak's margin over its neighbours is the part least likely to survive.
 
 | hold | Trades | Win% | Expectancy | vs random (same days) | vs random (any day) | PF | MaxDD | Return | Exits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 40 | 129 | 46% | +0.298R | 66th | 64th | 1.33 | 27.1% | +36.4% | time 129 |
 | 20 | 273 | 58% | +0.122R | 77th | 65th | 1.17 | 29.2% | +34.0% | time 273 |
 | 10 | 555 | 53% | +0.005R | 91st | 88th | 1.09 | 33.2% | +25.7% | time 555 |
-| 5 | 1112 | 50% | +0.001R | 70th | 66th | 1.06 | 39.2% | +20.3% | time 1112 |
 
 ## `h1_selection` — H1
 
@@ -99,6 +95,20 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 | 126 | 0.05 | 204 | 50% | -0.053R | 81st | 76th | 0.94 | 22.9% | -6.2% | time 131, stop 58, stop_gap 15 |
 | 21 | 0.1 | 278 | 49% | -0.064R | 30th ⚠ below random | 36th ⚠ below random | 0.90 | 29.1% | -11.3% | time 187, stop 77, stop_gap 14 |
 | 21 | 0.2 | 305 | 48% | -0.066R | 22nd ⚠ below random | 33rd ⚠ below random | 0.90 | 30.7% | -11.5% | time 201, stop 86, stop_gap 18 |
+
+## `h1_entry_delay` — H1
+
+**Question:** Does waiting after the ranking help? Momentum's return is reported absent in the weeks after ranking (Jegadeesh & Titman 1993). Delayed names are re-checked at the last close before the buy and dropped if they no longer rank or trend, so this measures waiting AND re-selection together.
+
+**Held fixed:** `hold=20`, `stop_atr=3.0`
+
+**Verdict — PLATEAU:** 1 of 2 positive cells sit inside a positive neighbourhood. Selected the plateau centre (entry_delay=1, +0.069R) rather than the peak (entry_delay=1, +0.069R) -- the peak's margin over its neighbours is the part least likely to survive.
+
+| entry_delay | Trades | Win% | Expectancy | vs random (same days) | vs random (any day) | PF | MaxDD | Return | Exits |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 278 | 53% | +0.069R | 79th | 82nd | 1.22 | 14.9% | +27.2% | time 187, stop 81, stop_gap 10 |
+| 3 | 256 | 49% | +0.023R | 70th | 69th | 1.05 | 15.4% | +5.7% | time 164, stop 81, stop_gap 11 |
+| 6 | 243 | 50% | -0.023R | 9th ⚠ below random | 17th ⚠ below random | 0.95 | 20.2% | -5.5% | time 157, stop 74, stop_gap 12 |
 
 ## `h1_trend_filter` — H1
 
@@ -225,14 +235,14 @@ Development-split results carry **no evidential weight** (docs/03-HYPOTHESES.md 
 
 **Held fixed:** `equity=5000000.0`, `max_open_risk_pct=0.6`, `max_position_pct=0.002`, `max_positions=400`, `r_multiple=0.0`, `risk_pct_per_trade=0.0005`, `time_limit=20`
 
-**Verdict — SEPARATED:** use_stop=False at +0.088R versus use_stop=True at -0.011R, a gap of +0.099R at 2.9 standard errors (paired over 705 shared signals, month-clustered), and the winning arm beats random selection on its own entry dates at the 85th percentile. Development split: a question worth pre-registering, not a settled result.
+**Verdict — INDISTINCT:** use_stop=False at +0.205R versus use_stop=True at +0.107R, a gap of +0.097R, but that gap is 0.8 standard errors on mean per-trade return (paired over 453 shared signals, month-clustered) -- under the 2 required.
 
-**Isolation held:** arms differ by 11.8% in trade count (760 vs 862), so both took substantially the same signals and the difference is the exit rule.
+**Isolation held:** arms differ by 0.2% in trade count (453 vs 454), so both took substantially the same signals and the difference is the exit rule.
 
 | use_stop | Trades | Win% | Expectancy | vs random (same days) | vs random (any day) | PF | MaxDD | Return | Exits |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| False | 760 | 54% | +0.088R | 85th | 80th | 1.33 | 1.1% | +1.7% | time 760 |
-| True | 862 | 41% | -0.011R | 34th ⚠ below random | 37th ⚠ below random | 1.11 | 1.1% | +0.7% | time 413, stop 378, stop_gap 71 |
+| False | 453 | 57% | +0.205R | 94th | 92nd | 1.40 | 0.6% | +1.3% | time 453 |
+| True | 454 | 44% | +0.107R | 85th | 88th | 1.31 | 0.4% | +0.9% | time 221, stop 214, stop_gap 19 |
 
 ## `h2_exit_isolated` — H2
 

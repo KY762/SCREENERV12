@@ -89,8 +89,17 @@ percentile but is non-monotonic across adjacent thresholds (85.7 → 26.0 → 88
 it), while `drift_exits` and `entry_delay` sit below random. **H5's holding
 period is 21 days, monthly** (operator decision,
 2026-09-11), matching its own `monthly_rebalance` flag and the horizon the
-momentum literature studies. Resolved in `HOLD_DEFAULTS`, not shared with H1,
-which rotates on 5.
+momentum literature studies. Resolved in `HOLD_DEFAULTS`, not shared with H1.
+
+**H1 is a swing rotation since 2026-09-18** (operator decision, docs/03 §H1
+amendment): hold ∈ {10, 20}, default 20 (was 5), with an optional
+`entry_delay` that re-checks the ranking and trend at the last close before
+the buy. Both changes were made after seeing development results, and the
+3/5-day runs already logged remain counted. `h1_entry_delay` tests delays
+{1, 3, 6}; with the re-check it measures waiting and re-selection together.
+Because `h1_exit_isolated` takes H1's default hold as its rebalance interval,
+its 2.9 SE result (measured at the old 5) has to be re-measured rather than
+carried over.
 
 **Survivorship is measured, and it is asymmetric.** `screener universe
 coverage` on 2026-08-26 against Tiingo: acquisitions **6/6 present**, failures
@@ -237,11 +246,36 @@ edge comes from the 2013–14 bull market, and it trailed SPY (+52.9% vs
 +81.2%). Its value is that the configuration is now fixed before any further
 decision about regimes, coverage, or holds can reshape it.
 
-## The stop-design finding, with the right test: H1 at ~3 SE, H5 short
+## H1 as a swing rotation: the delay hurts and the stop finding does not survive
 
-**2026-09-17. Supersedes everything above about exit design, including an
-earlier version of this section that said the finding was 1 SE.** That figure
-came from the wrong test and is recorded here so nobody re-derives it.
+**2026-09-18, battery after the H1 amendment (hold default 20, delay added).
+Supersedes the H1 figure in the next section.**
+
+- **Entry delay, with the buy-day re-check:** delay 1 gives +0.069R (79th
+  percentile same-day), delay 3 **+0.023R (70th)**, delay 6 **−0.023R (9th)**.
+  Waiting makes H1 worse at every step, and the plateau rule selects no delay.
+  The Jegadeesh & Titman skip-a-week motivation doesn't carry over to this
+  rule. (The experiment measures waiting plus re-selection; the data can't
+  separate them.)
+- **The no-stop advantage was a property of the 5-day rotation.** Measured
+  when H1 re-ranked every 5 sessions and held 20, it was 2.9 SE paired. With
+  re-ranking every 20 sessions (the new default), no-stop still leads, +0.205R
+  vs +0.107R, but by **0.8 SE** over 453 pairs. No exit comparison in the
+  battery now clears 2 SE.
+- **Narrowing the hold grid moved the plateau centre**, as recorded in the
+  amendment: from hold 10 / 2.5 ATR on the 4 × 5 grid to **hold 10 / 2.0 ATR on
+  the 2 × 5 grid, which fails the profit-factor bar** (1.154 against 1.20).
+  `h1_no_stop` now selects hold 20, which also fails it (1.17).
+  `preregistrations/H1.md` keeps the configuration chosen before the change.
+
+Taken together, H1 under the operator's swing definition has no rule-selected
+configuration that clears every pre-registered criterion on development.
+
+## The stop-design finding, with the right test (as measured on the 5-day rotation)
+
+**2026-09-17. Superseded for H1 by the section above,** which re-measures it
+under the 20-day default. Kept because it records why the unpaired "1 SE"
+figure was the wrong test.
 
 The exit-isolated arms take the same signals and differ only in the exit, so
 the question is whether each no-stop trade beat ITS OWN stop twin — same stock,
