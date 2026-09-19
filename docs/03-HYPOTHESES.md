@@ -120,15 +120,35 @@ Fixed before any test. Advancement requires **all**:
 
 | Criterion | Threshold |
 | --- | --- |
-| Trade count | ≥ 200 |
+| Trade count | ≥ 200 **effective** observations (trades ÷ design effect) |
 | Expectancy after costs | > 0 |
 | Profit factor | > 1.20 |
-| vs. random benchmark | > 75th percentile of 1,000-iteration distribution |
+| vs. random benchmark | one-sided **p ≤ 0.05 family-wise**, Holm-corrected, against random names bought on the **same days** |
 | Max drawdown | < 25% |
-| Regime robustness | Positive in ≥ 3 of 5 buckets; none worse than −15% |
+| Regime robustness | **Beat random in ≥ 2 of the split's 3 buckets**; none worse than −15% |
 | **Parameter stability** | See §0.7 — replaces the previous ±20% rule |
 
 Failing a criterion rejects or revises the hypothesis. **Thresholds do not move.**
+
+> **Amendment, 2026-09-19 (operator decision).** Three criteria were rewritten, before any
+> validation or test run existed, so that each measures whether the rule PICKS well rather than a
+> mix of picking, market direction and timing. The previous wording is kept here because what was
+> changed, and when, is part of the record.
+>
+> | Was | Now | Why |
+> | --- | --- | --- |
+> | Trade count ≥ 200 | ≥ 200 **effective** | Positions held at the same time in correlated names are not independent observations. Measured design effects run 1.1–1.6, so 200 raw trades can carry ~150 independent ones. |
+> | vs. random > 75th percentile, any day | one-sided p ≤ 0.05 family-wise (Holm), same days | The 75th percentile passes a rule with no skill one time in four, and seven hypotheses × 3 configurations is 21 tries at it. The any-day benchmark also let a strategy be charged, or credited, for **when** it traded: `h4_exit_isolated` moved from the 11th percentile to the 40th once the benchmark had to trade on the same dates. |
+> | Positive in ≥ 3 of 5 buckets | Beat random in ≥ 2 of the split's 3 buckets | No split contains 5 buckets, so "≥ 3 positive" ran as "all 3". On validation that asked a long-only rule to finish positive through the 2018-Q4 correction — a test of market direction, not of selection. |
+>
+> **Holm's family is the registered validation tests, and it must be closed before the first one
+> runs.** Signing another pre-registration afterwards would change the bar tests already run were
+> held to. `screener prereg family` reports the family and the verdict; a single run is held to
+> Holm's first and strictest step, 5% ÷ m.
+>
+> The same "beat random" standard now governs which configurations §0.7's plateau rule may select.
+> It had been selecting configurations that lose to a coin toss: `h7_no_stop` at the 26th
+> percentile, `h6_drift_exits` at the 34th.
 
 ### 0.7 Parameter methodology — the core of revision 2
 

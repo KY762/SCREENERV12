@@ -788,6 +788,91 @@ def prereg_show() -> None:
                     )
 
 
+@prereg_app.command("family")
+def prereg_family(
+    split: str = typer.Option("validation", "--split"),
+) -> None:
+    """The family a Holm correction runs over, and its verdict so far.
+
+    Every signed registration's configurations on this split are one family.
+    A run is held to Holm's first step (5% / m) as it happens; the final
+    verdict needs all of them, and is what this prints.
+
+    The family must be CLOSED before the first run on the split. Signing
+    another registration afterwards changes the bar that earlier runs were
+    held to, which is why the count is shown against what has already been
+    spent.
+    """
+    from .backtest.budget import config_hash
+    from .backtest.performance import FAMILY_WISE_ALPHA, holm
+    from .backtest.preregistration import load
+    from .backtest.splits import get_split
+    from .db.models import ResearchRun
+
+    chosen = get_split(split)
+    if not chosen.carries_evidence:
+        console.print(f"[yellow]{chosen.name} carries no evidential weight; "
+                      "no family, no correction.[/]")
+        return
+
+    try:
+        registry = load()
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    members = registry.family(chosen)
+    if not members:
+        console.print(f"[yellow]No signed pre-registration names a {chosen.name} "
+                      "configuration. The family is empty and nothing may run.[/]")
+        return
+
+    with session_scope() as session:
+        rows = {
+            r.config_hash: r
+            for r in session.scalars(
+                select(ResearchRun).where(ResearchRun.split == chosen.name)
+            )
+        }
+
+    m = len(members)
+    console.print(
+        f"[bold]{m}[/] registered test(s) on {chosen.name}. Family-wise "
+        f"{FAMILY_WISE_ALPHA:.0%}; first Holm step is p <= {FAMILY_WISE_ALPHA / m:.4g}."
+    )
+
+    p_values, labels = {}, {}
+    table = Table(title=f"Holm family -- {chosen.name}")
+    for col in ("Hypothesis", "Configuration", "Run", "same-day p"):
+        table.add_column(col, justify="left" if col != "same-day p" else "right")
+    for hypothesis, config in members:
+        digest = config_hash(config)
+        row = rows.get(digest)
+        key = f"{hypothesis}:{digest[:8]}"
+        labels[key] = hypothesis
+        shown = {k: v for k, v in config.items() if v is not None and k != "hypothesis"}
+        if row is not None and row.same_day_p is not None:
+            p_values[key] = row.same_day_p
+        table.add_row(
+            hypothesis.upper(), f"[dim]{shown}[/]",
+            "[red]not run[/]" if row is None else str(row.run_at.date()),
+            "--" if row is None or row.same_day_p is None else f"{row.same_day_p:.4f}",
+        )
+    console.print(table)
+
+    if len(p_values) < m:
+        console.print(
+            f"[yellow]{m - len(p_values)} of {m} not yet run.[/] Holm's verdict needs "
+            "every member; until then each run stands on the first step alone."
+        )
+        return
+
+    verdict = holm(p_values, FAMILY_WISE_ALPHA)
+    for key, passed in sorted(verdict.items(), key=lambda kv: p_values[kv[0]]):
+        mark = "[green]passes[/]" if passed else "[red]does not pass[/]"
+        console.print(f"  {labels[key].upper()} p={p_values[key]:.4f} {mark}")
+
+
 research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
 app.add_typer(research_app, name="research")
 

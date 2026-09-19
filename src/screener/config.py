@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     polygon_api_key: SecretStr | None = None
     polygon_base_url: str = "https://api.polygon.io"
 
+    # EODHD. Chosen 2026-09-19 as the delisted fix actually bought, because
+    # Polygon prices history by depth and its $29 plan reaches only ~2021 --
+    # past the 2010-2015 development split entirely. EODHD's "EOD Historical
+    # Data - All World" is $19.99/month with US history mostly from 2000,
+    # delisted included. Bought for one month: pull, store, cancel.
+    eodhd_api_key: SecretStr | None = None
+    eodhd_base_url: str = "https://eodhd.com"
+
     # --- other providers ----------------------------------------------------
     fred_api_key: SecretStr | None = None
     sec_user_agent: str = Field(
@@ -73,6 +81,10 @@ class Settings(BaseSettings):
     @property
     def has_tiingo_credentials(self) -> bool:
         return bool(self.tiingo_api_key)
+
+    @property
+    def has_eodhd(self) -> bool:
+        return bool(self.eodhd_api_key)
 
     @property
     def has_polygon_credentials(self) -> bool:
