@@ -54,6 +54,7 @@ def load_bars(
     *,
     adjusted: bool = True,
     splits: list[Split] | None = None,
+    splits_until: date | None = None,
 ) -> pd.DataFrame:
     """A symbol's full history, split-adjusted, indexed by date.
 
@@ -68,6 +69,21 @@ def load_bars(
     Passing `adjusted=False` returns the stored bytes, for the things that
     genuinely want them -- verifying against a vendor, showing a price someone
     can look up. Nothing that computes a return should.
+
+    `splits_until` is a no-lookahead guard, and it is not optional for a
+    backtest. Back-adjustment scales PAST prices by FUTURE splits, which is the
+    shape of a lookahead violation. It is harmless for returns -- a split
+    outside the window multiplies every bar in it by one constant, which
+    cancels in every ratio the engine reads -- but it is NOT harmless for share
+    counts. NBR's 1-for-50 reverse split in 2020 lifts its 2012 bars from about
+    $20 to about $1,018, and at $10,000 of equity the risk budget then buys
+    zero whole shares, so a 2012 trade disappears because of something that
+    happened in 2020. Found 2026-09-20 by
+    `test_a_split_after_the_window_does_not_move_earlier_trades`, which went
+    from 68 trades to none.
+
+    Pass the last date the run is allowed to see and splits after it are
+    dropped.
 
     `splits` lets a bulk caller pass pre-loaded actions rather than making this
     query once per symbol. Omit it and they are fetched here.
@@ -92,6 +108,8 @@ def load_bars(
     if splits is None:
         from ..ingest.actions import load_splits
         splits = load_splits(session, symbol_id)
+    if splits_until is not None:
+        splits = [x for x in splits if x.ex_date <= splits_until]
     return adjust_bars(frame, splits)
 
 

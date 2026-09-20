@@ -245,7 +245,9 @@ class Outcome:
         return bool(self.criteria) and all(c.passed for c in self.criteria)
 
 
-def load_symbol_bars(session: Session, symbols: str | None) -> dict[str, pd.DataFrame]:
+def load_symbol_bars(
+    session: Session, symbols: str | None, *, splits_until: date | None = None
+) -> dict[str, pd.DataFrame]:
     """Every symbol's bars, minus the ones we know are the wrong company.
 
     The quarantine is applied HERE as well as in `universe_members`, because
@@ -257,6 +259,9 @@ def load_symbol_bars(session: Session, symbols: str | None) -> dict[str, pd.Data
 
     An explicitly named symbol is dropped too. A contaminated series is not
     more trustworthy for having been asked for by name.
+
+    `splits_until` must be the last date the run may see. Without it a split
+    years after the window changes trades inside it -- see `load_bars`.
     """
     stmt = select(Symbol).order_by(Symbol.ticker)
     if symbols:
@@ -277,7 +282,10 @@ def load_symbol_bars(session: Session, symbols: str | None) -> dict[str, pd.Data
     # thousand round trips for a table holding a few thousand rows.
     splits_by_symbol = load_splits_bulk(session)
     bars = {
-        ticker: load_bars(session, sid, splits=splits_by_symbol.get(sid, []))
+        ticker: load_bars(
+            session, sid,
+            splits=splits_by_symbol.get(sid, []), splits_until=splits_until,
+        )
         for sid, ticker in rows
         if ticker not in excluded
     }

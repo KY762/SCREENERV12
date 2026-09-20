@@ -1003,7 +1003,7 @@ def diagnose_survivorship(
     keys = [h.strip().lower() for h in hypotheses.split(",") if h.strip()]
 
     with session_scope() as session:
-        bars_by_symbol = load_symbol_bars(session, None)
+        bars_by_symbol = load_symbol_bars(session, None, splits_until=chosen.end)
         events = _load_events(session, bars_by_symbol) if "h6" in keys else None
 
     console.print(f"[dim]{chosen.describe()}[/]")
@@ -1103,7 +1103,7 @@ def diagnose_sample_size(
 
     chosen = get_split(split)
     with session_scope() as session:
-        bars_by_symbol = load_symbol_bars(session, None)
+        bars_by_symbol = load_symbol_bars(session, None, splits_until=chosen.end)
         events = _load_events(session, bars_by_symbol)
     console.print(f"[dim]{chosen.describe()}[/]")
 
@@ -1358,7 +1358,7 @@ def research_explore(
     console.print(f"[dim]{chosen.describe()}[/]")
 
     with session_scope() as session:
-        bars_by_symbol = load_symbol_bars(session, symbols)
+        bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
@@ -2833,7 +2833,7 @@ def backtest_run(
         # Via load_symbol_bars, not a copy of it: this was a hand-rolled
         # duplicate, so the quarantine added to that function did not apply to
         # the one command that spends validation and test budget.
-        bars_by_symbol = load_symbol_bars(session, symbols)
+        bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
 
         if not bars_by_symbol:
@@ -3078,7 +3078,7 @@ def backtest_surface(
 
     cells: list[Cell] = []
     with session_scope() as session:
-        bars_by_symbol = load_symbol_bars(session, symbols)
+        bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")

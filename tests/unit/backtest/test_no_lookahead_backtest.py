@@ -15,6 +15,7 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from screener.backtest.engine import CostModel, ExitRule, run_backtest
 from screener.backtest.strategies import (
@@ -22,6 +23,7 @@ from screener.backtest.strategies import (
     pattern_candidates,
     relative_strength_candidates,
 )
+from screener.calc.splits import Split, adjust_bars
 
 
 def synthetic(seed: int, n: int = 700, start: str = "2015-01-01") -> pd.DataFrame:
@@ -160,3 +162,57 @@ def test_a_delayed_and_rechecked_entry_is_unchanged_by_truncating_the_future():
     settled = comparable(all_trades, cutoff)
     assert settled
     assert settled == comparable(partial_trades, cutoff)
+
+
+# --- split adjustment, added 2026-09-20 -------------------------------------
+#
+# Back-adjustment scales PAST prices by FUTURE splits, which is the shape of a
+# lookahead violation. It is safe only because a split outside the window
+# multiplies every bar in the window by the same constant, and every quantity
+# the engine decides on is a ratio. These pin that, because the reasoning is
+# not obvious and the existing tests above contain no splits at all.
+
+
+def test_a_split_after_the_window_changes_trades_if_it_is_applied():
+    """Why `splits_until` exists, pinned as the failure it prevents.
+
+    Back-adjustment scales PAST prices by FUTURE splits. For returns that is
+    harmless: a split outside the window multiplies every bar in it by one
+    constant, which cancels in every ratio. For SHARE COUNTS it is not. A
+    1-for-50 reverse split lifts a $20 bar to $1,018, and at $10,000 of equity
+    the risk budget then buys no whole shares at all.
+
+    Measured when this was written: 68 settled trades became zero.
+    """
+    cutoff = date(2016, 6, 1)
+    full = universe()
+    lifted = {k: adjust_bars(v, [Split(date(2020, 1, 2), 0.02)]) for k, v in full.items()}
+
+    def settled(bars):
+        trades = _run(
+            bars,
+            relative_strength_candidates(bars, trend=TrendFilter(enabled=False), top_pct=0.5),
+            date(2030, 1, 1),
+        ).trades
+        return [t for t in trades if t.exit_date is not None and t.exit_date < cutoff]
+
+    assert settled(full), "the unscaled run should produce trades to lose"
+    assert not settled(lifted), (
+        "if this ever passes, the engine stopped sizing off absolute prices "
+        "and `splits_until` may no longer be load-bearing"
+    )
+
+
+def test_a_split_inside_the_window_is_what_the_adjustment_is_for():
+    """The counterpart. A split the window CONTAINS must change the series,
+    because leaving it raw is the defect: a 1-for-50 reverse split reads as a
+    +4,900% one-day return and the name tops every momentum ranking."""
+    full = universe()
+    inside = {k: adjust_bars(v, [Split(date(2016, 1, 4), 0.02)]) for k, v in full.items()}
+
+    before = full["SYM1"]["close"]
+    after = inside["SYM1"]["close"]
+    early = pd.Timestamp("2015-06-01")
+
+    assert after.loc[early] == pytest.approx(before.loc[early] * 50)
+    assert after.iloc[-1] == pytest.approx(before.iloc[-1])
