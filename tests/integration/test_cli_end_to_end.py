@@ -22,6 +22,8 @@ def cli_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file}")
     monkeypatch.setenv("ALPACA_API_KEY_ID", "test-key-id")
     monkeypatch.setenv("ALPACA_API_SECRET_KEY", "test-secret")
+    # Opt out of the real EODHD account -- see test_verify_cli.
+    monkeypatch.setenv("EODHD_API_KEY", "")
 
     from screener import config
     from screener.db import session as db_session

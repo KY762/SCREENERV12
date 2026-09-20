@@ -84,7 +84,13 @@ class Settings(BaseSettings):
 
     @property
     def has_eodhd(self) -> bool:
-        return bool(self.eodhd_api_key)
+        # An empty EODHD_API_KEY= line parses to SecretStr(""), which is not
+        # None and is truthy. Treating that as "configured" made `ingest
+        # --provider auto` choose EODHD with no key -- and made tests that set
+        # the variable empty to opt out reach the real paid API instead of
+        # their fake provider.
+        key = self.eodhd_api_key
+        return bool(key and key.get_secret_value().strip())
 
     @property
     def has_polygon_credentials(self) -> bool:

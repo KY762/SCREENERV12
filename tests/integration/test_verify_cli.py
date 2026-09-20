@@ -29,6 +29,11 @@ def cli_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file}")
     monkeypatch.setenv("ALPACA_API_KEY_ID", "k")
     monkeypatch.setenv("ALPACA_API_SECRET_KEY", "s")
+    # Opt out of the real EODHD account. Settings reads the developer's .env,
+    # and `--provider auto` prefers EODHD when a key is present -- so without
+    # this, a test that monkeypatches a fake provider reaches the live paid
+    # API instead and ingests real bars.
+    monkeypatch.setenv("EODHD_API_KEY", "")
 
     from screener import config
     from screener.db import session as db_session
