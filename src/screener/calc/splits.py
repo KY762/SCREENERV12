@@ -29,6 +29,12 @@ SHARE count at a past date is now reasoning about a notional one. That matters
 for `calc/tradeability.py`, whose whole question is how many whole shares
 $10,000 buys, and its answers for pre-split dates should be read as notional.
 
+The distortion is not always small. NBR did a 1-for-50 reverse split in 2020,
+so its 2010 bars back-adjust from about $20 to about **$1,018** -- arithmetically
+correct, and nothing a 2010 order could have paid. Any check with an absolute
+price threshold in it (a minimum price filter, a "too few shares" rule) will
+read a name like that wrongly, and should use raw prices via `adjusted=False`.
+
 Dividends are deliberately excluded. They are not a discontinuity in the price
 a backtest fills at, and adjusting a fill price for them would misstate the
 fill. This module fixes the break in the series, not total return.

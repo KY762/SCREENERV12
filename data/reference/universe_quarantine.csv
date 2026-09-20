@@ -17,6 +17,7 @@ JAVA,not_a_stock,JPMorgan Active Value ETF,2026-09-19,an index member's ticker n
 KG,too_illiquid_to_be_a_member,"Kestrel Group, Ltd.",2026-09-19,"traded a median $68,372 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
 NFX,not_a_stock,Corgi NFLX 2x Daily ETF,2026-09-19,an index member's ticker now refers to a ETF
 PARA,too_illiquid_to_be_a_member,"Banzai International, Inc.",2026-09-19,"traded a median $32 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+PBG,manual,PEPSI BOTTLING GROUP INC,2026-09-20,"PepsiCo closed its buyout of Pepsi Bottling Group in Feb 2010 at $36.50 a share. The stored series prices it at $192-$219 on 26,079 shares a day WHILE it was still in the index (Jan-Feb 2010), then decays to $1.97 by 2015. No splits are recorded, so this is not an adjustment artifact. At ~$5.2M a day it clears MIN_MEMBER_DOLLAR_VOLUME, so no rule catches it."
 PCL,not_a_stock,PGIM Corporate Bond 10+ Year ETF,2026-09-19,an index member's ticker now refers to a ETF
 RX,too_illiquid_to_be_a_member,Ims Health Inc,2026-09-19,"traded a median $0 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
 SHLD,not_a_stock,Global X Defense Tech ETF,2026-09-19,an index member's ticker now refers to a ETF
