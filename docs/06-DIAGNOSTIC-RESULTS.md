@@ -7,6 +7,15 @@ verified against Yahoo (ADR 0002)
 
 No P&L has been computed. Nothing here says any hypothesis makes money.
 
+> **Superseded on data grounds, 2026-09-19.** Every number below was computed
+> before two changes that move them: the EODHD load (S&P 500 coverage for
+> 2010-2019 went from 106 of 719 members to 687, and bars from 881,449 to
+> 3,726,042) and the quarantine of 24 symbols whose stored series is not the
+> company that was in the index. On H1's default configuration the quarantine
+> alone moved the same-day random percentile from the 73.1th to the 55.9th.
+> The reasoning here stands; the figures need re-measuring.
+
+
 ---
 
 ## 1. Indicator redundancy
