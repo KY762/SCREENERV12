@@ -1,42 +1,53 @@
-"""Find price series that keep trading after the company stopped existing.
+"""Ticker identity: is this series the company we think it is?
 
-`universe coverage` probes twelve hand-picked names. This checks every symbol
-in the database against the provider's own list of what is no longer listed,
-because the twelve were chosen when the problem was suspected, and the point
-now is to find the cases nobody thought to name.
+A backtest joins membership to prices by TICKER. Tickers get reused, and a
+vendor keys history to whoever holds the letters now, so a series can be a
+different company from the one that was in the index -- with no gap, no jump,
+and nothing that looks wrong.
 
-The failure it looks for, measured on EODHD on 2026-09-19:
+Measured on this database, 2026-09-19, after loading EODHD:
 
-    FRC    ends 2023-05-02   correct, First Republic failed that week
-    SIVB   ends 2023-03-09   correct
-    BBBY   runs to 2026-09   WRONG, bankrupt in 2023
-    SBNY   runs to 2026-09   WRONG, Signature Bank failed in 2023
+    BBBY   2009-2026 continuous, and the 2013-2015 prices are OVERSTOCK's
+           ($26, $15, $21) not Bed Bath & Beyond's ($60-80). Overstock
+           renamed itself Bed Bath & Beyond Inc. and took the ticker.
+    BBT    2009-2026 continuous, though BB&T merged into Truist in 2019
+    CPWR   2009-2026 continuous, though Compuware went private in 2014
+    EMC    starts 2023-05, so EMC Corp's own history (to its 2016 Dell
+           acquisition) is absent
+    BEAM   starts 2020-02: Beam Therapeutics, not the Beam Inc. that Suntory
+           bought in 2014
 
-A dead company whose series continues is either a reused ticker -- a different
-company now trading under those letters -- or a stale feed. Either way the
-bars after the death are another company's, or nobody's, and a backtest that
-holds "SBNY" through 2024 is holding something that did not exist.
+Two failure modes, and they are not equally dangerous:
 
-This is worse than absence. A missing company is a gap that can be counted; a
-company that quietly becomes a different one is a wrong number that looks
-like a right one, and it survives every check that only asks whether data is
-present.
+    ABSENT      the old company's history is missing and the series starts
+                after it died. A backtest finds no data and the name drops
+                out -- a gap, which can be counted.
+    OVERWRITTEN a continuous series spanning two companies. Nothing looks
+                wrong. This is the one that puts a false number in a result.
 
-The test is deliberately crude: delisted, yet still printing bars near the end
-of the window. It cannot tell a reused ticker from a stale feed, and it does
-not need to -- both make the tail unusable.
+What this module does NOT do is decide which. Telling a reused ticker from a
+company that merely shrank out of the index needs to know whether the original
+company still exists, which is not in the price data. AAP, ANF and CLF all
+left the index and still trade as themselves; EMC and BBT did not. So this
+reports EVIDENCE and leaves the judgement with a person.
+
+The real fix is to stop keying on tickers. A security identifier that survives
+a rename -- ISIN, CUSIP, FIGI -- identifies the company rather than the
+letters, and EODHD carries ISIN in its reference data. Recorded as an open
+item rather than built here.
+
+An earlier version of this module flagged "delisted, yet still quoting" as
+contamination. It was wrong twice over: SBNY's shares really did keep trading
+at fractions of a cent after the bank failed, which is a correct record, and
+EODHD's delisted list also names live companies. Both were reported as
+suspect. A check that cries wolf teaches the reader to skip the report.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, timedelta
-
-# A delisted name whose last bar is within this of the data's end is still
-# being printed. Generous on purpose: a company that delisted years ago and
-# stops months before the end is a real, correctly truncated series.
-RECENT_DAYS = 45
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -50,42 +61,50 @@ class Series:
 
 
 @dataclass(frozen=True)
-class Suspect:
+class IdentityRisk:
+    """A ticker whose series may not be one company throughout."""
+
     symbol: str
+    left_universe: date
+    first_bar: date
     last_bar: date
-    bars_after_delisting: int | None
-    reason: str
+    mode: str          # "absent" | "overwritten"
+    detail: str
 
 
-def find_suspects(
+def identity_risks(
     series: Iterable[Series],
-    delisted: set[str],
+    left_universe: dict[str, date],
     *,
-    as_of: date,
-    recent_days: int = RECENT_DAYS,
-) -> list[Suspect]:
-    """Series the provider calls delisted but is still quoting.
+    data_ends: date,
+    still_trading_within_days: int = 45,
+) -> list[IdentityRisk]:
+    """Tickers that left the universe long ago yet still quote today.
 
-    `as_of` is the last date the data covers, not today: a database loaded
-    last month should not report every symbol as stale.
+    `left_universe` is the last date each ticker was a member. A ticker that
+    left and still trades is either the same company outside the index -- the
+    common, innocent case -- or different letters' worth of company. Both are
+    reported, with the evidence that separates them: whether the series covers
+    the membership era.
     """
-    cutoff = as_of - timedelta(days=recent_days)
-    out = [
-        Suspect(
-            symbol=s.symbol,
-            last_bar=s.last_bar,
-            bars_after_delisting=None,
-            reason=(
-                f"listed as delisted, yet quoting to {s.last_bar} "
-                f"({(as_of - s.last_bar).days} day(s) from the end of the data)"
-            ),
-        )
-        for s in series
-        if s.symbol in delisted and s.last_bar >= cutoff
-    ]
-    return sorted(out, key=lambda s: s.symbol)
-
-
-def coverage_gap(wanted: Iterable[str], have: Iterable[str]) -> list[str]:
-    """Symbols the universe needs and the database does not hold."""
-    return sorted(set(wanted) - set(have))
+    by_symbol = {s.symbol: s for s in series}
+    out: list[IdentityRisk] = []
+    for symbol, left in sorted(left_universe.items()):
+        s = by_symbol.get(symbol)
+        if s is None:
+            continue
+        if (data_ends - s.last_bar).days > still_trading_within_days:
+            continue                       # stopped trading; nothing to confuse
+        if s.first_bar > left:
+            out.append(IdentityRisk(
+                symbol, left, s.first_bar, s.last_bar, "absent",
+                f"series starts {s.first_bar}, after this ticker left the universe "
+                f"on {left} -- the earlier company's history is missing",
+            ))
+        else:
+            out.append(IdentityRisk(
+                symbol, left, s.first_bar, s.last_bar, "overwritten",
+                f"continuous {s.first_bar} to {s.last_bar}, spanning a membership "
+                f"that ended {left} -- one series, possibly two companies",
+            ))
+    return out

@@ -626,46 +626,30 @@ def universe_sp500(
     )
 
 
-@diag_app.command("stale-series")
-def diagnose_stale_series(
-    universe_name: str | None = typer.Option(
-        "sp500_pit", "--universe",
-        help="Also report which of this universe's members have no bars.",
-    ),
-    recent_days: int = typer.Option(45, "--recent-days"),
+@diag_app.command("identity")
+def diagnose_identity(
+    universe_name: str = typer.Option("sp500_pit", "--universe"),
+    within_days: int = typer.Option(45, "--within-days"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Find price series that keep trading after the company stopped existing.
+    """Is each price series the company we think it is?
 
-    Checks every symbol in the database against the provider's own list of
-    what is no longer listed. A dead company whose series continues is either
-    a reused ticker or a stale feed; either way the bars after the death
-    belong to another company, or to nobody.
+    A backtest joins membership to prices by TICKER, and tickers get reused.
+    The vendor keys history to whoever holds the letters now, so a series can
+    belong to a different company than the one that was in the index -- with
+    no gap, and nothing that looks wrong.
 
-    That is worse than a missing company. A gap can be counted. A series that
-    quietly becomes a different company is a wrong number that looks like a
-    right one, and it passes every check that only asks whether data exists.
+    Confirmed here on 2026-09-19: BBBY's stored 2013-2015 prices are
+    OVERSTOCK's, because Overstock renamed itself Bed Bath & Beyond Inc. and
+    took the ticker.
+
+    Reports evidence, not verdicts. Telling a reused ticker from a company
+    that merely shrank out of the index needs to know whether the original
+    company still exists, and that is not in the price data.
     """
     _configure_logging(verbose)
-    from .db.models import UniverseSnapshot
-    from .diagnostics.stale_series import Series, coverage_gap, find_suspects
-    from .providers.base import ProviderError
-    from .providers.eodhd import EodhdProvider
-    from .universe.build import universe_members
-
-    settings = get_settings()
-    if not settings.has_eodhd:
-        console.print("[red]EODHD_API_KEY is not set.[/] This check needs a provider "
-                      "that can say what is no longer listed.")
-        raise typer.Exit(code=1)
-
-    try:
-        with EodhdProvider(settings) as provider:
-            delisted = {d.symbol for d in provider.list_delisted()}
-    except ProviderError as exc:
-        console.print(f"[red]{exc}[/]")
-        raise typer.Exit(code=1) from exc
-    console.print(f"[dim]{len(delisted):,} symbol(s) listed as delisted by EODHD.[/]")
+    from .db.models import PriceDaily, UniverseSnapshot
+    from .diagnostics.stale_series import Series, identity_risks
 
     with session_scope() as session:
         rows = session.execute(
@@ -679,50 +663,69 @@ def diagnose_stale_series(
             .group_by(Symbol.ticker)
         ).all()
         series = [Series(t, first, last, bars) for t, first, last, bars in rows]
-        as_of = max((s.last_bar for s in series), default=date.today())
 
-        missing: list[str] = []
-        if universe_name:
-            wanted = {
-                t
-                for snapshot_date in session.scalars(
-                    select(UniverseSnapshot.date)
-                    .where(UniverseSnapshot.name == universe_name)
-                    .distinct()
-                )
-                for t in universe_members(session, universe_name, snapshot_date)
-            }
-            missing = coverage_gap(wanted, [s.symbol for s in series])
+        members = session.execute(
+            select(Symbol.ticker, func.max(UniverseSnapshot.date))
+            .join(UniverseSnapshot, UniverseSnapshot.symbol_id == Symbol.id)
+            .where(UniverseSnapshot.name == universe_name)
+            .group_by(Symbol.ticker)
+        ).all()
+        current = session.scalar(
+            select(func.max(UniverseSnapshot.date))
+            .where(UniverseSnapshot.name == universe_name)
+        )
+        # A ticker still in the latest membership has not left, so it is not a
+        # candidate: the question is only about tickers that stopped being one
+        # company and may since have become another.
+        left = {t: d for t, d in members if current is None or d < current}
 
-    suspects = find_suspects(series, delisted, as_of=as_of, recent_days=recent_days)
+    if not series:
+        console.print("[yellow]No price data.[/]")
+        return
+
+    data_ends = max(s.last_bar for s in series)
+    risks = identity_risks(
+        series, left, data_ends=data_ends, still_trading_within_days=within_days
+    )
+    absent = [r for r in risks if r.mode == "absent"]
+    overwritten = [r for r in risks if r.mode == "overwritten"]
 
     console.print(
-        f"[bold]{len(series):,}[/] symbol(s) with bars, data ending {as_of}."
+        f"[bold]{len(series):,}[/] symbol(s) with bars, data ending {data_ends}. "
+        f"{len(left):,} ticker(s) left {universe_name} at some point."
     )
-    if not suspects:
-        console.print("[green]No delisted symbol is still quoting.[/]")
-    else:
-        table = Table(title="Delisted, yet still quoting -- the tail is not this company's")
-        for col in ("Symbol", "Last bar", "Days from end of data"):
-            table.add_column(col, justify="left" if col == "Symbol" else "right")
-        for s in suspects:
-            table.add_row(s.symbol, str(s.last_bar), str((as_of - s.last_bar).days))
-        console.print(table)
-        console.print(
-            f"[yellow]{len(suspects)} series cannot be trusted after the delisting "
-            "date.[/] A backtest holding one of these is holding a company that no "
-            "longer existed, or a different one wearing its ticker."
-        )
 
-    if universe_name:
-        if missing:
-            console.print(
-                f"\n[yellow]{len(missing):,}[/] member(s) of {universe_name} have no "
-                f"bars at all: {', '.join(missing[:20])}"
-                + (" ..." if len(missing) > 20 else "")
-            )
-        else:
-            console.print(f"\n[green]Every member of {universe_name} has bars.[/]")
+    console.print("")
+    console.print(
+        f"[yellow]{len(absent)}[/] with the earlier company's history ABSENT: the "
+        "series starts after that ticker left, so a backtest of the earlier period "
+        "finds nothing. A gap, and countable."
+    )
+    for r in absent[:12]:
+        console.print(f"   {r.symbol:6} left {r.left_universe}, series starts {r.first_bar}")
+    if len(absent) > 12:
+        console.print(f"   ... and {len(absent) - 12} more")
+
+    console.print("")
+    console.print(
+        f"[red]{len(overwritten)}[/] with a CONTINUOUS series spanning a membership "
+        "that ended: one series, possibly two companies. Nothing about these looks "
+        "wrong, which is what makes them dangerous. Most are innocent -- a company "
+        "that shrank out of the index still trades as itself."
+    )
+    for r in overwritten[:12]:
+        console.print(
+            f"   {r.symbol:6} left {r.left_universe}, series {r.first_bar} to {r.last_bar}"
+        )
+    if len(overwritten) > 12:
+        console.print(f"   ... and {len(overwritten) - 12} more")
+
+    console.print("")
+    console.print(
+        "[dim]The fix is to stop keying on tickers: an identifier that survives a "
+        "rename (ISIN, CUSIP, FIGI) names the company rather than the letters, and "
+        "EODHD carries ISIN in its reference data. Open item, not built.[/]"
+    )
 
 
 @diag_app.command("survivorship")
