@@ -247,6 +247,60 @@ Each was invisible to a passing test suite and surfaced only on real data.
   membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
   `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
 
+## The first battery on data with no known defect (2026-09-20)
+
+**180 configurations, 1,020 symbols, 25 quarantined, splits adjusted, lookahead
+guarded.** `research/20260920-development-battery.md`. Every earlier battery in
+this project ran on data now known to be wrong, and none of their numbers
+transfer.
+
+**The strongest result the project has produced, and it is a gradient rather
+than a cell.** `h1_selection` sweeps the momentum ranking window, and the
+percentile against random on the same days is monotonic in it:
+
+| rs_lookback | same-day percentile | expectancy | PF |
+| --- | --- | --- | --- |
+| **252** (12 months) | **95th-98th** | +0.141R to +0.147R | 1.36-1.37 |
+| 126 (6 months) | 87th-91st | +0.104R to +0.132R | 1.30-1.38 |
+| 63 (3 months) | 81st-86th | **-0.130R to -0.150R** | 1.18-1.23 |
+| 21 (1 month) | 48th-62nd | +0.156R to +0.179R | 1.60-1.70 |
+
+A dose-response across three adjacent cells is much harder to produce by chance
+than one good cell, and **it is the shape Jegadeesh & Titman predict**. It only
+appeared after the split fix, because unadjusted splits inverted the ranking.
+Note that H1's own default lookback is **63 days**, sitting in the negative
+band: the project has spent four rounds testing H1 at a window the literature
+says is too short.
+
+**The selected cell passes five of six pre-registered criteria**
+(`rs_lookback=252, top_pct=0.1, hold=20, stop_atr=3.0`):
+
+| Criterion | Observed | Required | |
+| --- | --- | --- | --- |
+| trade_count | **171 effective** (305 raw) | >= 200 effective | **fail** |
+| expectancy | +0.146R | > 0 | pass |
+| profit_factor | 1.37 | > 1.20 | pass |
+| max_drawdown | 13.4% | < 25% | pass |
+| regime_robustness | beat random in 2 of 3, worst +3.1% | >= 2 of 3 | pass |
+| vs_random | same-day p = **0.0260** | <= 0.05 | pass |
+
+**This is not evidence and must not be reported as any.** Development proves
+nothing (docs/03 §0.4). The configuration was chosen by the plateau rule AFTER
+seeing 12 cells, so it is a search result, not a prediction. The p = 0.0260 is
+uncorrected for the 28 experiments in this battery, and Holm across the
+registered family would be stricter still. It fails the trade floor outright,
+and the design effect is now 1.78 rather than the 1.4 measured before -- with
+`max_positions` at 5 and 1,641 signals refused for want of a slot, concurrent
+trades are more correlated than they were.
+
+**Everything else got worse, which is the useful part.** H1's own exit
+experiments all return NONE. `h5_momentum_canonical` sits at the **0th
+percentile** and `h5_rebalance` at the 0th, so H5's monthly form is below random
+outright. H4's exit sweep is at the 1st. `h2/h3/h4_exit_isolated` all fail
+isolation again (29-29.4% divergence). `h3_no_stop` looks strong at the 96th
+with PF 1.81, but on **161 trades and a 35.5% drawdown**, failing two criteria.
+H7 returns NONE in all three of its experiments.
+
 ## Splits were never adjusted, and it inverted momentum
 
 **Found 2026-09-20.** `price_daily` holds raw prices by design (non-negotiable
