@@ -247,6 +247,40 @@ Each was invisible to a passing test suite and surfaced only on real data.
   membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
   `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
 
+## Splits were never adjusted, and it inverted momentum
+
+**Found 2026-09-20.** `price_daily` holds raw prices by design (non-negotiable
+2), which makes a split a real discontinuity, and the "adjusted series derived
+on demand" half of that rule was never built: `corporate_actions` held **zero
+rows** and nothing read it. Through the code path the strategies use:
+
+| | 63-day return, raw | adjusted | vol-adj RS, raw | adjusted |
+| --- | --- | --- | --- | --- |
+| AAPL 7-for-1, 2014-06-09 | **-81.7%** | +27.9% | **-8.21** | +14.36 |
+| C 1-for-10 reverse, 2011-05-09 | **+765.6%** | -13.4% | **+6.92** | -9.74 |
+| ETFC 1-for-10 reverse, 2010-06-02 | **+662.9%** | -23.7% | **+5.58** | -4.30 |
+
+Every case flips sign. Apple after its split ranked **last** and was never
+bought; Citigroup, a distressed bank reverse-splitting to keep its listing,
+ranked **first** and was. The bias is directional, not noisy: forward splits
+follow a price rise, so the rule systematically excluded recent winners, and
+reverse splits signal distress, so it systematically bought them. **81 index
+members and 130 events inside the 2010-2015 window alone.**
+
+Fixed by `calc/splits.py` plus an EODHD splits ingest (490 splits across 339 of
+1,050 symbols). `load_bars` adjusts **by default**, the polarity being
+deliberate: a caller who forgets gets the correct series and must ask for raw.
+
+**Back-adjustment is itself a lookahead risk, and it was a real one.** It
+scales PAST prices by FUTURE splits. That is harmless for returns -- a split
+outside the window multiplies every bar in it by one constant, which cancels in
+every ratio -- but not for share counts. NBR's 1-for-50 reverse split in 2020
+lifts its 2012 bars from $13.01 to $650.50, and at $10,000 equity the risk
+budget then buys zero whole shares. A test written to check this went from 68
+settled trades to **none**. `splits_until` now drops splits after the run's end
+date at both loaders, and every backtest call site passes it. Splits the window
+contains are still applied: AAPL's 2012 bar reads $80.14, not $20.04.
+
 ## The quarantine, and what liquidity revealed
 
 **Built 2026-09-19.** `universe_members` -- the single point every backtest
@@ -293,16 +327,28 @@ command that spends validation and test budget. All three now go through
 `load_symbol_bars`, which excludes quarantined tickers even when named
 explicitly, logs what it dropped, and prints it.
 
-**Measured effect on H1, development, default configuration.** Removing 2.3%
-of the universe moved it materially, and in the direction predicted:
+**Measured effect on H1, development, default configuration**, through four
+readings of the same run as each defect was fixed:
 
-| | before | after |
-| --- | --- | --- |
-| signals | 5,929 | 5,864 |
-| random, same days | **73.1th** | **55.9th** |
-| one-sided p | 0.270 | 0.442 |
-| expectancy | -0.338R | -0.384R |
-| regimes beating random | 2 of 3 | **1 of 3** |
+| | original | + quarantine | + splits | **+ lookahead guard** |
+| --- | --- | --- | --- | --- |
+| random, same days | 73.1th | 55.9th | 89.7th | **82.5th** |
+| one-sided p | 0.270 | 0.442 | 0.104 | **0.176** |
+| expectancy | -0.338R | -0.384R | +0.115R | **-0.297R** |
+| profit factor | 1.03 | 1.02 | 1.24 | **1.16** |
+| max drawdown | 34.1% | 33.7% | 14.8% | **25.5%** |
+| regimes beating random | 2 of 3 | 1 of 3 | 1 of 3 | **1 of 3** |
+
+**The third column was partly lookahead and must not be quoted.** It briefly
+showed H1 clearing the profit-factor bar at 1.24 with a positive expectancy;
+the guard took that back to 1.16 and -0.297R. The splits still help a great
+deal against the second column, which is the honest comparison: the quarantine
+cost H1 17 percentile points and the split fix returned 27 of them.
+
+Against the pre-registered criteria the current reading **fails four of five**:
+p=0.176 against 5%, profit factor 1.16 against 1.20, max drawdown 25.5% against
+25%, and 1 of 3 regimes against 2. Only the effective-trade floor passes (229
+against 200). One configuration, development, and development proves nothing.
 
 Beating random in 1 of 3 regimes is below the pre-registered bar of 2. The
 mechanism is visible: **45 of 2,241 H1 signals (2.0%) came from 10 quarantined
