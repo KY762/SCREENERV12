@@ -235,6 +235,58 @@ Each was invisible to a passing test suite and surfaced only on real data.
   Development hashes shifted as a result; development is unlimited, and no
   validation or test row existed to repair.
 
+- **An identity rule nearly quarantined three live companies.** Found
+  2026-09-19, while building the quarantine. `outlived_its_security` fired on
+  any symbol EODHD's delisted list names whose prices run to the end of the
+  data, and EODHD's list marks live companies dead -- the same unreliability
+  the module docstring already recorded, used as a verdict anyway. It flagged
+  **AVB, EA and EQR**, all three of which had just left the index with correct
+  continuous history (EA's last closes pinned at its take-private price).
+  Excluding them would have destroyed clean data to prevent contamination that
+  was not there. The rule now also requires the series to have outlived the
+  membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
+  `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
+
+## The quarantine, and what liquidity revealed
+
+**Built 2026-09-19.** `universe_members` -- the single point every backtest
+reads membership through -- now filters against
+`data/reference/universe_quarantine.csv`, a committed file of **24 symbols**
+whose stored series is not the company that was in the index. A symbol leaves
+the universe only if it appears there, with a reason and a date.
+
+The strongest check is not vendor metadata, it is our own prices: **an S&P 500
+member that traded under $1M a day while IN the index was not that member.**
+Measured over 798 symbols with 60+ bars inside their membership window, the
+median member trades **$152M a day** and the 5th percentile $34.5M. Ten
+symbols fall below a floor set 34x under that 5th percentile -- AYE, RX, SII
+and CPWR at literally **zero volume**, EP at $7/day, PARA at $32, ACS at $697,
+GR at $7,140, KG at $68,372, GENZ at $338k. Every one is a company acquired or
+taken private between 2010 and 2012 whose letters a shell or an ETF now holds,
+and each is confirmed independently by the holder name: EP is now "Empire
+Petroleum", PARA is "Banzai International", SII is "Sprott", KG is "Kestrel
+Group". **None of these was caught by any rule reading vendor metadata.**
+
+The 24 break down as 10 too illiquid, 12 whose letters now name an ETF, 1
+(BBBY) the vendor calls delisted while pricing it for another nine years, and
+1 hand-entered: **BBT**, which is Beacon Financial Corporation throughout --
+41,810 shares a day in 2010 against JPM's 41 million -- and liquid enough
+($2.1M/day median) to clear a floor set where no real member can fall. Hand
+rows carry a reason no rule emits and survive `--write`.
+
+**Not quarantined: the 34 whose history is merely ABSENT.** Their series start
+after the ticker left, so there are no bars during the membership and nothing
+to get wrong; excluding them would also discard a successor company's
+legitimate later membership.
+
+Whole-symbol exclusion is coarser than it should be -- the honest fix needs a
+handover date the vendor does not give -- so periods that were fine are
+discarded too. That costs coverage, which is the safe direction.
+
+**Every prior result was computed without this filter.** The battery has not
+been re-run on the quarantined universe; when it is, results will be restated
+and are expected to worsen.
+
 ## The 2026-09-19 decisions
 
 Five open decisions, closed by the operator on 2026-09-19 after research into
@@ -465,6 +517,9 @@ screener universe build
 screener universe coverage          # survivorship measurement
 screener ingest-earnings            # SEC EDGAR filing dates
 screener diagnose redundancy | signals
+screener universe identify          # what each ticker refers to now
+screener universe quarantine        # symbols excluded from every universe, and why
+screener diagnose identity          # is this series the company we think it is?
 screener diagnose survivorship      # per-hypothesis exposure to missing failures
 screener diagnose sample-size       # effective N; paired exit comparisons
 screener prereg show                # what validation/test may be spent on

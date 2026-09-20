@@ -118,7 +118,10 @@ def test_a_security_the_vendor_calls_delisted_that_keeps_printing_prices():
     )
 
     assert [c.kind for c in conflicts] == ["outlived_its_security"]
-    assert "disagree" in conflicts[0].detail
+    # The message now leads with how long the series outlived the membership,
+    # because that number is what separates BBBY from a company that simply
+    # left the index last month.
+    assert "3,328 days after it left" in conflicts[0].detail
 
 
 def test_a_correctly_delisted_security_is_not_a_conflict():
@@ -165,3 +168,100 @@ def test_a_reused_ticker_of_the_same_type_is_not_caught_and_that_is_stated():
     )
 
     assert conflicts == [], "no signal fires -- the name is the only clue"
+
+
+# --- the liquidity check ----------------------------------------------------
+#
+# The only check here that reads our own prices rather than the vendor's
+# metadata, and the only one that catches a ticker handed to another company of
+# the same type.
+
+
+def member(symbol, dollar_volume, first=date(2009, 1, 2), last=ENDS):
+    return Series(
+        symbol=symbol, first_bar=first, last_bar=last, bars=4000,
+        median_dollar_volume=dollar_volume,
+    )
+
+
+def common_stock(symbol, name, active=True):
+    return Identity(symbol, name, "Common Stock", active, None)
+
+
+def test_an_index_member_that_traded_seven_dollars_a_day_was_not_the_index_member():
+    """EP: El Paso Corp was in the S&P 500 until Kinder Morgan bought it in
+    2012. The stored series traded a median $7 a day during that membership and
+    the letters now belong to Empire Petroleum. Membership implies liquidity by
+    construction, so this is arithmetic about the index, not a judgement about
+    the company."""
+    conflicts = identity_conflicts(
+        [member("EP", 7.0)],
+        {"EP": common_stock("EP", "Empire Petroleum Corp")},
+        {"EP": date(2012, 5, 25)},
+        data_ends=ENDS,
+    )
+
+    assert [c.kind for c in conflicts] == ["too_illiquid_to_be_a_member"]
+    assert "not an S&P 500 constituent" in conflicts[0].detail
+
+
+def test_a_thin_but_real_member_is_left_alone():
+    """The floor sits 34x below the 5th percentile of member liquidity ($34.5M)
+    precisely so that a genuinely small constituent survives it. A check that
+    quarantines real members costs more coverage than the contamination it
+    removes."""
+    conflicts = identity_conflicts(
+        [member("SMALL", 20_000_000.0)],
+        {"SMALL": common_stock("SMALL", "A Small But Real Constituent")},
+        {"SMALL": date(2015, 6, 1)},
+        data_ends=ENDS,
+    )
+
+    assert conflicts == []
+
+
+def test_unmeasured_liquidity_is_not_treated_as_thin():
+    """None means 'not measured' -- a symbol with too few bars inside its
+    membership window to take a median on. Reading that as zero would
+    quarantine every late-ingested symbol."""
+    conflicts = identity_conflicts(
+        [Series("NEW", date(2009, 1, 2), ENDS, 4000, median_dollar_volume=None)],
+        {"NEW": common_stock("NEW", "Ordinary Company")},
+        {"NEW": date(2015, 6, 1)},
+        data_ends=ENDS,
+    )
+
+    assert conflicts == []
+
+
+# --- the delisted flag, which is unreliable ---------------------------------
+
+
+def test_a_company_that_just_left_the_index_is_not_flagged_as_outlived():
+    """Pinned because the rule DID flag AVB, EA and EQR on 2026-09-19. All
+    three left the index within weeks of the data ending, all three have
+    correct continuous history, and EODHD's delisted list marks live companies
+    dead. Flagging them would have destroyed clean data."""
+    conflicts = identity_conflicts(
+        [member("AVB", 200_000_000.0, last=date(2026, 8, 14))],
+        {"AVB": common_stock("AVB", "AvalonBay Communities Inc", active=False)},
+        {"AVB": date(2026, 8, 5)},
+        data_ends=date(2026, 8, 18),
+    )
+
+    assert conflicts == []
+
+
+def test_a_series_still_quoting_years_after_the_ticker_left_is_outlived():
+    """BBBY left the index on 2017-07-25 and the stored series prices it into
+    2026 -- 3,328 days of quotes belonging to whoever holds the letters. The
+    gap is what separates it from AVB's nine days."""
+    conflicts = identity_conflicts(
+        [member("BBBY", 5_000_000.0, last=date(2026, 9, 4))],
+        {"BBBY": common_stock("BBBY", "Bed Bath & Beyond, Inc.", active=False)},
+        {"BBBY": date(2017, 7, 25)},
+        data_ends=ENDS,
+    )
+
+    assert [c.kind for c in conflicts] == ["outlived_its_security"]
+    assert "3,328 days" in conflicts[0].detail

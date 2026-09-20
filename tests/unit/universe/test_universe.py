@@ -7,6 +7,8 @@ liquid, which inflates every backtest run against it.
 
 from __future__ import annotations
 
+from datetime import date
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -284,3 +286,43 @@ def test_reachable_us_does_not_mutate_the_pre_registered_definition():
     assert REACHABLE_US.min_dollar_volume == pytest.approx(250_000.0)
     assert REACHABLE_US.min_price == pytest.approx(5.00)
     assert REACHABLE_US.describe() != liquid.describe()
+
+
+# --- the quarantine, applied ------------------------------------------------
+
+
+def test_a_quarantined_symbol_never_reaches_a_backtest(session, tmp_path, monkeypatch):
+    """The whole point of filtering inside `universe_members` rather than in
+    each caller: there is one place a backtest reads membership through, so a
+    contaminated symbol cannot reach one by a caller forgetting.
+
+    If this fails, BBBY's Overstock prices are in a result.
+    """
+    from screener.universe import quarantine
+
+    bars = _synthetic(320)
+    _seed(session, "SPY", bars)
+    _seed(session, "BBBY", bars)
+    build_metrics(session, ["SPY", "BBBY"])
+    build_universe(session, UniverseDefinition(min_history_days=250))
+    late = bars.index[-1].date()
+
+    assert universe_members(session, "liquid_us", late) == ["BBBY", "SPY"]
+
+    path = tmp_path / "q.csv"
+    quarantine.write(
+        [
+            quarantine.Excluded(
+                symbol="BBBY", reason="outlived_its_security",
+                holder="Bed Bath & Beyond, Inc.", recorded_on=date(2026, 9, 19),
+                detail="Overstock's prices",
+            )
+        ],
+        path,
+    )
+    monkeypatch.setattr(quarantine, "QUARANTINE_FILE", path)
+    quarantine.symbols.cache_clear()
+
+    assert universe_members(session, "liquid_us", late) == ["SPY"]
+
+    quarantine.symbols.cache_clear()

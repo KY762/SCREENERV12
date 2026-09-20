@@ -23,8 +23,13 @@ node_modules/
 dist/
 .vite/
 
-# Data — market data is re-ingestable, never versioned
-data/
+# Data — market data is re-ingestable, never versioned.
+# `data/*`, not `data/`: git cannot re-include a file whose parent directory is
+# excluded, so `data/` made the negations below dead letters and the one
+# reference file in the repo is tracked only because it was force-added. A new
+# one would have been skipped silently, which is exactly what those negations
+# exist to prevent.
+data/*
 *.db
 *.sqlite3
 *.parquet

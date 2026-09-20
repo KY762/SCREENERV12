@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..db.models import MetricsDaily, PriceDaily, Symbol, UniverseSnapshot
+from . import quarantine
 from .definition import UniverseDefinition, passes_static_filters
 
 log = logging.getLogger(__name__)
@@ -170,7 +171,12 @@ def universe_members(
         .where(UniverseSnapshot.name == name, UniverseSnapshot.date == effective)
         .order_by(Symbol.ticker)
     ).all()
-    return [r[0] for r in rows]
+    # Symbols whose stored series is not the company that was in the index are
+    # excluded here, at the one point every backtest reads membership through,
+    # so no caller can forget. See universe/quarantine.py for the list and the
+    # reason each is on it.
+    excluded = quarantine.symbols()
+    return [r[0] for r in rows if r[0] not in excluded]
 
 
 def _load_metrics(

@@ -1,0 +1,25 @@
+symbol,reason,holder,recorded_on,detail
+ACS,too_illiquid_to_be_a_member,AFFILIATED COMPUTER SERVICES INC,2026-09-19,"traded a median $697 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+AYE,too_illiquid_to_be_a_member,ALLEGHENY ENERGY INC,2026-09-19,"traded a median $0 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+BBBY,outlived_its_security,"Bed Bath & Beyond, Inc.",2026-09-19,"listed as delisted, yet priced to 2026-09-04 -- 3,328 days after it left on 2017-07-25"
+BBT,manual,Beacon Financial Corporation,2026-09-19,"BB&T left the index 2019-12-05 on the Truist merger, but the series is not BB&T's at any point: it averaged 41,810 shares a day in 2010 against JPM's 41 million, and a median $2.1M a day while in the S&P 500. A top-50 US bank does not trade 42k shares a day. Above MIN_MEMBER_DOLLAR_VOLUME, so no rule catches it; confirmed by volume against a control and by the holder name."
+CA,not_a_stock,Xtrackers California Municipal Bonds ETF,2026-09-19,an index member's ticker now refers to a ETF
+CAM,not_a_stock,AB California Intermediate Municipal ETF,2026-09-19,an index member's ticker now refers to a ETF
+CPWR,too_illiquid_to_be_a_member,Ocean Thermal Energy Corp,2026-09-19,"traded a median $0 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+CSRA,not_a_stock,Cohen & Steers ETF Trust,2026-09-19,an index member's ticker now refers to a ETF
+EMC,not_a_stock,Global X Emerging Markets Great Consumer ETF,2026-09-19,an index member's ticker now refers to a ETF
+EP,too_illiquid_to_be_a_member,Empire Petroleum Corp,2026-09-19,"traded a median $7 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+FB,not_a_stock,ProShares Trust ProShares S&P 500 Dynamic Buffer ETF,2026-09-19,an index member's ticker now refers to a ETF
+GENZ,too_illiquid_to_be_a_member,VanEck Digital Native Economy ETF,2026-09-19,"traded a median $337,608 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+GR,too_illiquid_to_be_a_member,Goodrich Corp,2026-09-19,"traded a median $7,140 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+INFO,not_a_stock,Harbor PanAgora Dynamic Large Cap Core ETF,2026-09-19,an index member's ticker now refers to a ETF
+JAVA,not_a_stock,JPMorgan Active Value ETF,2026-09-19,an index member's ticker now refers to a ETF
+KG,too_illiquid_to_be_a_member,"Kestrel Group, Ltd.",2026-09-19,"traded a median $68,372 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+NFX,not_a_stock,Corgi NFLX 2x Daily ETF,2026-09-19,an index member's ticker now refers to a ETF
+PARA,too_illiquid_to_be_a_member,"Banzai International, Inc.",2026-09-19,"traded a median $32 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+PCL,not_a_stock,PGIM Corporate Bond 10+ Year ETF,2026-09-19,an index member's ticker now refers to a ETF
+RX,too_illiquid_to_be_a_member,Ims Health Inc,2026-09-19,"traded a median $0 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+SHLD,not_a_stock,Global X Defense Tech ETF,2026-09-19,an index member's ticker now refers to a ETF
+SII,too_illiquid_to_be_a_member,Sprott Inc.,2026-09-19,"traded a median $0 a day while in the index, against a member median of $152M: whatever this series is, it is not an S&P 500 constituent"
+SPLS,not_a_stock,PIMCO US Stocks PLUS Active Bond Exchange Traded Fund,2026-09-19,an index member's ticker now refers to a ETF
+UST,not_a_stock,ProShares Ultra 7-10 Year Treasury,2026-09-19,an index member's ticker now refers to a ETF

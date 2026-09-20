@@ -698,6 +698,177 @@ def universe_sp500(
     )
 
 
+def _identity_evidence(universe_name: str):
+    """Everything the identity checks read, gathered once.
+
+    Returns (series, identity, left_universe, data_ends). `series` carries each
+    symbol's median daily dollar volume DURING its membership window, which is
+    the one piece of evidence here that comes from our own prices rather than
+    the vendor's metadata -- and the only one that catches a ticker handed to
+    another company of the same type.
+
+    Shared by `diagnose identity` and `universe quarantine` so the report and
+    the exclusion list cannot disagree about what is contaminated.
+    """
+    import pandas as pd
+
+    from .db.models import PriceDaily, UniverseSnapshot
+    from .diagnostics.stale_series import Identity, Series
+
+    with session_scope() as session:
+        identity = {
+            s.ticker: Identity(s.ticker, s.name, s.security_type, s.is_active, s.isin)
+            for s in session.scalars(select(Symbol))
+        }
+        membership = pd.DataFrame(
+            session.execute(
+                select(Symbol.ticker, UniverseSnapshot.date)
+                .join(UniverseSnapshot, UniverseSnapshot.symbol_id == Symbol.id)
+                .where(UniverseSnapshot.name == universe_name)
+            ).all(),
+            columns=["ticker", "date"],
+        )
+        prices = pd.DataFrame(
+            session.execute(
+                select(Symbol.ticker, PriceDaily.date, PriceDaily.close, PriceDaily.volume)
+                .join(PriceDaily, PriceDaily.symbol_id == Symbol.id)
+            ).all(),
+            columns=["ticker", "date", "close", "volume"],
+        )
+
+    if prices.empty:
+        return [], identity, {}, None
+
+    extent = prices.groupby("ticker")["date"].agg(["min", "max", "count"])
+    data_ends = prices["date"].max()
+
+    liquidity: dict[str, float] = {}
+    left: dict[str, date] = {}
+    if not membership.empty:
+        current = membership["date"].max()
+        span = membership.groupby("ticker")["date"].agg(lo="min", hi="max")
+        left = {t: d for t, d in span["hi"].items() if d < current}
+
+        prices["dv"] = prices["close"].astype(float) * prices["volume"].astype(float)
+        joined = prices.merge(span.reset_index(), on="ticker", how="inner")
+        inside = joined[(joined.date >= joined.lo) & (joined.date <= joined.hi)]
+        grouped = inside.groupby("ticker")["dv"]
+        # Fewer than 60 bars inside the window is too little to call a median
+        # on, and a symbol ingested late looks thin for a reason that is not
+        # contamination. Left unmeasured rather than guessed at.
+        enough = grouped.size() >= 60
+        liquidity = {t: float(v) for t, v in grouped.median()[enough].items()}
+
+    series = [
+        Series(
+            symbol=t,
+            first_bar=row["min"],
+            last_bar=row["max"],
+            bars=int(row["count"]),
+            median_dollar_volume=liquidity.get(t),
+        )
+        for t, row in extent.iterrows()
+    ]
+    return series, identity, left, data_ends
+
+
+@universe_app.command("quarantine")
+def universe_quarantine(
+    write: bool = typer.Option(
+        False, "--write",
+        help="Regenerate the rule-found rows from the current identity conflicts.",
+    ),
+    universe_name: str = typer.Option("sp500_pit", "--universe"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Symbols excluded from every universe, and why.
+
+    A ticker is excluded when the series we hold is not the company that was
+    in the index: the letters now name an ETF, or the vendor calls the
+    security delisted and keeps pricing it. Symbols whose earlier history is
+    merely ABSENT are not excluded -- they have no bars during their
+    membership, so there is nothing to get wrong, and excluding them would
+    also discard a successor company's legitimate later membership.
+
+    The list is a committed file, so a symbol vanishes from the universe only
+    if it appears there with a reason and a date. `--write` regenerates the
+    rule-found rows and keeps hand-entered ones.
+    """
+    _configure_logging(verbose)
+    from .diagnostics.stale_series import identity_conflicts
+    from .universe import quarantine
+
+    existing = quarantine.load()
+
+    if not write:
+        if not existing:
+            console.print(
+                "[yellow]Nothing is quarantined.[/] Every symbol with bars is "
+                "eligible. Run with --write to generate the list from the "
+                "current identity conflicts."
+            )
+            return
+        table = Table(
+            title=f"Quarantined -- excluded from every universe ({len(existing)})"
+        )
+        for col in ("Symbol", "Reason", "Now held by", "Recorded"):
+            table.add_column(col, justify="left")
+        for e in sorted(existing, key=lambda e: (e.reason, e.symbol)):
+            table.add_row(
+                e.symbol, e.reason.replace("_", " "), e.holder[:44], str(e.recorded_on)
+            )
+        console.print(table)
+        console.print(f"[dim]{quarantine.QUARANTINE_FILE}[/]")
+        return
+
+    series, identity, left, data_ends = _identity_evidence(universe_name)
+
+    if not series:
+        console.print("[yellow]No price data.[/]")
+        raise typer.Exit(code=1)
+    if not any(i.security_type for i in identity.values()):
+        console.print("[yellow]No identity recorded.[/] Run "
+                      "'screener universe identify' first, or this would "
+                      "quarantine nothing and look like a clean bill of health.")
+        raise typer.Exit(code=1)
+
+    conflicts = identity_conflicts(series, identity, left, data_ends=data_ends)
+    # "absent" is deliberately not quarantined: no bars during the membership
+    # means nothing to get wrong, and excluding the ticker would also remove a
+    # successor company's legitimate later membership.
+    contaminating = [c for c in conflicts if c.kind in quarantine.CONTAMINATING_REASONS]
+
+    today = date.today()
+    generated = [
+        quarantine.Excluded(
+            symbol=c.symbol, reason=c.kind, holder=c.holder or "",
+            recorded_on=today, detail=c.detail,
+        )
+        for c in contaminating
+    ]
+    entries = quarantine.merge(generated, existing)
+    path = quarantine.write(entries)
+
+    kept = len(entries) - len(generated)
+    console.print(
+        f"[green]{len(entries)}[/] symbol(s) quarantined -> {path}  "
+        f"[dim]({len(generated)} found by rule, {kept} kept by hand)[/]"
+    )
+    for e in sorted(entries, key=lambda e: (e.reason, e.symbol)):
+        console.print(
+            f"   {e.symbol:6} {e.reason.replace('_', ' '):22} {e.holder[:44]}"
+        )
+    skipped = len(conflicts) - len(contaminating)
+    console.print(
+        f"\n[dim]{skipped} symbol(s) whose history is merely ABSENT were not "
+        "quarantined: no bars during their membership, so nothing to get wrong.[/]"
+    )
+    console.print(
+        "[yellow]Commit this file.[/] The universe shrinks because of it, and an "
+        "exclusion nobody can see is worse than the contamination it removes."
+    )
+
+
 @diag_app.command("identity")
 def diagnose_identity(
     universe_name: str = typer.Option("sp500_pit", "--universe"),
@@ -715,38 +886,9 @@ def diagnose_identity(
     first, or this has nothing to compare the prices against.
     """
     _configure_logging(verbose)
-    from .db.models import PriceDaily, UniverseSnapshot
-    from .diagnostics.stale_series import Identity, Series, identity_conflicts
+    from .diagnostics.stale_series import identity_conflicts
 
-    with session_scope() as session:
-        rows = session.execute(
-            select(
-                Symbol.ticker,
-                func.min(PriceDaily.date),
-                func.max(PriceDaily.date),
-                func.count(PriceDaily.date),
-            )
-            .join(PriceDaily, PriceDaily.symbol_id == Symbol.id)
-            .group_by(Symbol.ticker)
-        ).all()
-        series = [Series(t, first, last, bars) for t, first, last, bars in rows]
-
-        identity = {
-            s.ticker: Identity(s.ticker, s.name, s.security_type, s.is_active, s.isin)
-            for s in session.scalars(select(Symbol))
-        }
-
-        members = session.execute(
-            select(Symbol.ticker, func.max(UniverseSnapshot.date))
-            .join(UniverseSnapshot, UniverseSnapshot.symbol_id == Symbol.id)
-            .where(UniverseSnapshot.name == universe_name)
-            .group_by(Symbol.ticker)
-        ).all()
-        current = session.scalar(
-            select(func.max(UniverseSnapshot.date))
-            .where(UniverseSnapshot.name == universe_name)
-        )
-        left = {t: d for t, d in members if current is None or d < current}
+    series, identity, left, data_ends = _identity_evidence(universe_name)
 
     if not series:
         console.print("[yellow]No price data.[/]")
@@ -756,7 +898,6 @@ def diagnose_identity(
                       "'screener universe identify' first.")
         raise typer.Exit(code=1)
 
-    data_ends = max(s.last_bar for s in series)
     conflicts = identity_conflicts(
         series, identity, left, data_ends=data_ends, still_trading_within_days=within_days
     )
@@ -770,6 +911,11 @@ def diagnose_identity(
     )
 
     headings = {
+        "too_illiquid_to_be_a_member": (
+            "red",
+            "it traded too little WHILE in the index to have been in the index: "
+            "the strongest signal here, and the only one read from our own prices",
+        ),
         "not_a_stock": (
             "red",
             "the ticker now refers to an ETF or fund, so the downloaded series "

@@ -58,6 +58,9 @@ class Series:
     first_bar: date
     last_bar: date
     bars: int
+    #: Median daily dollar volume over the symbol's membership window, where
+    #: it is known. None means "not measured", which is not the same as thin.
+    median_dollar_volume: float | None = None
 
 
 @dataclass(frozen=True)
@@ -124,9 +127,27 @@ class Identity:
 @dataclass(frozen=True)
 class Conflict:
     symbol: str
-    kind: str          # "not_a_stock" | "outlived_its_security" | "absent"
+    # "too_illiquid_to_be_a_member" | "not_a_stock" | "outlived_its_security"
+    # | "absent"
+    kind: str
     holder: str | None
     detail: str
+
+
+#: An index member trading below this while IN the index is not that member.
+#:
+#: Measured 2026-09-19 over 798 symbols with 60+ bars inside their sp500_pit
+#: membership: the median member trades $152M a day and the 5th percentile
+#: $34.5M. This floor is 34x below that 5th percentile, so it cannot fire on a
+#: thin-but-real constituent. Below it sit nine symbols -- AYE, RX, SII and
+#: CPWR at literally zero volume, EP at $7/day, PARA at $32, ACS at $697, GR at
+#: $7,140, KG at $68,372, GENZ at $338k -- every one of them a company acquired
+#: or taken private between 2010 and 2012 whose letters a shell now holds.
+#:
+#: It deliberately stops short of BBBY ($1.68M) and BBT ($2.10M), which are
+#: also contaminated but sit among names this check cannot separate from thin
+#: real members. Those are caught by the rules below, or by hand.
+MIN_MEMBER_DOLLAR_VOLUME = 1_000_000.0
 
 
 def identity_conflicts(
@@ -136,11 +157,26 @@ def identity_conflicts(
     *,
     data_ends: date,
     still_trading_within_days: int = 45,
+    outlived_after_days: int = 365,
+    min_member_dollar_volume: float = MIN_MEMBER_DOLLAR_VOLUME,
 ) -> list[Conflict]:
     """Where the stored identity contradicts the stored prices.
 
-    Three signals, in descending certainty. All are about members of the
+    Four signals, in descending certainty. All are about members of the
     universe, because a ticker nobody traded on cannot corrupt a result.
+
+    too_illiquid_to_be_a_member
+                           the series traded less than a million dollars a day
+                           WHILE the ticker was in the S&P 500. Membership
+                           implies liquidity by construction -- the median
+                           member trades $152M a day -- so this is not a
+                           judgement about the company, it is arithmetic about
+                           the index. It is the only check here that reads our
+                           own prices rather than the vendor's metadata, which
+                           is why it is first, and it is the only one that
+                           catches a ticker handed to another company of the
+                           same type: CPWR at zero volume is Ocean Thermal
+                           Energy, not Compuware.
 
     not_a_stock            the letters now belong to an ETF or a fund. An
                            index member is a company, so the series that was
@@ -148,19 +184,35 @@ def identity_conflicts(
                            buffer ETF; EMC is a Global X emerging-markets ETF.
     outlived_its_security  the vendor's own list says this security is
                            delisted, yet the price series runs to the end of
-                           the data. The list and the prices disagree, and the
-                           tail belongs to whoever holds the letters now. BBBY
-                           is listed as Bed Bath & Beyond and quotes into 2026
-                           with Overstock's prices.
+                           the data AND has done so for a year or more since
+                           the ticker left the index. The list and the prices
+                           disagree, and a tail that long belongs to whoever
+                           holds the letters now. BBBY is listed as Bed Bath &
+                           Beyond and quotes into 2026 with Overstock's prices,
+                           3,328 days after it left the index.
+
+                           The year is what stops this firing on an ordinary
+                           recent delisting, and it was added because the rule
+                           without it flagged AVB, EA and EQR on 2026-09-19 --
+                           all three had just left the index, all three had
+                           correct continuous history, and EA's last closes
+                           were pinned at its take-private price. Quarantining
+                           them would have destroyed clean data on the strength
+                           of a flag the paragraph below already calls
+                           unreliable. Their tails were 9, 41 and 12 days; the
+                           nearest true positive is 2,800. The threshold sits
+                           in empty space, not in a crowd.
     absent                 the series starts after the ticker left the
                            universe, so the earlier company's history is
                            missing rather than wrong.
 
-    A fourth case cannot be settled from this data: a ticker whose company
-    quietly became another company of the same type, with the vendor listing
-    only the newcomer. BBT reads as "Beacon Financial Corporation" and CPWR as
-    "Ocean Thermal Energy Corp" -- obvious to a person reading the names, and
-    invisible to any rule here. That is why the names are reported.
+    What still cannot be settled from this data is the same-type handover that
+    is ALSO liquid enough to pass the first check. BBT reads as "Beacon
+    Financial Corporation" and traded a median $2.1M a day in the index -- ten
+    times too little for BB&T, which was a top-50 US bank, but above a floor
+    set where no real member can fall. Obvious to a person reading the name and
+    the volume together, invisible to every rule here. That is why the names
+    are reported.
     """
     by_symbol = {s.symbol: s for s in series}
     out: list[Conflict] = []
@@ -172,17 +224,33 @@ def identity_conflicts(
         ident = identity.get(symbol)
         holder = ident.name if ident else None
         still_quoting = (data_ends - s.last_bar).days <= still_trading_within_days
+        thin = (
+            s.median_dollar_volume is not None
+            and s.median_dollar_volume < min_member_dollar_volume
+        )
 
-        if ident and ident.security_type and ident.security_type != "Common Stock":
+        if thin:
+            out.append(Conflict(
+                symbol, "too_illiquid_to_be_a_member", holder,
+                f"traded a median ${s.median_dollar_volume:,.0f} a day while in "
+                f"the index, against a member median of $152M: whatever this "
+                f"series is, it is not an S&P 500 constituent",
+            ))
+        elif ident and ident.security_type and ident.security_type != "Common Stock":
             out.append(Conflict(
                 symbol, "not_a_stock", holder,
                 f"an index member's ticker now refers to a {ident.security_type}",
             ))
-        elif ident and not ident.is_active and still_quoting:
+        elif (
+            ident
+            and not ident.is_active
+            and still_quoting
+            and (s.last_bar - left).days >= outlived_after_days
+        ):
             out.append(Conflict(
                 symbol, "outlived_its_security", holder,
-                f"listed as delisted, yet priced to {s.last_bar}: the vendor's own "
-                "list and its prices disagree",
+                f"listed as delisted, yet priced to {s.last_bar} -- "
+                f"{(s.last_bar - left).days:,} days after it left on {left}",
             ))
         elif s.first_bar > left:
             out.append(Conflict(
