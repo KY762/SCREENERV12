@@ -626,6 +626,105 @@ def universe_sp500(
     )
 
 
+@diag_app.command("stale-series")
+def diagnose_stale_series(
+    universe_name: str | None = typer.Option(
+        "sp500_pit", "--universe",
+        help="Also report which of this universe's members have no bars.",
+    ),
+    recent_days: int = typer.Option(45, "--recent-days"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Find price series that keep trading after the company stopped existing.
+
+    Checks every symbol in the database against the provider's own list of
+    what is no longer listed. A dead company whose series continues is either
+    a reused ticker or a stale feed; either way the bars after the death
+    belong to another company, or to nobody.
+
+    That is worse than a missing company. A gap can be counted. A series that
+    quietly becomes a different company is a wrong number that looks like a
+    right one, and it passes every check that only asks whether data exists.
+    """
+    _configure_logging(verbose)
+    from .db.models import UniverseSnapshot
+    from .diagnostics.stale_series import Series, coverage_gap, find_suspects
+    from .providers.base import ProviderError
+    from .providers.eodhd import EodhdProvider
+    from .universe.build import universe_members
+
+    settings = get_settings()
+    if not settings.has_eodhd:
+        console.print("[red]EODHD_API_KEY is not set.[/] This check needs a provider "
+                      "that can say what is no longer listed.")
+        raise typer.Exit(code=1)
+
+    try:
+        with EodhdProvider(settings) as provider:
+            delisted = {d.symbol for d in provider.list_delisted()}
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[dim]{len(delisted):,} symbol(s) listed as delisted by EODHD.[/]")
+
+    with session_scope() as session:
+        rows = session.execute(
+            select(
+                Symbol.ticker,
+                func.min(PriceDaily.date),
+                func.max(PriceDaily.date),
+                func.count(PriceDaily.date),
+            )
+            .join(PriceDaily, PriceDaily.symbol_id == Symbol.id)
+            .group_by(Symbol.ticker)
+        ).all()
+        series = [Series(t, first, last, bars) for t, first, last, bars in rows]
+        as_of = max((s.last_bar for s in series), default=date.today())
+
+        missing: list[str] = []
+        if universe_name:
+            wanted = {
+                t
+                for snapshot_date in session.scalars(
+                    select(UniverseSnapshot.date)
+                    .where(UniverseSnapshot.name == universe_name)
+                    .distinct()
+                )
+                for t in universe_members(session, universe_name, snapshot_date)
+            }
+            missing = coverage_gap(wanted, [s.symbol for s in series])
+
+    suspects = find_suspects(series, delisted, as_of=as_of, recent_days=recent_days)
+
+    console.print(
+        f"[bold]{len(series):,}[/] symbol(s) with bars, data ending {as_of}."
+    )
+    if not suspects:
+        console.print("[green]No delisted symbol is still quoting.[/]")
+    else:
+        table = Table(title="Delisted, yet still quoting -- the tail is not this company's")
+        for col in ("Symbol", "Last bar", "Days from end of data"):
+            table.add_column(col, justify="left" if col == "Symbol" else "right")
+        for s in suspects:
+            table.add_row(s.symbol, str(s.last_bar), str((as_of - s.last_bar).days))
+        console.print(table)
+        console.print(
+            f"[yellow]{len(suspects)} series cannot be trusted after the delisting "
+            "date.[/] A backtest holding one of these is holding a company that no "
+            "longer existed, or a different one wearing its ticker."
+        )
+
+    if universe_name:
+        if missing:
+            console.print(
+                f"\n[yellow]{len(missing):,}[/] member(s) of {universe_name} have no "
+                f"bars at all: {', '.join(missing[:20])}"
+                + (" ..." if len(missing) > 20 else "")
+            )
+        else:
+            console.print(f"\n[green]Every member of {universe_name} has bars.[/]")
+
+
 @diag_app.command("survivorship")
 def diagnose_survivorship(
     split: str = typer.Option("development", "--split"),
@@ -1394,10 +1493,16 @@ def universe_coverage(
     settings = get_settings()
     choice = provider_name.strip().lower()
     if choice == "auto":
-        choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
+        if settings.has_eodhd:
+            choice = "eodhd"
+        else:
+            choice = "tiingo" if settings.has_tiingo_credentials else "alpaca"
 
     try:
-        if choice == "tiingo":
+        if choice == "eodhd":
+            from .providers.eodhd import EodhdProvider
+            provider = EodhdProvider(settings)
+        elif choice == "tiingo":
             from .providers.tiingo import TiingoProvider
             provider = TiingoProvider(settings)
         else:
