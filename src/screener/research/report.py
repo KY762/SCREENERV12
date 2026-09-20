@@ -97,6 +97,18 @@ def to_markdown(
     add(f"**Window:** {split.start} → {split.end}")
     add(f"**Symbols:** {context.get('symbols', 0)}  ")
     add(f"**Configurations tested:** {sum(len(r.cells) for r in results)}")
+    # Which symbols were EXCLUDED is part of what a result means, and this
+    # report outlives the terminal it was printed in. A reader months from now
+    # cannot tell a quarantined universe from an unfiltered one otherwise.
+    quarantined = context.get("quarantined")
+    if quarantined:
+        add(f"**Quarantined and excluded:** {len(quarantined)} "
+            f"({', '.join(sorted(quarantined))})  ")
+        add("")
+        add("Those symbols' stored series is not the company that was in the "
+            "index — see `data/reference/universe_quarantine.csv` for the "
+            "reason on each. Results generated before 2026-09-19 did not "
+            "exclude them and are not comparable.")
     add("")
     add("Development-split results carry **no evidential weight** "
         "(docs/03-HYPOTHESES.md §0.4). Nothing here confirms a hypothesis; "

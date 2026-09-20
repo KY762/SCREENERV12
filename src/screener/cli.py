@@ -1350,6 +1350,7 @@ def research_explore(
 
     with session_scope() as session:
         bars_by_symbol = load_symbol_bars(session, symbols)
+        _report_quarantine()
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
             raise typer.Exit(code=1)
@@ -1405,9 +1406,17 @@ def research_explore(
                     )
                 results.append(result)
 
+    from .universe import quarantine
+
     md_path, json_path = write_report(
         results, chosen,
-        {"symbols": len(bars_by_symbol), "slippage_bps": slippage_bps, "equity": equity},
+        {
+            "symbols": len(bars_by_symbol),
+            "slippage_bps": slippage_bps,
+            "equity": equity,
+            "universe": universe_name,
+            "quarantined": sorted(quarantine.symbols()),
+        },
         Path(out),
     )
 
@@ -2982,6 +2991,7 @@ def backtest_surface(
     cells: list[Cell] = []
     with session_scope() as session:
         bars_by_symbol = load_symbol_bars(session, symbols)
+        _report_quarantine()
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
             raise typer.Exit(code=1)
