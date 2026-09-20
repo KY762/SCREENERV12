@@ -8,6 +8,7 @@ the difference would look like a parameter effect.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from datetime import date
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..calc.sizing import RiskLimits
 from ..db.models import Symbol
 from ..metrics.compute import load_bars
+from ..universe import quarantine
 from . import inference
 from .benchmarks import (
     date_matched_benchmark,
@@ -47,6 +49,8 @@ from .strategies import (
     pattern_candidates,
     relative_strength_candidates,
 )
+
+log = logging.getLogger(__name__)
 
 # h1-h4 are Round 1. h5-h7 are Round 2, admitted after Round 1 returned no
 # positive configuration -- each chosen for having published evidence behind
@@ -241,12 +245,38 @@ class Outcome:
 
 
 def load_symbol_bars(session: Session, symbols: str | None) -> dict[str, pd.DataFrame]:
+    """Every symbol's bars, minus the ones we know are the wrong company.
+
+    The quarantine is applied HERE as well as in `universe_members`, because
+    those are two different doors into a run and most runs use only this one:
+    `backtest run` and `research explore` default `--universe` to None, so
+    every result in the project to date was computed over every symbol in the
+    database. Filtering membership alone would have left BBBY's Overstock
+    prices in every battery while the quarantine reported success.
+
+    An explicitly named symbol is dropped too. A contaminated series is not
+    more trustworthy for having been asked for by name.
+    """
     stmt = select(Symbol).order_by(Symbol.ticker)
     if symbols:
         wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
         stmt = stmt.where(Symbol.ticker.in_(wanted))
     rows = [(s.id, s.ticker) for s in session.scalars(stmt)]
-    bars = {ticker: load_bars(session, sid) for sid, ticker in rows}
+
+    excluded = quarantine.symbols()
+    dropped = sorted({ticker for _, ticker in rows} & excluded)
+    if dropped:
+        log.warning(
+            "quarantine: %d symbol(s) excluded from this run -- %s. "
+            "See data/reference/universe_quarantine.csv for the reason on each.",
+            len(dropped), ", ".join(dropped),
+        )
+
+    bars = {
+        ticker: load_bars(session, sid)
+        for sid, ticker in rows
+        if ticker not in excluded
+    }
     return {k: v for k, v in bars.items() if not v.empty}
 
 

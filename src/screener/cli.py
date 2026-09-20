@@ -73,6 +73,25 @@ def _load_events(session, bars_by_symbol) -> dict[str, list]:
     return out
 
 
+def _report_quarantine() -> None:
+    """Say out loud that symbols were excluded.
+
+    `load_symbol_bars` logs it, but a log record with no handler configured is
+    a silent exclusion, and a run that quietly drops a symbol looks identical
+    to one where the symbol was never ingested. This project treats an
+    exclusion nobody can see as worse than the contamination it removes.
+    """
+    from .universe import quarantine
+
+    excluded = quarantine.symbols()
+    if excluded:
+        console.print(
+            f"[dim]{len(excluded)} quarantined symbol(s) excluded: their stored "
+            "series is not the company that was in the index. "
+            "'screener universe quarantine' lists them.[/]"
+        )
+
+
 def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
@@ -505,20 +524,16 @@ def diagnose_signals(
     same bars, crediting both double-counts one piece of evidence.
     """
     _configure_logging(verbose)
+    from .backtest.runner import load_symbol_bars
     from .calc.indicators import slope_positive, sma
     from .calc.patterns import fvg_entry_events, ifvg_entry_events, sweep_entry_events
     from .diagnostics.signals import frequency_report, overlap_matrix
-    from .metrics.compute import load_bars
 
     with session_scope() as session:
-        stmt = select(Symbol).order_by(Symbol.ticker)
-        if symbols:
-            wanted = [t.strip().upper() for t in symbols.split(",")]
-            stmt = stmt.where(Symbol.ticker.in_(wanted))
-        universe = [(s.id, s.ticker) for s in session.scalars(stmt)]
-        bars_by_symbol = {
-            ticker: load_bars(session, sid) for sid, ticker in universe
-        }
+        # Same loader as the backtests, so a signal-frequency report is not
+        # computed over series the backtests refuse to trade.
+        bars_by_symbol = load_symbol_bars(session, symbols)
+    _report_quarantine()
 
     bars_by_symbol = {k: v for k, v in bars_by_symbol.items() if len(v) >= 250}
     if not bars_by_symbol:
@@ -2655,9 +2670,8 @@ def backtest_run(
     from .backtest import budget
     from .backtest.benchmarks import buy_and_hold
     from .backtest.engine import CostModel
-    from .backtest.runner import HYPOTHESES
+    from .backtest.runner import HYPOTHESES, load_symbol_bars
     from .backtest.splits import get_split
-    from .metrics.compute import load_bars
     from .universe.build import universe_members
 
     key = hypothesis.strip().lower()
@@ -2719,13 +2733,11 @@ def backtest_run(
                 console.print(f"[red]{exc}[/]")
                 raise typer.Exit(code=1) from exc
 
-        stmt = select(Symbol).order_by(Symbol.ticker)
-        if symbols:
-            wanted = [t.strip().upper() for t in symbols.split(",") if t.strip()]
-            stmt = stmt.where(Symbol.ticker.in_(wanted))
-        rows = [(s.id, s.ticker) for s in session.scalars(stmt)]
-        bars_by_symbol = {ticker: load_bars(session, sid) for sid, ticker in rows}
-        bars_by_symbol = {k: v for k, v in bars_by_symbol.items() if not v.empty}
+        # Via load_symbol_bars, not a copy of it: this was a hand-rolled
+        # duplicate, so the quarantine added to that function did not apply to
+        # the one command that spends validation and test budget.
+        bars_by_symbol = load_symbol_bars(session, symbols)
+        _report_quarantine()
 
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")

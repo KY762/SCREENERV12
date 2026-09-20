@@ -283,9 +283,38 @@ Whole-symbol exclusion is coarser than it should be -- the honest fix needs a
 handover date the vendor does not give -- so periods that were fine are
 discarded too. That costs coverage, which is the safe direction.
 
-**Every prior result was computed without this filter.** The battery has not
-been re-run on the quarantined universe; when it is, results will be restated
-and are expected to worsen.
+**The quarantine has to be applied at three doors, and only one existed.**
+Membership was the obvious one, and it was also the least used: `backtest run`
+and `research explore` default `--universe` to None, so every result in this
+project was computed over every symbol in the database with no point-in-time
+filter at all. Worse, `backtest run` carried its own hand-rolled copy of
+`load_symbol_bars`, so the filter added to that function did not reach the one
+command that spends validation and test budget. All three now go through
+`load_symbol_bars`, which excludes quarantined tickers even when named
+explicitly, logs what it dropped, and prints it.
+
+**Measured effect on H1, development, default configuration.** Removing 2.3%
+of the universe moved it materially, and in the direction predicted:
+
+| | before | after |
+| --- | --- | --- |
+| signals | 5,929 | 5,864 |
+| random, same days | **73.1th** | **55.9th** |
+| one-sided p | 0.270 | 0.442 |
+| expectancy | -0.338R | -0.384R |
+| regimes beating random | 2 of 3 | **1 of 3** |
+
+Beating random in 1 of 3 regimes is below the pre-registered bar of 2. The
+mechanism is visible: **45 of 2,241 H1 signals (2.0%) came from 10 quarantined
+names**, and their development-window price ranges are ACS $0.095-$24.90
+(262x), GR $0.04-$9.10 (228x), CPWR $0.0011-$0.08 (73x). Those are not company
+returns, they are a series changing companies mid-window, and a relative-
+strength screen is drawn to them precisely because the handover looks like a
+spectacular rally. 2% of signals cost 17 percentile points, which is what a
+handful of fictional outliers should do.
+
+One hypothesis, one configuration, development. **The battery has not been
+re-run**; when it is, every figure in the sections above is restated.
 
 ## The 2026-09-19 decisions
 
