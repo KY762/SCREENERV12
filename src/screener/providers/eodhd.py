@@ -37,7 +37,7 @@ import httpx
 import pandas as pd
 
 from ..config import Settings, get_settings
-from .base import BarRequest, ProviderError
+from .base import BarRequest, CorporateAction, ProviderError
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ REQUEST_INTERVAL = 0.05
 
 BARS_PATH = "/api/eod/{symbol}"
 SYMBOLS_PATH = "/api/exchange-symbol-list/{exchange}"
+SPLITS_PATH = "/api/splits/{symbol}"
 
 
 class SymbolNotFound(ProviderError):
@@ -172,6 +173,52 @@ class EodhdProvider:
             {"from": start.isoformat(), "to": end.isoformat(), "period": "d", "order": "a"},
         )
 
+    # -- corporate actions ---------------------------------------------------
+
+    def get_corporate_actions(
+        self, symbol: str, start: date, end: date
+    ) -> list[CorporateAction]:
+        """Splits for one ticker. Without these, raw prices are unusable.
+
+        `price_daily` holds RAW prices by design (non-negotiable 2), so a split
+        is a real discontinuity in the stored series and the adjustment has to
+        be derived from these rows. With the table empty -- which it was until
+        2026-09-19 -- a 7-for-1 split reads as a 86% one-day loss and a 1-for-10
+        reverse split as a 900% gain. Measured on this database, that put
+        Apple at the BOTTOM of H1's ranking after its 2014 split and Citigroup
+        at the TOP after its 2011 reverse split, which inverts the hypothesis.
+
+        EODHD returns `{"date": "2014-06-09", "split": "7.000000/1.000000"}`.
+        The ratio stored is shares-after over shares-before, so a forward split
+        is > 1 and a reverse split < 1, and the price rule is the same either
+        way: price_after = price_before / ratio.
+
+        Dividends are NOT fetched. They matter for total return and not for the
+        price discontinuity this exists to fix, and a dividend adjustment
+        applied to a price series the backtest fills at would misstate the fill.
+        """
+        rows = self._get(
+            SPLITS_PATH.format(symbol=_us(symbol)),
+            {"from": start.isoformat(), "to": end.isoformat()},
+        )
+        out: list[CorporateAction] = []
+        for row in rows:
+            ratio = _split_ratio(row.get("split"))
+            raw_date = str(row.get("date") or "").strip()
+            if ratio is None or not raw_date:
+                log.warning("%s: unparseable split row %r", symbol, row)
+                continue
+            try:
+                ex_date = date.fromisoformat(raw_date)
+            except ValueError:
+                log.warning("%s: unparseable split date %r", symbol, raw_date)
+                continue
+            out.append(CorporateAction(
+                symbol=symbol.upper(), ex_date=ex_date,
+                action_type="split", ratio=ratio,
+            ))
+        return out
+
     # -- what is missing -----------------------------------------------------
 
     def list_symbols(self, exchange: str = "US", *, delisted: bool = False) -> list[SymbolRef]:
@@ -216,6 +263,26 @@ class EodhdProvider:
 
 
 # -- parsing (pure, so the format is pinned without a network) ---------------
+
+def _split_ratio(raw: object) -> float | None:
+    """"7.000000/1.000000" -> 7.0, shares after over shares before.
+
+    Returns None rather than guessing on anything unexpected: a wrong ratio
+    silently rewrites a price series, which is worse than a missing one that
+    gets reported.
+    """
+    text = str(raw or "").strip()
+    if "/" not in text:
+        return None
+    new, _, old = text.partition("/")
+    try:
+        numerator, denominator = float(new), float(old)
+    except ValueError:
+        return None
+    if numerator <= 0 or denominator <= 0:
+        return None
+    return numerator / denominator
+
 
 def _us(symbol: str) -> str:
     """EODHD addresses US tickers as SYMBOL.US, with a DASH for share classes.

@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..calc import indicators as ind
 from ..calc.relative_strength import relative_strength, relative_strength_adjusted
+from ..calc.splits import Split, adjust_bars
 from ..db.models import MetricsDaily, PriceDaily, Symbol
 
 log = logging.getLogger(__name__)
@@ -47,8 +48,30 @@ class MetricsResult:
         return self.error is None
 
 
-def load_bars(session: Session, symbol_id: int) -> pd.DataFrame:
-    """Load a symbol's full raw history as a DataFrame indexed by date."""
+def load_bars(
+    session: Session,
+    symbol_id: int,
+    *,
+    adjusted: bool = True,
+    splits: list[Split] | None = None,
+) -> pd.DataFrame:
+    """A symbol's full history, split-adjusted, indexed by date.
+
+    ADJUSTED BY DEFAULT, and the default is the point. `price_daily` holds raw
+    prices (non-negotiable 2), so an unadjusted series contains every split as
+    a real discontinuity: Apple's 2014 7-for-1 reads as a -81.7% 63-day return
+    and ranked LAST in H1's momentum screen, Citigroup's 2011 reverse split as
+    +765.6% and ranked first. That went unnoticed for the life of the project
+    because this function returned raw prices and every analytical caller used
+    them as if they were comparable.
+
+    Passing `adjusted=False` returns the stored bytes, for the things that
+    genuinely want them -- verifying against a vendor, showing a price someone
+    can look up. Nothing that computes a return should.
+
+    `splits` lets a bulk caller pass pre-loaded actions rather than making this
+    query once per symbol. Omit it and they are fetched here.
+    """
     rows = session.execute(
         select(
             PriceDaily.date, PriceDaily.open, PriceDaily.high,
@@ -63,7 +86,13 @@ def load_bars(session: Session, symbol_id: int) -> pd.DataFrame:
     frame = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     frame = frame.set_index("date")
     frame.index = pd.to_datetime(frame.index)
-    return frame.astype("float64").sort_index()
+    frame = frame.astype("float64").sort_index()
+    if not adjusted:
+        return frame
+    if splits is None:
+        from ..ingest.actions import load_splits
+        splits = load_splits(session, symbol_id)
+    return adjust_bars(frame, splits)
 
 
 def compute_metrics_frame(bars: pd.DataFrame) -> pd.DataFrame:

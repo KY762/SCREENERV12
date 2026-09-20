@@ -97,6 +97,15 @@ def _configure_logging(verbose: bool) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
+    # httpx logs every request at INFO, URL and query string included, and our
+    # API keys travel in the query string -- EODHD takes `api_token`, so a
+    # routine ingest wrote the live key into its log several hundred times.
+    # Found 2026-09-20 in the splits ingest. Raised to WARNING so the key
+    # cannot reach a log file, a terminal scrollback or a pasted traceback;
+    # --verbose still turns it on, and that is now a deliberate act.
+    if not verbose:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 @db_app.command("init")
@@ -1443,6 +1452,85 @@ def research_explore(
         f"  git add {out}\n"
         '  git commit -m "battery results"\n'
         "  git push"
+    )
+
+
+@app.command("ingest-actions")
+def ingest_actions_cmd(
+    symbols: str | None = typer.Option(None, "--symbols", "-s", help="Omit for all."),
+    start: str = typer.Option("2009-01-01", "--start"),
+    end: str | None = typer.Option(None, "--end"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Fetch and store splits. Nothing here works correctly without them.
+
+    `price_daily` holds RAW prices by design, so a split is a genuine
+    discontinuity in the stored series and the adjustment is derived from this
+    table. The table held zero rows until 2026-09-19, which meant every split
+    was a fake return: Apple's 2014 7-for-1 read as a -81.7% 63-day return and
+    ranked LAST in H1's momentum screen, while Citigroup's 2011 reverse split
+    read as +765.6% and ranked first.
+
+    Idempotent. A re-run writes nothing new, so an interrupted pass resumes.
+    """
+    _configure_logging(verbose)
+    from .ingest.actions import ingest_splits
+    from .providers.eodhd import EodhdProvider
+
+    settings = get_settings()
+    if not settings.has_eodhd:
+        console.print(
+            "[red]EODHD credentials missing.[/] Splits for 2010-2019 need them; "
+            "Alpaca's history starts 2020-07-27. See .env.example."
+        )
+        raise typer.Exit(code=1)
+
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end) if end else date.today()
+
+    with session_scope() as session:
+        wanted = (
+            [t.strip().upper() for t in symbols.split(",") if t.strip()]
+            if symbols else
+            [t for (t,) in session.execute(select(Symbol.ticker).order_by(Symbol.ticker)).all()]
+        )
+        if not wanted:
+            console.print("[yellow]No symbols.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+
+        console.print(
+            f"Fetching splits for [bold]{len(wanted):,}[/] symbol(s), "
+            f"{start_date} to {end_date}."
+        )
+        provider = EodhdProvider(settings)
+        try:
+            with Progress(
+                SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+                BarColumn(), TaskProgressColumn(), console=console,
+            ) as bar:
+                task = bar.add_task("splits", total=len(wanted))
+
+                def tick(ticker, result):
+                    bar.update(task, completed=result.symbols_checked,
+                               description=f"splits {ticker}")
+
+                result = ingest_splits(
+                    session, provider, wanted,
+                    start=start_date, end=end_date, progress=tick,
+                )
+        finally:
+            provider.close()
+
+    console.print(f"[green]{result.summary()}[/]")
+    if result.failures:
+        console.print(f"[yellow]{len(result.failures)} failure(s):[/]")
+        for ticker, why in list(result.failures.items())[:10]:
+            console.print(f"   {ticker:8} {why[:90]}")
+        if len(result.failures) > 10:
+            console.print(f"   ... and {len(result.failures) - 10} more")
+    console.print(
+        "[yellow]Rebuild metrics next.[/] They are computed from prices and were "
+        "built without this adjustment:\n  screener metrics build --rebuild"
     )
 
 

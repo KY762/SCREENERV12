@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from ..calc.sizing import RiskLimits
 from ..db.models import Symbol
+from ..ingest.actions import load_splits_bulk
 from ..metrics.compute import load_bars
 from ..universe import quarantine
 from . import inference
@@ -272,8 +273,11 @@ def load_symbol_bars(session: Session, symbols: str | None) -> dict[str, pd.Data
             len(dropped), ", ".join(dropped),
         )
 
+    # One query for every symbol's splits rather than one per symbol: a
+    # thousand round trips for a table holding a few thousand rows.
+    splits_by_symbol = load_splits_bulk(session)
     bars = {
-        ticker: load_bars(session, sid)
+        ticker: load_bars(session, sid, splits=splits_by_symbol.get(sid, []))
         for sid, ticker in rows
         if ticker not in excluded
     }
