@@ -54,13 +54,23 @@ class SymbolNotFound(ProviderError):
 
 
 @dataclass(frozen=True)
-class DelistedTicker:
-    """A symbol EODHD no longer lists. `name` is often all that survives."""
+class SymbolRef:
+    """What a ticker refers to, as the vendor understands it TODAY.
+
+    `isin` is the part that matters. A ticker is a label the exchange reuses;
+    an ISIN identifies the security itself and survives a rename. BBBY as a
+    label has belonged to two companies; the two have different ISINs.
+
+    `type` catches the crudest reuse: an index member that is now an ETF is
+    certainly not the same thing. FB is a ProShares buffer ETF now.
+    """
 
     symbol: str
     name: str | None
     exchange: str | None
     type: str | None
+    isin: str | None
+    delisted: bool
 
 
 class EodhdProvider:
@@ -164,26 +174,36 @@ class EodhdProvider:
 
     # -- what is missing -----------------------------------------------------
 
-    def list_delisted(self, exchange: str = "US") -> list[DelistedTicker]:
-        """Every symbol EODHD marks as no longer listed on the exchange.
+    def list_symbols(self, exchange: str = "US", *, delisted: bool = False) -> list[SymbolRef]:
+        """Every symbol on an exchange, listed or delisted, with its identity.
 
-        The point of the subscription. A backtest universe built from symbols
-        that still trade silently drops the companies that failed, and their
-        endings are the bad ones.
+        Two calls cover what the project needs. The delisted list is the point
+        of the subscription -- a universe built from symbols that still trade
+        silently drops the companies that failed, and their endings are the
+        bad ones. The active list is what says whether those letters have
+        since been handed to somebody else.
         """
-        rows = self._get(SYMBOLS_PATH.format(exchange=exchange), {"delisted": "1"})
+        rows = self._get(
+            SYMBOLS_PATH.format(exchange=exchange), {"delisted": "1" if delisted else "0"}
+        )
         out = []
         for row in rows:
             code = str(row.get("Code") or "").strip().upper()
             if not code:
                 continue
-            out.append(DelistedTicker(
+            out.append(SymbolRef(
                 symbol=code,
                 name=(row.get("Name") or None),
                 exchange=(row.get("Exchange") or None),
                 type=(row.get("Type") or None),
+                isin=(row.get("Isin") or None),
+                delisted=delisted,
             ))
         return out
+
+    def list_delisted(self, exchange: str = "US") -> list[SymbolRef]:
+        """Symbols EODHD marks as no longer listed."""
+        return self.list_symbols(exchange, delisted=True)
 
     def close(self) -> None:
         self._client.close()

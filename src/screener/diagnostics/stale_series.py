@@ -108,3 +108,85 @@ def identity_risks(
                 f"that ended {left} -- one series, possibly two companies",
             ))
     return out
+
+
+@dataclass(frozen=True)
+class Identity:
+    """What a ticker refers to now, as recorded by `universe identify`."""
+
+    symbol: str
+    name: str | None
+    security_type: str | None
+    is_active: bool
+    isin: str | None
+
+
+@dataclass(frozen=True)
+class Conflict:
+    symbol: str
+    kind: str          # "not_a_stock" | "outlived_its_security" | "absent"
+    holder: str | None
+    detail: str
+
+
+def identity_conflicts(
+    series: Iterable[Series],
+    identity: dict[str, Identity],
+    left_universe: dict[str, date],
+    *,
+    data_ends: date,
+    still_trading_within_days: int = 45,
+) -> list[Conflict]:
+    """Where the stored identity contradicts the stored prices.
+
+    Three signals, in descending certainty. All are about members of the
+    universe, because a ticker nobody traded on cannot corrupt a result.
+
+    not_a_stock            the letters now belong to an ETF or a fund. An
+                           index member is a company, so the series that was
+                           downloaded is not that company. FB is a ProShares
+                           buffer ETF; EMC is a Global X emerging-markets ETF.
+    outlived_its_security  the vendor's own list says this security is
+                           delisted, yet the price series runs to the end of
+                           the data. The list and the prices disagree, and the
+                           tail belongs to whoever holds the letters now. BBBY
+                           is listed as Bed Bath & Beyond and quotes into 2026
+                           with Overstock's prices.
+    absent                 the series starts after the ticker left the
+                           universe, so the earlier company's history is
+                           missing rather than wrong.
+
+    A fourth case cannot be settled from this data: a ticker whose company
+    quietly became another company of the same type, with the vendor listing
+    only the newcomer. BBT reads as "Beacon Financial Corporation" and CPWR as
+    "Ocean Thermal Energy Corp" -- obvious to a person reading the names, and
+    invisible to any rule here. That is why the names are reported.
+    """
+    by_symbol = {s.symbol: s for s in series}
+    out: list[Conflict] = []
+
+    for symbol, left in sorted(left_universe.items()):
+        s = by_symbol.get(symbol)
+        if s is None:
+            continue
+        ident = identity.get(symbol)
+        holder = ident.name if ident else None
+        still_quoting = (data_ends - s.last_bar).days <= still_trading_within_days
+
+        if ident and ident.security_type and ident.security_type != "Common Stock":
+            out.append(Conflict(
+                symbol, "not_a_stock", holder,
+                f"an index member's ticker now refers to a {ident.security_type}",
+            ))
+        elif ident and not ident.is_active and still_quoting:
+            out.append(Conflict(
+                symbol, "outlived_its_security", holder,
+                f"listed as delisted, yet priced to {s.last_bar}: the vendor's own "
+                "list and its prices disagree",
+            ))
+        elif s.first_bar > left:
+            out.append(Conflict(
+                symbol, "absent", holder,
+                f"series starts {s.first_bar}, after this ticker left on {left}",
+            ))
+    return out

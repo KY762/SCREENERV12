@@ -56,6 +56,11 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # correction over validation needs every run's p-value as recorded, not
     # re-derived later from a different seed.
     ("research_runs", "same_day_p", "DOUBLE PRECISION"),
+    # 2026-09-19: ticker identity. A backtest joins membership to prices by
+    # ticker, and tickers get reused -- BBBY held Overstock's history. An ISIN
+    # names the security rather than the letters.
+    ("symbols", "isin", "VARCHAR(12)"),
+    ("symbols", "security_type", "VARCHAR(40)"),
 )
 
 

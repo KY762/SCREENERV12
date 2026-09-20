@@ -66,6 +66,13 @@ class Symbol(Base):
     sector: Mapped[str | None] = mapped_column(String(100))
     industry: Mapped[str | None] = mapped_column(String(150))
     cik: Mapped[str | None] = mapped_column(String(20), index=True)
+    # A ticker is a label the exchange reuses; an ISIN identifies the SECURITY
+    # and survives a rename. Stored 2026-09-19 after BBBY was found holding
+    # Overstock's history: the two companies share letters and differ here.
+    isin: Mapped[str | None] = mapped_column(String(12), index=True)
+    # What the letters refer to today. FB is a ProShares ETF now, so an index
+    # member whose ticker is no longer common stock certainly changed hands.
+    security_type: Mapped[str | None] = mapped_column(String(40))
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     first_date: Mapped[date | None] = mapped_column(Date)

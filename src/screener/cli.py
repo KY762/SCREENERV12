@@ -571,6 +571,78 @@ def diagnose_signals(
         console.print(f"  [{colour}]{result.summary()}[/]")
 
 
+@universe_app.command("identify")
+def universe_identify(
+    exchange: str = typer.Option("US", "--exchange"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Record what each ticker refers to: ISIN, security type, listed or not.
+
+    A backtest joins membership to prices by TICKER, and tickers get reused.
+    BBBY's stored 2013-2015 prices are Overstock's, because Overstock renamed
+    itself Bed Bath & Beyond Inc. and took the letters. An ISIN names the
+    security instead and survives a rename, so this is what makes the problem
+    checkable rather than suspected.
+
+    Two calls: what is listed today, and what is not. A ticker in both lists
+    has belonged to more than one security.
+    """
+    _configure_logging(verbose)
+    from .providers.base import ProviderError
+    from .providers.eodhd import EodhdProvider
+
+    settings = get_settings()
+    if not settings.has_eodhd:
+        console.print("[red]EODHD_API_KEY is not set.[/] Identity comes from its "
+                      "symbol lists.")
+        raise typer.Exit(code=1)
+
+    try:
+        with EodhdProvider(settings) as provider:
+            active = provider.list_symbols(exchange, delisted=False)
+            delisted = provider.list_symbols(exchange, delisted=True)
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"[dim]{len(active):,} listed and {len(delisted):,} delisted symbol(s) "
+        f"on {exchange}.[/]"
+    )
+
+    # Prefer the listed entry: it says what the letters mean NOW, which is what
+    # the price series we just downloaded actually followed.
+    by_symbol: dict[str, object] = {}
+    for ref in delisted:
+        by_symbol.setdefault(ref.symbol, ref)
+    for ref in active:
+        by_symbol[ref.symbol] = ref
+
+    reused = sorted(
+        {r.symbol for r in active} & {r.symbol for r in delisted}
+    )
+
+    updated = 0
+    with session_scope() as session:
+        for symbol in session.scalars(select(Symbol)):
+            ref = by_symbol.get(symbol.ticker)
+            if ref is None:
+                continue
+            symbol.isin = ref.isin
+            symbol.security_type = ref.type
+            symbol.is_active = not ref.delisted
+            if ref.name and symbol.name in (None, "", symbol.ticker):
+                symbol.name = ref.name[:255]
+            updated += 1
+
+    console.print(f"[green]{updated:,}[/] symbol(s) given an identity.")
+    console.print(
+        f"[yellow]{len(reused):,}[/] ticker(s) appear in BOTH lists, so those "
+        "letters have carried more than one security."
+    )
+    console.print("[dim]`screener diagnose identity` is what reads this.[/]")
+
+
 @universe_app.command("sp500")
 def universe_sp500(
     file: str = typer.Option(
@@ -635,21 +707,16 @@ def diagnose_identity(
     """Is each price series the company we think it is?
 
     A backtest joins membership to prices by TICKER, and tickers get reused.
-    The vendor keys history to whoever holds the letters now, so a series can
-    belong to a different company than the one that was in the index -- with
-    no gap, and nothing that looks wrong.
+    Confirmed here 2026-09-19: BBBY's stored 2013-2015 closes are $26, $15 and
+    $21 -- Overstock's. Bed Bath & Beyond traded $60-80 then, and Overstock
+    renamed itself Bed Bath & Beyond Inc. and took the letters.
 
-    Confirmed here on 2026-09-19: BBBY's stored 2013-2015 prices are
-    OVERSTOCK's, because Overstock renamed itself Bed Bath & Beyond Inc. and
-    took the ticker.
-
-    Reports evidence, not verdicts. Telling a reused ticker from a company
-    that merely shrank out of the index needs to know whether the original
-    company still exists, and that is not in the price data.
+    Reads the identity recorded by `screener universe identify`. Run that
+    first, or this has nothing to compare the prices against.
     """
     _configure_logging(verbose)
     from .db.models import PriceDaily, UniverseSnapshot
-    from .diagnostics.stale_series import Series, identity_risks
+    from .diagnostics.stale_series import Identity, Series, identity_conflicts
 
     with session_scope() as session:
         rows = session.execute(
@@ -664,6 +731,11 @@ def diagnose_identity(
         ).all()
         series = [Series(t, first, last, bars) for t, first, last, bars in rows]
 
+        identity = {
+            s.ticker: Identity(s.ticker, s.name, s.security_type, s.is_active, s.isin)
+            for s in session.scalars(select(Symbol))
+        }
+
         members = session.execute(
             select(Symbol.ticker, func.max(UniverseSnapshot.date))
             .join(UniverseSnapshot, UniverseSnapshot.symbol_id == Symbol.id)
@@ -674,57 +746,62 @@ def diagnose_identity(
             select(func.max(UniverseSnapshot.date))
             .where(UniverseSnapshot.name == universe_name)
         )
-        # A ticker still in the latest membership has not left, so it is not a
-        # candidate: the question is only about tickers that stopped being one
-        # company and may since have become another.
         left = {t: d for t, d in members if current is None or d < current}
 
     if not series:
         console.print("[yellow]No price data.[/]")
         return
+    if not any(i.security_type for i in identity.values()):
+        console.print("[yellow]No identity recorded.[/] Run "
+                      "'screener universe identify' first.")
+        raise typer.Exit(code=1)
 
     data_ends = max(s.last_bar for s in series)
-    risks = identity_risks(
-        series, left, data_ends=data_ends, still_trading_within_days=within_days
+    conflicts = identity_conflicts(
+        series, identity, left, data_ends=data_ends, still_trading_within_days=within_days
     )
-    absent = [r for r in risks if r.mode == "absent"]
-    overwritten = [r for r in risks if r.mode == "overwritten"]
+    groups: dict[str, list] = {}
+    for c in conflicts:
+        groups.setdefault(c.kind, []).append(c)
 
     console.print(
         f"[bold]{len(series):,}[/] symbol(s) with bars, data ending {data_ends}. "
         f"{len(left):,} ticker(s) left {universe_name} at some point."
     )
 
-    console.print("")
-    console.print(
-        f"[yellow]{len(absent)}[/] with the earlier company's history ABSENT: the "
-        "series starts after that ticker left, so a backtest of the earlier period "
-        "finds nothing. A gap, and countable."
-    )
-    for r in absent[:12]:
-        console.print(f"   {r.symbol:6} left {r.left_universe}, series starts {r.first_bar}")
-    if len(absent) > 12:
-        console.print(f"   ... and {len(absent) - 12} more")
+    headings = {
+        "not_a_stock": (
+            "red",
+            "the ticker now refers to an ETF or fund, so the downloaded series "
+            "is certainly not the index member",
+        ),
+        "outlived_its_security": (
+            "red",
+            "the vendor lists the security as delisted yet keeps pricing it: "
+            "its own list and its prices disagree",
+        ),
+        "absent": (
+            "yellow",
+            "the series starts after the ticker left, so the earlier company's "
+            "history is missing rather than wrong",
+        ),
+    }
+    for kind, (colour, why) in headings.items():
+        found = groups.get(kind, [])
+        console.print("")
+        console.print(f"[{colour}]{len(found)}[/] {kind.replace('_', ' ')}: {why}")
+        for c in found[:15]:
+            holder = f" -- now {c.holder}" if c.holder else ""
+            console.print(f"   {c.symbol:6} {c.detail}{holder}")
+        if len(found) > 15:
+            console.print(f"   ... and {len(found) - 15} more")
 
     console.print("")
     console.print(
-        f"[red]{len(overwritten)}[/] with a CONTINUOUS series spanning a membership "
-        "that ended: one series, possibly two companies. Nothing about these looks "
-        "wrong, which is what makes them dangerous. Most are innocent -- a company "
-        "that shrank out of the index still trades as itself."
-    )
-    for r in overwritten[:12]:
-        console.print(
-            f"   {r.symbol:6} left {r.left_universe}, series {r.first_bar} to {r.last_bar}"
-        )
-    if len(overwritten) > 12:
-        console.print(f"   ... and {len(overwritten) - 12} more")
-
-    console.print("")
-    console.print(
-        "[dim]The fix is to stop keying on tickers: an identifier that survives a "
-        "rename (ISIN, CUSIP, FIGI) names the company rather than the letters, and "
-        "EODHD carries ISIN in its reference data. Open item, not built.[/]"
+        "[dim]A ticker handed to a different company of the SAME type is invisible "
+        "to every rule above: BBT reads 'Beacon Financial Corporation' and CPWR "
+        "'Ocean Thermal Energy Corp', both listed common stock with continuous "
+        "history. Reading the holder names is the only way to catch those.[/]"
     )
 
 
