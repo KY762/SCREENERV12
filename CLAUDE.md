@@ -316,6 +316,36 @@ handful of fictional outliers should do.
 One hypothesis, one configuration, development. **The battery has not been
 re-run**; when it is, every figure in the sections above is restated.
 
+## The EODHD purchase worked: coverage went from 15% to 96%
+
+**Measured 2026-09-19 after the load.** This is the payoff from decision 4, and
+it is the largest single improvement to data quality in the project.
+
+| | before | after |
+| --- | --- | --- |
+| S&P 500 members 2010-2019 with bars in-window | **106 of 719** | **687 of 719 (96%)** |
+| symbols with prices | 307 | 1,045 |
+| daily bars | 881,449 | **3,726,042** |
+
+**The point-in-time universe is now usable.** Membership resolves to 484-502
+names across 2010-2019, and **92-99% of them have a bar on the day** (92% in
+2010 rising to 99% in 2019). Before the load this was around 15%, which is why
+every run to date used no universe filter at all.
+
+**The missing failures are largely back, with correct endings.** FRC ends
+2023-05-02 (the seizure), SIVB ends 2023-03-09 — both were absent before.
+Acquisitions end at their deal dates: ATVI 2023-10-13, TWTR 2022-10-27, XLNX
+2022-02-16, MXIM 2021-08-26, ALXN 2021-07-21, CERN 2022-06-08. **SBNY's tail is
+a correct record, not contamination**: $110 to $70 through the March 2023
+collapse, then OTC at $0.30-0.38 on a few thousand shares into 2026. It is
+deliberately not quarantined. BBBY is present but contaminated and IS
+quarantined. YELL, RAD, LEHMQ and WAMUQ have no symbol row because they were
+never requested, not because coverage failed.
+
+**What this does not fix.** The survivorship numbers in the section below were
+measured on the old 307-symbol universe and have not been re-measured. Neither
+has the battery. Both are expected to move.
+
 ## The 2026-09-19 decisions
 
 Five open decisions, closed by the operator on 2026-09-19 after research into
