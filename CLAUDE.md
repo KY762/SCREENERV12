@@ -308,10 +308,16 @@ Beating random in 1 of 3 regimes is below the pre-registered bar of 2. The
 mechanism is visible: **45 of 2,241 H1 signals (2.0%) came from 10 quarantined
 names**, and their development-window price ranges are ACS $0.095-$24.90
 (262x), GR $0.04-$9.10 (228x), CPWR $0.0011-$0.08 (73x). Those are not company
-returns, they are a series changing companies mid-window, and a relative-
-strength screen is drawn to them precisely because the handover looks like a
-spectacular rally. 2% of signals cost 17 percentile points, which is what a
-handful of fictional outliers should do.
+returns, they are a series changing companies mid-window.
+
+Be careful about the mechanism. The quarantined names are 2.3% of the pool and
+produced 2.0% of H1's signals, so there is **no evidence they were selected at
+an above-base rate** — an earlier note here claimed a momentum screen is drawn
+to a ticker handover, and the measurement does not support it. What the data
+shows is magnitude, not frequency: a handful of trades carried returns no
+company produces, and 2% of signals cost 17 percentile points. Both benchmarks
+draw from the same filtered pool as the strategy, so the move is the strategy
+falling relative to random, not a changed yardstick.
 
 One hypothesis, one configuration, development. **The battery has not been
 re-run**; when it is, every figure in the sections above is restated.
