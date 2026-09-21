@@ -126,14 +126,37 @@ so 0/6 is a floor, not a measurement.
 Consequence: Round 1's negative h1–h4 results were produced *with* this bias
 helping them, which makes them more credible, not less. Value screens are the
 most exposed thing here — they select distressed companies, which is exactly
-the missing population. Polygon (~$29/mo) is the documented fix
-(`providers/alpaca.py:12`).
+the missing population.
 
-**Do not spend validation or test budget until delisted coverage is fixed.**
+**Polygon has been purchased** (operator, 2026-09-21). That is the documented
+fix, and it is bought. It is not yet connected, and the distinction matters:
+
+- **Fact, verified in the code on 2026-09-21.** `PolygonProvider`
+  (`providers/polygon.py`) is imported by nothing. `screener ingest` selects
+  between Tiingo and Alpaca only (`cli.py:151` and `cli.py:999`). `config.py`
+  reads a `polygon_api_key`, but `.env.example` does not list one. **No path
+  exists today from the subscription to the database.**
+- **Fact.** The 881,449 bars already stored came from Tiingo and still carry
+  the measured hole. Buying a provider does not repair stored history. The
+  affected symbols have to be re-ingested before anything in the database
+  changes.
+- **Unverified.** Whether the key is in the operator's local `.env`, and
+  whether coverage has been re-measured against Polygon. Neither can be
+  checked from the repository.
+
+**The budget gate is unchanged, and the condition is the measurement, not the
+purchase.** Do not spend validation or test budget until `screener universe
+coverage` has been re-run against Polygon and shows the failures present.
 Development is unlimited and the bias direction is known, so Round 2 can run
 there. Validation (3 configs) and test (1, once) are enforced against the
-database and never regenerate; spending them on knowingly biased data burns
-them permanently.
+database and never regenerate; spending them on data whose coverage has not
+been re-measured burns them permanently.
+
+To connect it: add `POLYGON_API_KEY` to `.env` and `.env.example`; add
+`PolygonProvider` to the provider selection in `cli.py`; re-ingest at least the
+six failures the coverage probe names (FRC, BBBY, YELL, RAD, SIVB, SBNY) plus
+the wider pool; then re-run `screener universe coverage`. The result of that
+run is what lifts the gate — record it here.
 
 Universe as of 2026-08-26: 265 candidates ingested, 263 returned bars, 307
 symbols with metrics (the pool plus the earlier 51). 881,449 daily bars;
