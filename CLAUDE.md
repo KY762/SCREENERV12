@@ -738,6 +738,9 @@ screener prereg show                # what validation/test may be spent on
 screener backtest run --hypothesis h5 --split development
 screener backtest surface --hypothesis h5 --vary hold=21,63,126
 screener research explore --battery all
+screener forward record -h h1 --since 2026-09-22   # paper book: append today's signals
+screener forward book   -h h1                      # what they have done since
+screener ingest-actions             # splits; nothing works correctly without them
 ```
 
 ## Conventions

@@ -1496,11 +1496,13 @@ def forward_book(
     console.print("")
     if open_now:
         table = Table(title=f"Open ({len(open_now)})")
-        for col in ("Symbol", "Entered", "Entry", "Stop"):
+        for col in ("Symbol", "Entered", "Entry", "Stop", "Shares", "Risk"):
             table.add_column(col, justify="left")
         for t in sorted(open_now, key=lambda t: t.entry_date):
-            table.add_row(t.ticker, str(t.entry_date), f"{t.entry_price:.2f}",
-                          f"{t.stop_price:.2f}" if t.stop_price is not None else "-")
+            table.add_row(
+                t.ticker, str(t.entry_date), f"{t.entry_price:.2f}",
+                f"{t.stop:.2f}", str(t.shares), f"{t.risk_dollars:.2f}",
+            )
         console.print(table)
     else:
         console.print("[dim]No open positions.[/]")
@@ -1512,11 +1514,17 @@ def forward_book(
         )
         return
 
-    console.print(
-        f"\n[bold]{len(closed)}[/] closed: "
-        f"{sum(1 for t in closed if t.r_multiple > 0) / len(closed):.1%} win rate, "
-        f"expectancy {sum(t.r_multiple for t in closed) / len(closed):+.3f}R"
-    )
+    # `r_multiple` is None where the trade carried no measurable risk, so it is
+    # filtered rather than summed over -- a None in that sum is a TypeError at
+    # the end of a long run, and a 0 substituted for it is a silent lie about
+    # the expectancy.
+    rs = [t.r_multiple for t in closed if t.r_multiple is not None]
+    if rs:
+        console.print(
+            f"\n[bold]{len(closed)}[/] closed, {len(rs)} with an R: "
+            f"{sum(1 for r in rs if r > 0) / len(rs):.1%} win rate, "
+            f"expectancy {sum(rs) / len(rs):+.3f}R"
+        )
     console.print(
         "[dim]A paper book is not a track record. It has no queue position, no "
         "partial fills and no emotional cost, and it fills at the engine's "
