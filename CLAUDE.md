@@ -463,6 +463,34 @@ settled trades to **none**. `splits_until` now drops splits after the run's end
 date at both loaders, and every backtest call site passes it. Splits the window
 contains are still applied: AAPL's 2012 bar reads $80.14, not $20.04.
 
+## The point-in-time universe has a 5-8% hole, and it does not change the verdict
+
+**Measured 2026-09-22**, because the H1 conclusion now rests entirely on this
+universe being sound. On any given date 5-8% of `sp500_pit` members have no
+bars: 39 of 484 in 2010, 32 of 489 in 2013, 27 of 491 in 2015.
+
+The missing names are not random. ALTR (Intel, 2015), BEAM (Suntory, 2014), DTV
+(AT&T, 2015), FRX (Actavis, 2014), MON (Bayer, 2018), DELL (private, 2013) --
+**acquired, renamed or restructured companies**, which is the population whose
+absence creates survivorship bias in the first place. `BHGE` is listed as a
+2010 member although Baker Hughes a GE Company did not exist until 2017, and
+`ARNC` likewise: this is the caveat in `universe/sp500.py` made concrete --
+**the membership is point-in-time but the symbols are not**, so a company that
+was in the index under an older ticker appears under its modern one, for which
+no 2010 bars exist.
+
+**It does not invalidate the percentile, and it does invalidate the
+expectancy.** Both the strategy and the date-matched benchmark now draw from
+the same ~450 members that have bars, so the comparison is symmetric and the
+percentile is a fair test of selection within that pool. What it is a test OF
+is narrower than the S&P 500: "top-decile momentum among index members that
+still trade under the same ticker" against "random among the same". Absolute
+returns from this universe are still biased upward, because the names that
+vanished are disproportionately the ones that stopped existing.
+
+So H1's 49.8th percentile stands. Its **+0.078R expectancy does not** and
+should not be quoted as what the rule would have earned.
+
 ## The quarantine, and what liquidity revealed
 
 **Built 2026-09-19.** `universe_members` -- the single point every backtest
