@@ -301,6 +301,39 @@ isolation again (29-29.4% divergence). `h3_no_stop` looks strong at the 96th
 with PF 1.81, but on **161 trades and a 35.5% drawdown**, failing two criteria.
 H7 returns NONE in all three of its experiments.
 
+## Every result so far ran without a point-in-time universe (2026-09-22)
+
+**`--universe` defaults to None**, so `backtest run`, `backtest surface` and
+`research explore` have all been selecting from **every stored symbol** rather
+than from index membership on the date. Non-negotiable 3 exists to prevent
+exactly that. The point-in-time universe has been usable since the EODHD load
+(92-99% of members have a bar on the day) and nothing has used it.
+
+It matters enormously. The configuration that passes all six criteria below
+goes from the **97.7th percentile to the 31.3rd** when the strategy is
+restricted to `sp500_pit`, with p from 0.0240 to 0.6873 and 3 of 6 criteria
+failing.
+
+**Neither figure is the right test, and the second is unfair in the other
+direction.** All three benchmark calls drew from `bars_by_symbol` regardless of
+the strategy's universe, so the restricted run had the strategy picking from
+~500 index members while the benchmark picked from 1,020 stored symbols. That
+pool is enriched with companies that later GREW into the index -- the second
+survivorship channel this file has recorded as unmeasured and as the one that
+"flatters exactly the rules this table clears". Leaving the benchmark
+unrestricted hands it that enrichment and takes it from the strategy.
+
+`date_matched_benchmark` now takes an `eligible` predicate and masks its pool
+per entry date; `score` and `evaluate` take the universe and every call site
+supplies it. **The honest reading -- strategy and benchmark on the same pool --
+is the one that decides whether any of this is worth a validation slot.**
+
+The lesson generalises: a percentile is a comparison, and a comparison is only
+as good as the thing on the other side of it. This project has now found three
+ways for the other side to be wrong -- timing bundled with selection (fixed by
+the date-matched benchmark), contaminated symbols in both pools (fixed by the
+quarantine), and now a different pool on each side.
+
 ## A configuration that passes every criterion (2026-09-21)
 
 **On development, which proves nothing.** Recorded because it is the first

@@ -168,18 +168,37 @@ looking at.
 
 ## 8. Validation gates
 
-No strategy touches real capital before Stage F. Current position: **Stage B on all four hypotheses.**
+No strategy touches real capital before Stage F. Current position, updated
+**2026-09-22**: **Stage D on H1, and nowhere on the other six.**
 
 | Stage | Meaning | Status |
 | --- | --- | --- |
 | A — Idea | Interesting, unproven | ✓ passed |
-| B — Objective specification | Rules fully defined | **← we are here** |
-| C — Historical test | Initial backtest complete | |
-| D — Robustness | Overfitting and fragility probed | |
-| E — Out-of-sample | Sealed data, one run | |
-| F — Forward test | Prospective, on paper | |
+| B — Objective specification | Rules fully defined | ✓ passed — `docs/03`, seven hypotheses |
+| C — Historical test | Initial backtest complete | ✓ passed — five batteries, the last on data with no known defect |
+| D — Robustness | Overfitting and fragility probed | **← H1 is here** |
+| E — Out-of-sample | Sealed data, one run | budget unspent; `preregistrations/H1.md` drafted, unsigned |
+| F — Forward test | Prospective, on paper | harness built 2026-09-22, book open, no prospective signals yet |
 | G — Small capital | Limited real money | |
 | H — Scaling review | Increased allocation | |
+
+**Only H1 has reached D**, and only its twelve-month form. H2, H3, H4 and H7
+return NONE across every experiment in the 2026-09-20 battery; H5's monthly
+form sits at the 0th percentile; H6 has never had the sample size to answer.
+
+**Stage D is not passed, it is occupied.** What has been probed: a
+random-selection benchmark on matched entry dates, month-clustered standard
+errors, effective sample size, plateau selection over peaks, per-hypothesis
+survivorship exposure, a ticker-identity quarantine, split adjustment, and a
+no-lookahead guard on that adjustment. What has not: whether the twelve-month
+result survives a point-in-time universe with the benchmark drawn from the
+same pool — in progress as of 2026-09-22, and the reading that decides whether
+Stage E is worth spending.
+
+**F does not have to wait for E.** The forward-test harness records signals
+prospectively and spends no split budget, so it can run alongside everything
+above. What it cannot do is substitute for E: a paper book proves the pipeline
+works and that the rule keeps behaving, not that the edge is real.
 
 **The $10,000 stays uninvested until Stage E clears.** Nothing is lost by waiting; no validated strategy
 will exist for months regardless.
