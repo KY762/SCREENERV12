@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import typer
@@ -1572,6 +1572,138 @@ def forward_book(
         "question: does the rule keep doing prospectively what development "
         "said it does.[/]"
     )
+
+@forward_app.command("snapshot")
+def forward_snapshot(
+    hypothesis: str = typer.Option(..., "--hypothesis", "-h"),
+    universe_name: str | None = typer.Option(None, "--universe"),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    use_stop: bool = typer.Option(True, "--use-stop/--no-stop"),
+    hold: int | None = typer.Option(None, "--hold"),
+    top_pct: float = typer.Option(0.10, "--top-pct"),
+    stop_atr: float = typer.Option(2.0, "--stop-atr"),
+    rs_lookback: int = typer.Option(63, "--rs-lookback"),
+    max_positions: int = typer.Option(5, "--max-positions"),
+    risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
+    entry_delay: int = typer.Option(1, "--entry-delay"),
+    r_multiple: float | None = typer.Option(None, "--r-multiple"),
+    time_limit: int | None = typer.Option(None, "--time-limit"),
+    out: str = typer.Option("research/forward-snapshot.json", "--out"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Write the paper book to JSON, for a dashboard to read.
+
+    A snapshot, not a live query: the page that reads it shows what was true
+    when this ran, and says so. That is deliberate -- a dashboard that queries
+    a database live is a dashboard that shows a different number every time
+    someone opens it, and there is no way afterwards to say what was on screen
+    when a decision was made.
+    """
+    _configure_logging(verbose)
+    import json
+
+    from .backtest.engine import CostModel, ExitRule, run_backtest
+    from .backtest.runner import RunConfig, load_symbol_bars
+    from .forward import backfilled, latest_bar, load_signals, span
+
+    config, digest = _forward_config(
+        hypothesis=hypothesis, universe=universe_name, equity=equity,
+        slippage_bps=slippage_bps, trend_filter=trend_filter, use_stop=use_stop,
+        hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+        max_positions=max_positions, entry_delay=entry_delay,
+        r_multiple=r_multiple, time_limit=time_limit,
+        risk_pct=risk_pct, max_open_risk_pct=max_open_risk_pct,
+    )
+    key = config["hypothesis"]
+
+    with session_scope() as session:
+        book = span(session, digest)
+        candidates = load_signals(session, digest)
+        prospective = load_signals(session, digest, prospective_only=True)
+        bars_by_symbol = load_symbol_bars(session, None)
+
+    as_of = latest_bar(bars_by_symbol)
+    payload = {
+        "generated": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "hypothesis": key,
+        "config_hash": digest,
+        "config": config,
+        "data_through": str(as_of) if as_of else None,
+        "signals": book.signals,
+        "first_signal": str(book.first_signal) if book.first_signal else None,
+        "last_signal": str(book.last_signal) if book.last_signal else None,
+        "recorded_first": str(book.recorded_first) if book.recorded_first else None,
+        "recorded_last": str(book.recorded_last) if book.recorded_last else None,
+        "seeded_from_history": backfilled(book),
+        "prospective_signals": len(prospective),
+        "open": [],
+        "closed": [],
+    }
+
+    if candidates and as_of:
+        run_config = RunConfig(
+            hypothesis=key, equity=equity, r_multiple=config["r_multiple"],
+            time_limit=config["time_limit"], slippage_bps=slippage_bps,
+            trend_filter=trend_filter, use_stop=use_stop, hold=config["hold"],
+            top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+            max_positions=max_positions, entry_delay=entry_delay,
+            risk_pct_per_trade=risk_pct, max_open_risk_pct=max_open_risk_pct,
+        ).resolved()
+        result = run_backtest(
+            candidates, bars_by_symbol,
+            start=book.first_signal, end=as_of, starting_equity=equity,
+            exit_rule=ExitRule(
+                r_multiple=run_config.r_multiple,
+                time_limit=run_config.time_limit, use_stop=use_stop,
+            ),
+            costs=CostModel(slippage_bps=slippage_bps),
+        )
+        prospective_days = {c.signal_date for c in prospective}
+        for t in result.trades:
+            row = {
+                "ticker": t.ticker,
+                "entry_date": str(t.entry_date),
+                "entry_price": float(t.entry_price),
+                "stop": float(t.stop),
+                "shares": t.shares,
+                "risk_dollars": float(t.risk_dollars),
+                # Whether THIS trade came from a signal written before its
+                # outcome existed. The dashboard must not blend the two.
+                "prospective": any(
+                    d <= t.entry_date for d in prospective_days
+                ) and t.entry_date in {
+                    c.entry_date for c in prospective if c.ticker == t.ticker
+                },
+            }
+            if t.exit_date is None:
+                payload["open"].append(row)
+            else:
+                row.update({
+                    "exit_date": str(t.exit_date),
+                    "exit_price": float(t.exit_price) if t.exit_price else None,
+                    "exit_reason": t.exit_reason,
+                    "r_multiple": t.r_multiple,
+                    "bars_held": t.bars_held,
+                })
+                payload["closed"].append(row)
+
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    console.print(
+        f"[green]{payload['signals']}[/] signal(s), "
+        f"{len(payload['open'])} open, {len(payload['closed'])} closed -> {path}"
+    )
+    if payload["seeded_from_history"]:
+        console.print(
+            "[yellow]Seeded from history.[/] The page will say so; only the "
+            f"{payload['prospective_signals']} prospective signal(s) are a "
+            "forward test."
+        )
+
 
 research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
 app.add_typer(research_app, name="research")
