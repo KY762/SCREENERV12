@@ -128,21 +128,27 @@ helping them, which makes them more credible, not less. Value screens are the
 most exposed thing here — they select distressed companies, which is exactly
 the missing population.
 
-**Polygon has been purchased** (operator, 2026-09-21). That is the documented
-fix, and it is bought. It is not yet connected, and the distinction matters:
+**EODHD has been purchased** (operator, 2026-09-22). Not Polygon — an earlier
+version of this note said Polygon, which was wrong; `providers/polygon.py`
+was written speculatively and no subscription to it exists. EODHD serves the
+property that matters: end-of-day history for delisted US tickers, reached by
+listing an exchange's symbols with `delisted=1` and then calling the ordinary
+EOD endpoints with those tickers. That is a two-step workflow, unlike Tiingo.
 
-- **Fact, verified in the code on 2026-09-21.** `PolygonProvider`
-  (`providers/polygon.py`) is imported by nothing. `screener ingest` selects
-  between Tiingo and Alpaca only (`cli.py:151` and `cli.py:999`). `config.py`
-  reads a `polygon_api_key`, but `.env.example` does not list one. **No path
-  exists today from the subscription to the database.**
+It is bought and it is not connected, and the distinction matters:
+
+- **Fact, verified in the code on 2026-09-22.** There is no EODHD provider at
+  all. `providers/` holds tiingo, alpaca, polygon, edgar, reference — none of
+  them EODHD. `screener ingest` selects between Tiingo and Alpaca only
+  (`cli.py:151` and `cli.py:999`). `config.py` reads a `polygon_api_key` that
+  is now irrelevant and no EODHD key at all. **No path exists today from the
+  subscription to the database.**
 - **Fact.** The 881,449 bars already stored came from Tiingo and still carry
   the measured hole. Buying a provider does not repair stored history. The
   affected symbols have to be re-ingested before anything in the database
   changes.
-- **Unverified.** Whether the key is in the operator's local `.env`, and
-  whether coverage has been re-measured against Polygon. Neither can be
-  checked from the repository.
+- **Unverified.** Whether coverage has been re-measured against EODHD. It
+  cannot be checked from the repository.
 
 **The budget gate is unchanged, and the condition is the measurement, not the
 purchase.** Do not spend validation or test budget until `screener universe
@@ -152,11 +158,15 @@ there. Validation (3 configs) and test (1, once) are enforced against the
 database and never regenerate; spending them on data whose coverage has not
 been re-measured burns them permanently.
 
-To connect it: add `POLYGON_API_KEY` to `.env` and `.env.example`; add
-`PolygonProvider` to the provider selection in `cli.py`; re-ingest at least the
-six failures the coverage probe names (FRC, BBBY, YELL, RAD, SIVB, SBNY) plus
-the wider pool; then re-run `screener universe coverage`. The result of that
-run is what lifts the gate — record it here.
+To connect it: write `providers/eodhd.py` with the two-step delisted lookup
+(`exchange-symbol-list/US?delisted=1`, then the EOD endpoint per ticker); add
+`EODHD_API_KEY` to `config.py`, `.env` and `.env.example`; add the provider to
+the selection in `cli.py`; re-ingest at least the six failures the coverage
+probe names (FRC, BBBY, YELL, RAD, SIVB, SBNY) plus the wider pool; then re-run
+`screener universe coverage`. The result of that run is what lifts the gate —
+record it here. `providers/polygon.py` is now dead code: delete it or keep it
+clearly marked unused, because an unused provider next to a real one is how the
+wrong one gets wired.
 
 Universe as of 2026-08-26: 265 candidates ingested, 263 returned bars, 307
 symbols with metrics (the pool plus the earlier 51). 881,449 daily bars;
