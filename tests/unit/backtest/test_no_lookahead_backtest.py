@@ -216,3 +216,38 @@ def test_a_split_inside_the_window_is_what_the_adjustment_is_for():
 
     assert after.loc[early] == pytest.approx(before.loc[early] * 50)
     assert after.iloc[-1] == pytest.approx(before.iloc[-1])
+
+
+# --- the universe must bound the ranking, not filter its output -------------
+
+
+def test_the_top_slice_is_a_slice_of_the_universe():
+    """docs/03 H1 says "selection cutoff: top 10%" and scores the result
+    against "random selection from the same universe". Both mean the top 10% OF
+    THE UNIVERSE.
+
+    Ranking every stored symbol and filtering the winners afterwards answers a
+    different question -- which members also beat non-members -- and picks a
+    smaller, more extreme set. Found 2026-09-22, after it had been read as
+    evidence that momentum has no edge on a point-in-time universe.
+
+    Here SYM1..SYM4 are members and the two OUTSIDERs outrank all of them. With
+    the universe bounding the ranking, the top slice is drawn from the four
+    members and is non-empty; filtering afterwards would leave it empty.
+    """
+    members = {f"SYM{i}": synthetic(i) for i in (1, 2, 3, 4)}
+    hot = synthetic(7)
+    hot["close"] = hot["close"] * np.linspace(1.0, 6.0, len(hot))
+    hot["open"] = hot["open"] * np.linspace(1.0, 6.0, len(hot))
+    hot["high"] = hot["high"] * np.linspace(1.0, 6.0, len(hot))
+    hot["low"] = hot["low"] * np.linspace(1.0, 6.0, len(hot))
+    bars = {**members, "OUT1": hot, "OUT2": hot.copy(), "SPY": synthetic(99)}
+
+    in_index = {"SYM1", "SYM2", "SYM3", "SYM4"}
+    candidates = relative_strength_candidates(
+        bars, trend=TrendFilter(enabled=False), top_pct=0.25,
+        universe=lambda ticker, _day: ticker in in_index,
+    )
+
+    assert candidates, "the top slice should be drawn from the members"
+    assert {c.ticker for c in candidates} <= in_index

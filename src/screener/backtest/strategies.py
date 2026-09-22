@@ -210,7 +210,18 @@ def relative_strength_candidates(
         if day in slices:
             return slices[day]
         scored: list[tuple[float, str]] = []
+        ranking_day = day.date()
         for ticker, series in rs_by_symbol.items():
+            # MEMBERSHIP BEFORE RANKING. "Top 10%" in docs/03 H1 means the top
+            # 10% OF THE UNIVERSE, and the benchmark it is scored against is
+            # "random selection from the same universe". Ranking every stored
+            # symbol and filtering the winners afterwards answers a different
+            # question -- which index members also beat non-members -- and
+            # selects a smaller, more extreme set than the rule specifies.
+            # Found 2026-09-22. Membership on the ranking day is known at that
+            # day's close, so this reads nothing the rule could not have known.
+            if not universe(ticker, ranking_day):
+                continue
             if day not in series.index:
                 continue
             value = series.loc[day]
@@ -337,6 +348,10 @@ def canonical_momentum_candidates(
     for day in rebalance_days:
         ranked: list[tuple[float, str]] = []
         for ticker, series in scores.items():
+            # Membership before ranking, as in H1 above: a top slice of the
+            # universe, not the universe's share of a top slice of everything.
+            if not universe(ticker, day.date()):
+                continue
             if day not in series.index:
                 continue
             value = series.loc[day]
