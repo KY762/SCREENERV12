@@ -1326,6 +1326,8 @@ def forward_record(
     stop_atr: float = typer.Option(2.0, "--stop-atr"),
     rs_lookback: int = typer.Option(63, "--rs-lookback"),
     max_positions: int = typer.Option(5, "--max-positions"),
+    risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
     entry_delay: int = typer.Option(1, "--entry-delay"),
     r_multiple: float | None = typer.Option(None, "--r-multiple"),
     time_limit: int | None = typer.Option(None, "--time-limit"),
@@ -1355,6 +1357,7 @@ def forward_record(
         hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
         max_positions=max_positions, entry_delay=entry_delay,
         r_multiple=r_multiple, time_limit=time_limit,
+        risk_pct=risk_pct, max_open_risk_pct=max_open_risk_pct,
     )
     key = config["hypothesis"]
     start = date.fromisoformat(since) if since else None
@@ -1375,6 +1378,7 @@ def forward_record(
             trend_filter=trend_filter, use_stop=use_stop, hold=config["hold"],
             top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
             max_positions=max_positions, entry_delay=entry_delay,
+            risk_pct_per_trade=risk_pct, max_open_risk_pct=max_open_risk_pct,
         ).resolved()
         events = _load_events(session, bars_by_symbol) if key == "h6" else None
         candidates = build_candidates(bars_by_symbol, run_config, events_by_symbol=events)
@@ -1413,6 +1417,8 @@ def forward_book(
     stop_atr: float = typer.Option(2.0, "--stop-atr"),
     rs_lookback: int = typer.Option(63, "--rs-lookback"),
     max_positions: int = typer.Option(5, "--max-positions"),
+    risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
     entry_delay: int = typer.Option(1, "--entry-delay"),
     r_multiple: float | None = typer.Option(None, "--r-multiple"),
     time_limit: int | None = typer.Option(None, "--time-limit"),
@@ -1436,6 +1442,7 @@ def forward_book(
         hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
         max_positions=max_positions, entry_delay=entry_delay,
         r_multiple=r_multiple, time_limit=time_limit,
+        risk_pct=risk_pct, max_open_risk_pct=max_open_risk_pct,
     )
     key = config["hypothesis"]
 
@@ -1459,6 +1466,7 @@ def forward_book(
         trend_filter=trend_filter, use_stop=use_stop, hold=config["hold"],
         top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
         max_positions=max_positions, entry_delay=entry_delay,
+        risk_pct_per_trade=risk_pct, max_open_risk_pct=max_open_risk_pct,
     ).resolved()
 
     result = run_backtest(

@@ -301,6 +301,53 @@ isolation again (29-29.4% divergence). `h3_no_stop` looks strong at the 96th
 with PF 1.81, but on **161 trades and a 35.5% drawdown**, failing two criteria.
 H7 returns NONE in all three of its experiments.
 
+## A configuration that passes every criterion (2026-09-21)
+
+**On development, which proves nothing.** Recorded because it is the first
+time it has happened, and because how it happened matters more than that it did.
+
+The operator chose on 2026-09-21 to raise `max_positions` from 5 to 10 at 1%
+risk. **That changed nothing at all** -- identical 305 trades, identical
++0.146R, identical 171 effective observations. At 1% risk per trade the **5%
+open-risk cap binds at five concurrent positions** whatever `max_positions`
+says; the refusal reason simply moves from "at max concurrent positions" to
+"total open risk would reach 5.92%". An earlier note here called the position
+count "the binding constraint on effective sample size". It was not, and that
+claim is withdrawn.
+
+The lever that works is risk per trade. At **0.5% risk with 10 positions** --
+total open risk unchanged at 5%, the same money spread over twice the names:
+
+| Criterion | 1% / 5 positions | **0.5% / 10 positions** | Required |
+| --- | --- | --- | --- |
+| trade_count | 171 effective (305) | **240 effective (602)** | >= 200 |
+| expectancy | +0.146R | **+0.165R** | > 0 |
+| profit_factor | 1.37 | **1.42** | > 1.20 |
+| max_drawdown | 13.4% | **10.3%** | < 25% |
+| regime_robustness | 2 of 3, worst +3.1% | **2 of 3, worst +1.4%** | >= 2 of 3 |
+| vs_random | p = 0.0260 | **p = 0.0240** | <= 0.05 |
+| | **fails 1 of 6** | **passes 6 of 6** | |
+
+**The reason to believe this is that almost nothing moved.** Expectancy went
++0.146R to +0.165R and the percentile 97.5th to 97.7th. If halving risk had
+transformed the result, the right conclusion would be that a new overfit had
+been found. Instead the per-trade edge is unchanged and the observation count
+doubled, which is what a sample-size fix is supposed to look like. Drawdown
+fell because the same risk is spread wider, not because the rule improved.
+
+**Why this is still not evidence.** Development proves nothing (docs/03 §0.4).
+The lookback was chosen by the plateau rule after seeing 12 cells; four
+configurations of this rule were then run on 2026-09-21 alone, and every look
+adds to the multiple-comparison burden. p = 0.0240 is uncorrected for the 28
+experiments in the battery, and Holm across the registered family is stricter.
+The universe still enriches for momentum that persisted (survivorship channel
+two, unmeasured).
+
+**0.5% risk is not adopted.** Risk parameters are the operator's
+(`docs/08`), and the operator's standing choice is 1% at 10 positions, which
+the arithmetic makes identical to 1% at 5. The 0.5% figure above is a
+measurement of what would clear the floor, not a change to the profile.
+
 ## Splits were never adjusted, and it inverted momentum
 
 **Found 2026-09-20.** `price_daily` holds raw prices by design (non-negotiable
