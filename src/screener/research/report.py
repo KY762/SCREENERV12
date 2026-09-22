@@ -100,6 +100,25 @@ def to_markdown(
     # Which symbols were EXCLUDED is part of what a result means, and this
     # report outlives the terminal it was printed in. A reader months from now
     # cannot tell a quarantined universe from an unfiltered one otherwise.
+    # WHICH UNIVERSE, stated before anything else a reader might act on. Every
+    # battery before 2026-09-22 ran with this unset, selecting from every stored
+    # symbol rather than index membership on the date, and the omission went
+    # unnoticed for the life of the project because no report said so. The
+    # apparent momentum edge was entirely that difference.
+    universe = context.get("universe")
+    if universe:
+        add(f"**Universe:** `{universe}` — point-in-time membership  ")
+    else:
+        add("**Universe:** NONE — every stored symbol, not index membership  ")
+        add("")
+        add("> **Read these numbers with that in mind.** Selecting from every "
+            "stored symbol rather than from point-in-time membership enriches "
+            "the pool with companies that later *grew into* the index, which "
+            "flatters momentum and trend rules specifically. Measured "
+            "2026-09-22, that difference was worth **53 percentile points** on "
+            "H1's twelve-month configuration: 97.7th here against 45.0th on "
+            "`sp500_pit`. This violates non-negotiable 3.")
+
     quarantined = context.get("quarantined")
     if quarantined:
         add(f"**Quarantined and excluded:** {len(quarantined)} "

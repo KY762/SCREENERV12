@@ -73,6 +73,31 @@ def _load_events(session, bars_by_symbol) -> dict[str, list]:
     return out
 
 
+def _report_universe(universe_name: str | None) -> None:
+    """Say which universe a run selected from, every time.
+
+    Non-negotiable 3 requires a point-in-time universe, and `--universe`
+    defaults to None, so until 2026-09-22 every run in this project quietly
+    violated it by selecting from every stored symbol. Nothing said so, in the
+    terminal or in any report, which is why it survived four rounds of results.
+
+    The difference is not cosmetic. A pool of every stored symbol is enriched
+    with companies that later GREW into the index, and on H1's twelve-month
+    configuration that was worth 53 percentile points -- 97.7th unrestricted
+    against 45.0th on `sp500_pit`, which is the whole apparent edge.
+    """
+    if universe_name:
+        console.print(f"[dim]universe: {universe_name} (point-in-time membership)[/]")
+        return
+    console.print(
+        "[yellow]No --universe: selecting from EVERY stored symbol, not index "
+        "membership on the date.[/] That breaches non-negotiable 3 and flatters "
+        "momentum and trend rules -- it was worth 53 percentile points on H1. "
+        "Pass [bold]--universe sp500_pit[/] unless the unrestricted pool is the "
+        "point of the run."
+    )
+
+
 def _report_quarantine() -> None:
     """Say out loud that symbols were excluded.
 
@@ -1771,6 +1796,7 @@ def research_explore(
     with session_scope() as session:
         bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
+        _report_universe(universe_name)
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
             raise typer.Exit(code=1)
@@ -3265,6 +3291,7 @@ def backtest_run(
         # the one command that spends validation and test budget.
         bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
+        _report_universe(universe_name)
 
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
@@ -3514,6 +3541,7 @@ def backtest_surface(
     with session_scope() as session:
         bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
         _report_quarantine()
+        _report_universe(universe_name)
         if not bars_by_symbol:
             console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
             raise typer.Exit(code=1)
