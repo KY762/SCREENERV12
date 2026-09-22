@@ -1000,6 +1000,127 @@ def diagnose_identity(
     )
 
 
+@diag_app.command("predictive")
+def diagnose_predictive(
+    split: str = typer.Option("development", "--split"),
+    universe_name: str | None = typer.Option("sp500_pit", "--universe"),
+    horizons: str = typer.Option("5,20,63", "--horizons"),
+    stride: int | None = typer.Option(
+        None, "--stride",
+        help="Sessions between samples. Default is the horizon, so forward "
+             "windows do not overlap and the t-statistic is honest.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Does each indicator predict anything, before a strategy is built on it?
+
+    Every battery here tests an indicator PLUS a hold, a stop, sizing and
+    portfolio limits, so a failure cannot be attributed to any one of them.
+    This asks the prior question: rank the universe by the indicator, rank it
+    by what followed, correlate the two. An indicator with no information
+    coefficient cannot be rescued by any configuration built on it.
+
+    Run this BEFORE a battery, not after.
+    """
+    _configure_logging(verbose)
+    import pandas as pd
+
+    from .backtest.runner import load_symbol_bars, universe_filter
+    from .backtest.splits import get_split
+    from .calc import indicators as ind
+    from .calc.relative_strength import relative_strength_adjusted
+    from .diagnostics.predictive import information_coefficient
+
+    chosen = get_split(split)
+    windows = [int(x) for x in horizons.split(",") if x.strip()]
+
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, None, splits_until=chosen.end)
+        _report_quarantine()
+        _report_universe(universe_name)
+        universe = universe_filter(session, universe_name) if universe_name else None
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/]")
+            raise typer.Exit(code=1)
+
+        benchmark = bars_by_symbol.get("SPY")
+        if benchmark is None or benchmark.empty:
+            console.print("[red]SPY has no bars[/]; relative strength needs it.")
+            raise typer.Exit(code=1)
+
+        # Every indicator the hypotheses actually rank on, built from calc/ so
+        # this measures the same arithmetic the strategies use.
+        families: dict[str, dict[str, pd.Series]] = {}
+        for lookback in (21, 63, 126, 252):
+            families[f"RS_adj({lookback})"] = {
+                t: relative_strength_adjusted(b["close"], benchmark["close"], lookback)
+                for t, b in bars_by_symbol.items()
+                if t != "SPY" and not b.empty
+            }
+        families["ret(252) skip 21"] = {
+            t: ind.returns(b["close"], 252).shift(21)
+            for t, b in bars_by_symbol.items() if t != "SPY" and not b.empty
+        }
+        families["pct_from_high(252)"] = {
+            t: ind.pct_from_high(b, 252)
+            for t, b in bars_by_symbol.items() if t != "SPY" and not b.empty
+        }
+        families["rvol(20)"] = {
+            t: ind.rvol(b, 20)
+            for t, b in bars_by_symbol.items() if t != "SPY" and not b.empty
+        }
+        families["atr_pct(14)"] = {
+            t: ind.atr_pct(b, 14)
+            for t, b in bars_by_symbol.items() if t != "SPY" and not b.empty
+        }
+
+        console.print(
+            f"[dim]{chosen.name}: {chosen.start} to {chosen.end}. "
+            f"{len(bars_by_symbol):,} symbols loaded.[/]"
+        )
+
+        rows = []
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            BarColumn(), TaskProgressColumn(), console=console,
+        ) as progress:
+            task = progress.add_task("scoring", total=len(families) * len(windows))
+            for name, values in families.items():
+                for horizon in windows:
+                    progress.update(task, description=f"{name} @ {horizon}d")
+                    rows.append(information_coefficient(
+                        values, bars_by_symbol,
+                        indicator=name, horizon=horizon,
+                        start=chosen.start, end=chosen.end,
+                        universe=universe, stride=stride,
+                    ))
+                    progress.advance(task)
+
+    table = Table(title="Information coefficient — rank(indicator) vs rank(forward return)")
+    for col in ("Indicator", "Horizon", "Dates", "Names", "IC", "t", "Positive", "Reading"):
+        numeric = col in ("Dates", "Names", "IC", "t", "Positive")
+        table.add_column(col, justify="right" if numeric else "left")
+    for r in rows:
+        if not r.dates:
+            table.add_row(r.indicator, f"{r.horizon}d", "0", "-", "-", "-", "-", "no usable dates")
+            continue
+        strong = abs(r.t_stat) >= 2
+        colour = "green" if strong and r.mean_ic > 0 else ("red" if strong else "white")
+        table.add_row(
+            r.indicator, f"{r.horizon}d", f"{r.dates}", f"{r.mean_names:.0f}",
+            f"[{colour}]{r.mean_ic:+.4f}[/]", f"[{colour}]{r.t_stat:+.2f}[/]",
+            f"{r.hit_rate:.0%}", r.verdict(),
+        )
+    console.print(table)
+    console.print(
+        "[dim]A real equity factor sits near IC 0.02-0.05 with |t| above 3. "
+        "Anything past 0.10 on liquid large caps should be read as a lookahead "
+        "bug until proven otherwise. Forward returns are open-to-open from the "
+        "session AFTER the signal, which is what this platform can actually "
+        "fill, and windows are sampled every horizon so they do not overlap.[/]"
+    )
+
+
 @diag_app.command("survivorship")
 def diagnose_survivorship(
     split: str = typer.Option("development", "--split"),
