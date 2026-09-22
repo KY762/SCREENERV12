@@ -124,13 +124,21 @@ def record_signals(
     return result
 
 
-def load_signals(session: Session, config_hash: str) -> list[Candidate]:
+def load_signals(
+    session: Session, config_hash: str, *, prospective_only: bool = False
+) -> list[Candidate]:
     """Every recorded signal for one configuration, oldest first.
 
     Rebuilt into the engine's own `Candidate`, so the book is computed by the
     same code path as a backtest rather than by anything written here.
+
+    `prospective_only` keeps just the rows whose signal date is on or after the
+    day they were WRITTEN. Those are the forward test. A row dated before the
+    day it was written was seeded from history, and mixing the two produces a
+    number that is neither a backtest nor a forward test -- which is worse than
+    either, because it reads as the second while containing the first.
     """
-    rows = session.execute(
+    stmt = (
         select(
             Symbol.ticker, PaperSignal.setup, PaperSignal.signal_date,
             PaperSignal.entry_date, PaperSignal.stop_level,
@@ -139,7 +147,12 @@ def load_signals(session: Session, config_hash: str) -> list[Candidate]:
         .join(Symbol, Symbol.id == PaperSignal.symbol_id)
         .where(PaperSignal.config_hash == config_hash)
         .order_by(PaperSignal.signal_date, Symbol.ticker)
-    ).all()
+    )
+    if prospective_only:
+        stmt = stmt.where(
+            PaperSignal.signal_date >= func.date(PaperSignal.recorded_at)
+        )
+    rows = session.execute(stmt).all()
     return [
         Candidate(
             ticker=ticker,

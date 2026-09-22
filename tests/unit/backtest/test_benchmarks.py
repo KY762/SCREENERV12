@@ -213,3 +213,62 @@ def test_p_value_and_percentile_agree_away_from_the_tails():
     draws = np.linspace(0.0, 1.0, 1000)
     bench = RandomBenchmark(1000, 10, draws)
     assert bench.p_value(0.9) == pytest.approx(1 - bench.percentile_of(0.9) / 100, abs=0.002)
+
+
+# --- the benchmark must draw from the strategy's own pool -------------------
+
+
+def test_the_benchmark_can_be_restricted_to_a_universe():
+    """Why `eligible` exists.
+
+    Measured on H1's twelve-month configuration, 2026-09-22: unrestricted on
+    both sides it sat at the 97.7th percentile against random; restricted on
+    the strategy side alone it read the 31.3rd. Neither was the right test.
+    The pool of all stored symbols is enriched with companies that later GREW
+    into the index, so leaving the benchmark unrestricted hands it that
+    enrichment and takes it from the strategy.
+    """
+    index = pd.bdate_range("2020-01-02", periods=30)
+    flat = pd.DataFrame(
+        {"open": np.full(30, 100.0), "high": np.full(30, 101.0),
+         "low": np.full(30, 99.0), "close": np.full(30, 100.0),
+         "volume": np.full(30, 1e6)},
+        index=index,
+    )
+    doubler = flat.copy()
+    doubler["open"] = np.linspace(100.0, 200.0, 30)
+
+    bars = {"MEMBER": flat, "OUTSIDER": doubler}
+    entries = [(index[0].date(), 10)]
+
+    everything = date_matched_benchmark(bars, entries=entries, iterations=200, seed=1)
+    members_only = date_matched_benchmark(
+        bars, entries=entries, iterations=200, seed=1,
+        eligible=lambda ticker, _day: ticker == "MEMBER",
+    )
+
+    # OUTSIDER rises through the window, so a pool containing it has a higher
+    # mean than one restricted to the flat member.
+    assert everything.distribution.mean() > members_only.distribution.mean()
+    assert members_only.distribution.mean() == pytest.approx(0.0, abs=0.002)
+
+
+def test_an_empty_universe_on_a_date_drops_that_trade_from_both_sides():
+    """A trade with no eligible alternative is dropped rather than scored as
+    zero: dividing by trades that were never sampled pulls the distribution
+    toward zero and flatters the strategy."""
+    index = pd.bdate_range("2020-01-02", periods=30)
+    flat = pd.DataFrame(
+        {"open": np.full(30, 100.0), "high": np.full(30, 101.0),
+         "low": np.full(30, 99.0), "close": np.full(30, 100.0),
+         "volume": np.full(30, 1e6)},
+        index=index,
+    )
+
+    bench = date_matched_benchmark(
+        {"A": flat, "B": flat}, entries=[(index[0].date(), 10)],
+        iterations=50, seed=1, eligible=lambda *_: False,
+    )
+
+    assert bench.n_trades == 0
+    assert bench.distribution.size == 0

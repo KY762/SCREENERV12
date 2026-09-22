@@ -28,7 +28,7 @@ number can separate.
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -55,6 +55,7 @@ def date_matched_benchmark(
     iterations: int = 1000,
     seed: int = 0,
     costs: CostModel | None = None,
+    eligible: Callable[[str, date], bool] | None = None,
 ) -> RandomBenchmark:
     """Mean per-trade return when only the SYMBOL is chosen at random.
 
@@ -70,10 +71,20 @@ def date_matched_benchmark(
     claims a percentile says. This is the one to quote for "did selection add
     anything".
 
-    Eligibility is "had a bar that day, with enough bars after it". That is
-    tradeability as this database sees it, NOT point-in-time index membership,
-    which is not threaded this far down -- so the pool can include a name that
-    was listed but outside the universe on that date.
+    Eligibility is "had a bar that day, with enough bars after it", narrowed by
+    `eligible` when one is given -- which is how point-in-time membership
+    reaches this far down.
+
+    PASS `eligible` WHENEVER THE STRATEGY IS RESTRICTED TO A UNIVERSE. Without
+    it the strategy picks from index members while the benchmark picks from
+    every symbol stored, and the comparison is not the one the percentile
+    claims. Measured 2026-09-22 on H1's twelve-month configuration: unrestricted
+    on both sides it sat at the 97.7th percentile, and restricted on the
+    strategy side alone it read the 31.3rd. Neither was the right test, because
+    the pool of all stored symbols is enriched with companies that later GREW
+    into the index -- the second survivorship channel -- so leaving the
+    benchmark unrestricted hands it that enrichment and takes it from the
+    strategy.
 
     A trade with no eligible alternative is dropped from BOTH sides rather than
     counted as zero: dividing by trades that were never sampled pulls the
@@ -86,6 +97,21 @@ def date_matched_benchmark(
     frames = {t: f for t, f in bars_by_symbol.items() if len(f) > 1}
     if not frames or not entries:
         return RandomBenchmark(iterations, 0, np.array([], dtype="float64"))
+
+    tickers = list(frames)
+    # Membership is the same for every trade sharing an entry date, and many do.
+    mask_cache: dict[date, np.ndarray] = {}
+
+    def eligible_on(day: date) -> np.ndarray | None:
+        if eligible is None:
+            return None
+        cached = mask_cache.get(day)
+        if cached is None:
+            cached = np.fromiter(
+                (eligible(t, day) for t in tickers), dtype=bool, count=len(tickers)
+            )
+            mask_cache[day] = cached
+        return cached
 
     # One aligned matrix of opens, dates x symbols, NaN where a name has no bar
     # that day. Turns "every eligible symbol on date d" into one vectorised row
@@ -112,6 +138,9 @@ def date_matched_benchmark(
             continue
         buy, sell = opens[i], opens[i + hold]
         usable = np.isfinite(buy) & np.isfinite(sell) & (buy > 0)
+        members = eligible_on(entry_date)
+        if members is not None:
+            usable = usable & members
         if not usable.any():
             continue
         entry = buy[usable] * (1.0 + slip)

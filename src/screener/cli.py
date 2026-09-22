@@ -1457,6 +1457,7 @@ def forward_book(
             )
             raise typer.Exit(code=1)
         candidates = load_signals(session, digest)
+        prospective = load_signals(session, digest, prospective_only=True)
         bars_by_symbol = load_symbol_bars(session, None)
 
     as_of = latest_bar(bars_by_symbol)
@@ -1525,8 +1526,47 @@ def forward_book(
             f"{sum(1 for r in rs if r > 0) / len(rs):.1%} win rate, "
             f"expectancy {sum(rs) / len(rs):+.3f}R"
         )
+    # The forward test is the prospective subset and nothing else. Reported
+    # separately rather than blended, because a blended number reads as a
+    # forward test while containing a backtest -- worse than either alone.
+    if prospective and len(prospective) < len(candidates):
+        forward = run_backtest(
+            prospective, bars_by_symbol,
+            start=min(c.signal_date for c in prospective), end=as_of,
+            starting_equity=equity,
+            exit_rule=ExitRule(
+                r_multiple=run_config.r_multiple,
+                time_limit=run_config.time_limit, use_stop=use_stop,
+            ),
+            costs=CostModel(slippage_bps=slippage_bps),
+        )
+        fwd_closed = [t for t in forward.trades if t.exit_date is not None]
+        fwd_rs = [t.r_multiple for t in fwd_closed if t.r_multiple is not None]
+        console.print("")
+        console.print(
+            f"[bold]Recorded prospectively:[/] {len(prospective)} signal(s), "
+            f"{len(fwd_closed)} closed"
+        )
+        if fwd_rs:
+            console.print(
+                f"  {sum(1 for r in fwd_rs if r > 0) / len(fwd_rs):.1%} win rate, "
+                f"expectancy {sum(fwd_rs) / len(fwd_rs):+.3f}R "
+                f"[dim]-- this, and only this, is the forward test[/]"
+            )
+        else:
+            console.print(
+                "  [dim]nothing closed yet. The figures above include seeded "
+                "history and are not a forward result.[/]"
+            )
+    elif not prospective:
+        console.print(
+            "\n[yellow]No signal here was recorded prospectively[/], so this "
+            "book carries no forward-test weight at all yet. It starts to when "
+            "'forward record' runs on a day the data is current for."
+        )
+
     console.print(
-        "[dim]A paper book is not a track record. It has no queue position, no "
+        "\n[dim]A paper book is not a track record. It has no queue position, no "
         "partial fills and no emotional cost, and it fills at the engine's "
         "assumption rather than a broker's confirmation. It answers one "
         "question: does the rule keep doing prospectively what development "
@@ -3150,6 +3190,8 @@ def backtest_run(
         outcome = score(
             result, bars_by_symbol, run_config, chosen, candidates=len(candidates),
             random_iterations=random_iterations, seed=seed, alpha=alpha,
+            # The benchmarks must draw from the same pool the strategy did.
+            universe=in_universe if universe_name else None,
         )
         stats, regimes = outcome.stats, outcome.regimes
         criteria = list(outcome.criteria)
@@ -3371,6 +3413,7 @@ def backtest_surface(
                 outcome = evaluate(
                     candidate_cache[entry_key], bars_by_symbol, config, chosen,
                     random_iterations=random_iterations, seed=seed,
+                    universe=universe if universe_name else None,
                 )
                 cells.append(Cell(params=params, outcome=outcome))
                 budget.record(

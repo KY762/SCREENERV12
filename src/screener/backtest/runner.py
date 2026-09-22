@@ -381,12 +381,14 @@ def evaluate(
     random_iterations: int = 1000,
     seed: int = 0,
     alpha: float = FAMILY_WISE_ALPHA,
+    universe=None,
 ) -> Outcome:
     """Run one configuration and score it against the pre-registered criteria."""
     result = simulate(candidates, bars_by_symbol, config, split)
     return score(
         result, bars_by_symbol, config, split, candidates=len(candidates),
         random_iterations=random_iterations, seed=seed, alpha=alpha,
+        universe=universe,
     )
 
 
@@ -400,8 +402,15 @@ def score(
     random_iterations: int = 1000,
     seed: int = 0,
     alpha: float = FAMILY_WISE_ALPHA,
+    universe=None,
 ) -> Outcome:
     """Everything the pre-registered criteria read, computed in one place.
+
+    `universe` is the SAME predicate the strategy was restricted by, and it
+    must be passed whenever one was. The benchmarks otherwise draw from every
+    stored symbol while the strategy draws from index members, and the
+    percentile then answers a question nobody asked. See
+    `benchmarks.date_matched_benchmark`.
 
     `screener backtest run`, the battery and every diagnostic score through
     here. Until 2026-09-19 the run command computed its own criteria beside
@@ -447,6 +456,7 @@ def score(
         matched = date_matched_benchmark(
             bars_by_symbol, entries=trade_entries(result.closed_trades),
             iterations=random_iterations, seed=seed, costs=costs,
+            eligible=universe,
         )
         if matched.distribution.size:
             date_matched = matched.percentile_of(observed)
@@ -464,6 +474,7 @@ def score(
             regime_bench = date_matched_benchmark(
                 bars_by_symbol, entries=trade_entries(inside),
                 iterations=random_iterations, seed=seed, costs=costs,
+                eligible=universe,
             )
             regime_results[name] = RegimeResult(
                 name, rstats.trades, rstats.total_return_pct,

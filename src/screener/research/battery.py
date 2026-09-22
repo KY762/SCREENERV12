@@ -443,6 +443,7 @@ def run_experiment(
         outcome = evaluate(
             cache[entry_key], bars_by_symbol, config, split,
             random_iterations=random_iterations, seed=seed,
+            universe=universe if universe is not always_in_universe else None,
         )
         cells.append(Cell(params=params, outcome=outcome))
         if on_cell is not None:
