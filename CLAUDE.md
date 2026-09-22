@@ -325,8 +325,32 @@ unrestricted hands it that enrichment and takes it from the strategy.
 
 `date_matched_benchmark` now takes an `eligible` predicate and masks its pool
 per entry date; `score` and `evaluate` take the universe and every call site
-supplies it. **The honest reading -- strategy and benchmark on the same pool --
-is the one that decides whether any of this is worth a validation slot.**
+supplies it.
+
+**The honest reading, both sides on `sp500_pit`:**
+
+| | unrestricted | strategy only | **both, correct** |
+| --- | --- | --- | --- |
+| random, same days | 97.7th | 31.3rd | **45.0th** |
+| one-sided p | 0.0240 | 0.6873 | **0.5504** |
+| expectancy | +0.165R | +0.058R | **+0.058R** |
+| profit factor | 1.42 | 1.14 | **1.14** |
+| regimes beating random | 2 of 3 | 1 of 3 | **1 of 3** |
+| criteria | **6 of 6 pass** | 3 fail | **3 fail** |
+
+Fixing the benchmark was worth 14 percentile points, as predicted, and did not
+rescue it. **At the 45th percentile with p = 0.55, twelve-month momentum on a
+point-in-time S&P 500 universe is indistinguishable from picking at random.**
+
+`preregistrations/H1.md` is marked DO NOT SIGN. Nothing was spent: the
+configuration was caught before a validation slot went on it, which is the
+machinery doing its job rather than a setback.
+
+**What remains open is the gradient, not the cell.** The monotonic lookback
+result (252 > 126 > 63 > 21) was measured on the unrestricted pool too. Whether
+the dose-response survives a point-in-time universe -- even with every cell
+near random -- is a different question from whether one cell clears a bar, and
+it is the one worth answering next.
 
 The lesson generalises: a percentile is a comparison, and a comparison is only
 as good as the thing on the other side of it. This project has now found three
