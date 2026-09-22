@@ -34,3 +34,9 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Personal financial data — NEVER commit. This repository is public.
+# Brokerage exports, statements and trade history live here and stay here.
+private/
+*.1099*
+robinhood*.csv
