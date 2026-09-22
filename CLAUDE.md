@@ -346,11 +346,25 @@ point-in-time S&P 500 universe is indistinguishable from picking at random.**
 configuration was caught before a validation slot went on it, which is the
 machinery doing its job rather than a setback.
 
-**What remains open is the gradient, not the cell.** The monotonic lookback
-result (252 > 126 > 63 > 21) was measured on the unrestricted pool too. Whether
-the dose-response survives a point-in-time universe -- even with every cell
-near random -- is a different question from whether one cell clears a bar, and
-it is the one worth answering next.
+**The gradient does not survive either, and that is the bigger loss.**
+Measured 2026-09-22 at all four lookbacks on `sp500_pit`, both sides:
+
+| rs_lookback | unrestricted | **point-in-time** |
+| --- | --- | --- |
+| 252 | 95th-98th | **45.0th** |
+| 126 | 87th-91st | **54.2nd** |
+| 63 | 81st-86th | **0.0th** |
+| 21 | 48th-62nd | **15.7th** |
+
+Not monotonic, not ordered, and nothing above the 55th. The dose-response that
+was "much harder to produce by chance than one good cell" **was the universe**.
+It was the single structural reason for treating the twelve-month result as
+more than a search artifact, and it is gone.
+
+What is left of H1 on a point-in-time universe: no lookback beats random, and
+63 days -- H1's own default for four rounds -- sits at the **0th percentile**
+with PF 0.83. The honest summary is that H1's selection rule has no measurable
+edge on the universe it is supposed to trade.
 
 The lesson generalises: a percentile is a comparison, and a comparison is only
 as good as the thing on the other side of it. This project has now found three
