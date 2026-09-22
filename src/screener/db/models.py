@@ -446,3 +446,48 @@ class Fundamental(Base):
         ),
         Index("ix_fundamentals_pit", "symbol_id", "concept", "filed"),
     )
+
+
+class PaperSignal(Base):
+    """One signal, recorded the day it was produced and never rewritten.
+
+    This is the whole forward test. Only the SIGNAL is stored, because storing
+    the outcome as well would mean a second implementation of the exit rules
+    that could drift from the one the backtest was measured with. The book is
+    derived on demand by feeding these rows back through `run_backtest`, so
+    what is tracked forward is by construction the same engine that was tested
+    backward.
+
+    Append-only, and that is the point: a forward test is only evidence if the
+    decision provably predates the outcome. `recorded_at` is when the row was
+    written and `entry_date` is the session it was meant to be bought on, which
+    is the next one after the signal by non-negotiable 1.
+    """
+
+    __tablename__ = "paper_signals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol_id: Mapped[int] = mapped_column(
+        ForeignKey("symbols.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    hypothesis: Mapped[str] = mapped_column(String(10), nullable=False)
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    setup: Mapped[str] = mapped_column(String(40), nullable=False)
+    signal_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+    stop_level: Mapped[Decimal | None] = mapped_column(PRICE)
+    stop_distance: Mapped[Decimal | None] = mapped_column(PRICE)
+    atr: Mapped[Decimal | None] = mapped_column(PRICE)
+    rank: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        # One signal per symbol per day per configuration. Re-running the
+        # command on the same day must not duplicate the book, and must not
+        # silently replace a row either -- see the ingest that rolled back.
+        UniqueConstraint(
+            "symbol_id", "signal_date", "config_hash", name="uq_paper_signal"
+        ),
+    )

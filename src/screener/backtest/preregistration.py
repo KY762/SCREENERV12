@@ -62,6 +62,9 @@ RUN_DEFAULTS: dict[str, Any] = {
     "stop_atr": 2.0,
     "rs_lookback": 63,
     "entry_delay": 1,
+    "max_positions": 5,
+    "risk_pct": 0.01,
+    "max_open_risk_pct": 0.05,
 }
 
 EVIDENTIAL_SPLITS = ("validation", "test")
@@ -79,6 +82,14 @@ def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
       - `equity`: hashed at all. It was not, so a second validation run at a
         different account size hashed as a reproduction of the first and cost
         nothing -- unlimited looks at the split by changing one number.
+      - `max_positions`, `risk_pct`, `max_open_risk_pct`: the same hole, found
+        2026-09-21 when the operator raised max_positions from 5 to 10 to lift
+        the effective trade count. All three decide which signals are taken and
+        therefore which trades exist, so two runs differing in any of them are
+        two runs and must not share one budget slot. Raising max_positions
+        alone turned out to change nothing, because at 1% risk per trade the 5%
+        open-risk cap already binds at five concurrent positions -- which is
+        exactly why all three have to be visible rather than one.
       - `r_multiple`, `time_limit`: through RunConfig.resolved(), as before.
     """
     from .runner import RunConfig
@@ -118,6 +129,11 @@ def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
         # Always present for the hypotheses that read it, including at 1, so
         # moving the default later cannot give two different runs one hash.
         "entry_delay": int(opts["entry_delay"]) if key in ("h1", "h6") else None,
+        "max_positions": int(opts["max_positions"]),
+        # Risk sizing decides which signals are affordable and therefore which
+        # trades exist at all, so two runs at different risk are two runs.
+        "risk_pct": float(opts["risk_pct"]),
+        "max_open_risk_pct": float(opts["max_open_risk_pct"]),
     }
 
 

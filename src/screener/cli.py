@@ -1294,6 +1294,229 @@ def prereg_family(
         console.print(f"  {labels[key].upper()} p={p_values[key]:.4f} {mark}")
 
 
+forward_app = typer.Typer(help="Forward test on paper.", no_args_is_help=True)
+app.add_typer(forward_app, name="forward")
+
+
+def _forward_config(**options) -> tuple[dict, str]:
+    """The configuration being tracked, and the hash that keys its book.
+
+    Built by `evidential_config`, the same function a pre-registration and a
+    budget check use, so the book is keyed by exactly the run identity the rest
+    of the project means -- and two configurations that differ anywhere keep
+    two separate books rather than quietly sharing one.
+    """
+    from .backtest.budget import config_hash
+    from .backtest.preregistration import evidential_config
+
+    config = evidential_config(options.pop("hypothesis"), **options)
+    return config, config_hash(config)
+
+
+@forward_app.command("record")
+def forward_record(
+    hypothesis: str = typer.Option(..., "--hypothesis", "-h"),
+    universe_name: str | None = typer.Option(None, "--universe"),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    use_stop: bool = typer.Option(True, "--use-stop/--no-stop"),
+    hold: int | None = typer.Option(None, "--hold"),
+    top_pct: float = typer.Option(0.10, "--top-pct"),
+    stop_atr: float = typer.Option(2.0, "--stop-atr"),
+    rs_lookback: int = typer.Option(63, "--rs-lookback"),
+    max_positions: int = typer.Option(5, "--max-positions"),
+    entry_delay: int = typer.Option(1, "--entry-delay"),
+    r_multiple: float | None = typer.Option(None, "--r-multiple"),
+    time_limit: int | None = typer.Option(None, "--time-limit"),
+    since: str | None = typer.Option(
+        None, "--since",
+        help="Ignore signals before this date. Omit and the first run seeds "
+             "the book from all stored history, which is a backfill.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Record today's signals. Run it once a day, after the close.
+
+    Appends every new signal to the paper book and never rewrites one. That is
+    the whole evidential content: a decision written down before its outcome
+    exists. Re-running on the same day adds nothing.
+
+    It spends no split budget. Validation and test are finite and one-way; this
+    is not, which is why it can run every day forever.
+    """
+    _configure_logging(verbose)
+    from .backtest.runner import RunConfig, build_candidates, load_symbol_bars
+    from .forward import latest_bar, record_signals
+
+    config, digest = _forward_config(
+        hypothesis=hypothesis, universe=universe_name, equity=equity,
+        slippage_bps=slippage_bps, trend_filter=trend_filter, use_stop=use_stop,
+        hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+        max_positions=max_positions, entry_delay=entry_delay,
+        r_multiple=r_multiple, time_limit=time_limit,
+    )
+    key = config["hypothesis"]
+    start = date.fromisoformat(since) if since else None
+
+    with session_scope() as session:
+        # No `splits_until`: a forward book is marked to the present, so every
+        # stored split is one the run is entitled to know about.
+        bars_by_symbol = load_symbol_bars(session, None)
+        _report_quarantine()
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+
+        as_of = latest_bar(bars_by_symbol)
+        run_config = RunConfig(
+            hypothesis=key, equity=equity, r_multiple=config["r_multiple"],
+            time_limit=config["time_limit"], slippage_bps=slippage_bps,
+            trend_filter=trend_filter, use_stop=use_stop, hold=config["hold"],
+            top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+            max_positions=max_positions, entry_delay=entry_delay,
+        ).resolved()
+        events = _load_events(session, bars_by_symbol) if key == "h6" else None
+        candidates = build_candidates(bars_by_symbol, run_config, events_by_symbol=events)
+        result = record_signals(
+            session, candidates, hypothesis=key, config_hash=digest, since=start
+        )
+
+    console.print(f"[bold]{key}[/] book [dim]{digest[:12]}[/], data to [bold]{as_of}[/]")
+    console.print(f"[green]{result.summary()}[/]")
+    if result.no_symbol:
+        console.print(
+            f"[yellow]{len(result.no_symbol)} signal(s) had no symbol row[/] and were "
+            f"skipped: {', '.join(sorted(set(result.no_symbol))[:8])}"
+        )
+    if start is None and result.written:
+        console.print(
+            "[yellow]No --since given, so this seeded the book from all stored "
+            "history.[/] Those rows are a backfill, not a forward test; "
+            "'screener forward book' says so until signals start postdating them."
+        )
+    console.print(f"[dim]Read it with: screener forward book -h {key} "
+                  f"--rs-lookback {rs_lookback} --top-pct {top_pct} "
+                  f"--stop-atr {stop_atr} --max-positions {max_positions}[/]")
+
+
+@forward_app.command("book")
+def forward_book(
+    hypothesis: str = typer.Option(..., "--hypothesis", "-h"),
+    universe_name: str | None = typer.Option(None, "--universe"),
+    equity: float = typer.Option(10_000.0, "--equity"),
+    slippage_bps: float = typer.Option(5.0, "--slippage-bps"),
+    trend_filter: bool = typer.Option(True, "--trend-filter/--no-trend-filter"),
+    use_stop: bool = typer.Option(True, "--use-stop/--no-stop"),
+    hold: int | None = typer.Option(None, "--hold"),
+    top_pct: float = typer.Option(0.10, "--top-pct"),
+    stop_atr: float = typer.Option(2.0, "--stop-atr"),
+    rs_lookback: int = typer.Option(63, "--rs-lookback"),
+    max_positions: int = typer.Option(5, "--max-positions"),
+    entry_delay: int = typer.Option(1, "--entry-delay"),
+    r_multiple: float | None = typer.Option(None, "--r-multiple"),
+    time_limit: int | None = typer.Option(None, "--time-limit"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """The paper book: what the recorded signals have done since.
+
+    Derived, never stored. The signals go back through `run_backtest` -- the
+    same engine, ExitRule, slippage and ambiguity convention every development
+    result was measured with -- so there is no second implementation of the
+    exit rules to drift from the one that was tested.
+    """
+    _configure_logging(verbose)
+    from .backtest.engine import CostModel, ExitRule, run_backtest
+    from .backtest.runner import RunConfig, load_symbol_bars
+    from .forward import backfilled, latest_bar, load_signals, span
+
+    config, digest = _forward_config(
+        hypothesis=hypothesis, universe=universe_name, equity=equity,
+        slippage_bps=slippage_bps, trend_filter=trend_filter, use_stop=use_stop,
+        hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+        max_positions=max_positions, entry_delay=entry_delay,
+        r_multiple=r_multiple, time_limit=time_limit,
+    )
+    key = config["hypothesis"]
+
+    with session_scope() as session:
+        book = span(session, digest)
+        if not book.signals:
+            console.print(
+                f"[yellow]Nothing recorded for this configuration[/] "
+                f"([dim]{digest[:12]}[/]). Run 'screener forward record' first, "
+                "with exactly these options -- a different configuration keeps "
+                "a different book."
+            )
+            raise typer.Exit(code=1)
+        candidates = load_signals(session, digest)
+        bars_by_symbol = load_symbol_bars(session, None)
+
+    as_of = latest_bar(bars_by_symbol)
+    run_config = RunConfig(
+        hypothesis=key, equity=equity, r_multiple=config["r_multiple"],
+        time_limit=config["time_limit"], slippage_bps=slippage_bps,
+        trend_filter=trend_filter, use_stop=use_stop, hold=config["hold"],
+        top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
+        max_positions=max_positions, entry_delay=entry_delay,
+    ).resolved()
+
+    result = run_backtest(
+        candidates, bars_by_symbol,
+        start=book.first_signal, end=as_of,
+        starting_equity=equity,
+        exit_rule=ExitRule(
+            r_multiple=run_config.r_multiple, time_limit=run_config.time_limit,
+            use_stop=use_stop,
+        ),
+        costs=CostModel(slippage_bps=slippage_bps),
+    )
+
+    console.print(f"[bold]{key}[/] paper book [dim]{digest[:12]}[/]")
+    console.print(f"{book.describe()}; marked to [bold]{as_of}[/]")
+    if backfilled(book):
+        console.print(
+            "[yellow]This book is seeded from history.[/] Its earliest signals "
+            f"are dated {book.first_signal} but were written on "
+            f"{book.recorded_first}, so they were not recorded before their "
+            "outcomes existed. Only signals dated after that carry forward-test "
+            "weight; the rest is a backtest by another name."
+        )
+
+    closed = [t for t in result.trades if t.exit_date is not None]
+    open_now = [t for t in result.trades if t.exit_date is None]
+    console.print("")
+    if open_now:
+        table = Table(title=f"Open ({len(open_now)})")
+        for col in ("Symbol", "Entered", "Entry", "Stop"):
+            table.add_column(col, justify="left")
+        for t in sorted(open_now, key=lambda t: t.entry_date):
+            table.add_row(t.ticker, str(t.entry_date), f"{t.entry_price:.2f}",
+                          f"{t.stop_price:.2f}" if t.stop_price is not None else "-")
+        console.print(table)
+    else:
+        console.print("[dim]No open positions.[/]")
+
+    if not closed:
+        console.print(
+            "\n[dim]Nothing has closed yet, so there is no result to read. "
+            "That is the normal state of a young forward test.[/]"
+        )
+        return
+
+    console.print(
+        f"\n[bold]{len(closed)}[/] closed: "
+        f"{sum(1 for t in closed if t.r_multiple > 0) / len(closed):.1%} win rate, "
+        f"expectancy {sum(t.r_multiple for t in closed) / len(closed):+.3f}R"
+    )
+    console.print(
+        "[dim]A paper book is not a track record. It has no queue position, no "
+        "partial fills and no emotional cost, and it fills at the engine's "
+        "assumption rather than a broker's confirmation. It answers one "
+        "question: does the rule keep doing prospectively what development "
+        "said it does.[/]"
+    )
+
 research_app = typer.Typer(help="Pre-declared experiment batteries.", no_args_is_help=True)
 app.add_typer(research_app, name="research")
 
@@ -2739,6 +2962,24 @@ def backtest_run(
     top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
     stop_atr: float = typer.Option(2.0, "--stop-atr", help="H1 stop, in ATR(14)."),
     rs_lookback: int = typer.Option(63, "--rs-lookback", help="H1 relative-strength window."),
+    risk_pct: float = typer.Option(
+        0.01, "--risk-pct",
+        help="Risk per trade as a fraction of equity. The approved profile is "
+             "0.01. With a 5%% open-risk cap this is what actually decides how "
+             "many positions can be open at once.",
+    ),
+    max_open_risk_pct: float = typer.Option(
+        0.05, "--max-open-risk",
+        help="Total open risk cap as a fraction of equity. At 1%% per trade "
+             "this binds at five concurrent positions regardless of "
+             "--max-positions.",
+    ),
+    max_positions: int = typer.Option(
+        5, "--max-positions",
+        help="Concurrent positions. Raising it takes more of the signals that "
+             "are otherwise refused for want of a slot, and raises total open "
+             "risk in proportion.",
+    ),
     entry_delay: int = typer.Option(
         1, "--entry-delay",
         help="Sessions after the signal to buy at the open; 1 is the next open. "
@@ -2810,7 +3051,8 @@ def backtest_run(
         r_multiple=r_multiple, time_limit=time_limit, slippage_bps=slippage_bps,
         trend_filter=trend_filter, use_stop=use_stop, displacement=displacement,
         hold=hold, top_pct=top_pct, stop_atr=stop_atr, rs_lookback=rs_lookback,
-        entry_delay=entry_delay,
+        entry_delay=entry_delay, max_positions=max_positions,
+        risk_pct=risk_pct, max_open_risk_pct=max_open_risk_pct,
     )
 
     with session_scope() as session:
@@ -2857,6 +3099,8 @@ def backtest_run(
             trend_filter=trend_filter, use_stop=use_stop,
             displacement=displacement, hold=hold, top_pct=top_pct,
             stop_atr=stop_atr, rs_lookback=rs_lookback, entry_delay=entry_delay,
+            max_positions=max_positions, risk_pct_per_trade=risk_pct,
+            max_open_risk_pct=max_open_risk_pct,
         ).resolved()
 
         events = _load_events(session, bars_by_symbol) if key == "h6" else None
