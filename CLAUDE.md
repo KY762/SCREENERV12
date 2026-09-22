@@ -347,24 +347,34 @@ configuration was caught before a validation slot went on it, which is the
 machinery doing its job rather than a setback.
 
 **The gradient does not survive either, and that is the bigger loss.**
-Measured 2026-09-22 at all four lookbacks on `sp500_pit`, both sides:
+Measured three times as the method was corrected. The first two readings
+measured the wrong rule -- `top_slice` ranked every stored symbol and applied
+the universe afterwards, which selects "members that also beat non-members"
+rather than the top decile of the universe that docs/03 H1 specifies. Fixed
+2026-09-22; the third column is the rule as written:
 
-| rs_lookback | unrestricted | **point-in-time** |
-| --- | --- | --- |
-| 252 | 95th-98th | **45.0th** |
-| 126 | 87th-91st | **54.2nd** |
-| 63 | 81st-86th | **0.0th** |
-| 21 | 48th-62nd | **15.7th** |
+| rs_lookback | unrestricted | filter-after-rank | **rank within universe** |
+| --- | --- | --- | --- |
+| 252 | 95th-98th | 45.0th | **49.8th** |
+| 126 | 87th-91st | 54.2nd | **57.1st** |
+| 63 | 81st-86th | 0.0th | **0.0th** |
+| 21 | 48th-62nd | 15.7th | **9.8th** |
 
-Not monotonic, not ordered, and nothing above the 55th. The dose-response that
-was "much harder to produce by chance than one good cell" **was the universe**.
-It was the single structural reason for treating the twelve-month result as
-more than a search artifact, and it is gone.
+**The correction moved the numbers and not the conclusion**, which is the one
+reassuring thing here: a wrong method that gives the same answer as the right
+one is at least not the reason for the answer. Not monotonic, not ordered,
+nothing meaningfully above random.
 
-What is left of H1 on a point-in-time universe: no lookback beats random, and
-63 days -- H1's own default for four rounds -- sits at the **0th percentile**
-with PF 0.83. The honest summary is that H1's selection rule has no measurable
-edge on the universe it is supposed to trade.
+The dose-response that was "much harder to produce by chance than one good
+cell" **was the universe**. It was the single structural reason for treating
+the twelve-month result as more than a search artifact, and it is gone.
+
+**H1's selection rule has no measurable edge on the universe it is meant to
+trade.** Its own default 63-day lookback is the worst of the four: **0th
+percentile**, p = 1.00, PF 0.82, expectancy -0.117R, drawdown 30.6%. H1 exists
+to be beaten (docs/03 §H1, "CONTROL"); on a real universe it does not beat
+random, which makes "H2-H4 cannot outperform it" a much weaker statement than
+it looked.
 
 The lesson generalises: a percentile is a comparison, and a comparison is only
 as good as the thing on the other side of it. This project has now found three
