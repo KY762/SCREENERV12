@@ -69,6 +69,29 @@ than by anyone's memory:
   CLAUDE.md as current, reporting the exit-isolated experiments as unrun after
   they had been run and committed.
 
+## The noise null
+
+`backtest/noise.py` builds the data a strategy must FAIL on. It permutes each
+symbol's returns in time, carrying every bar's geometry and volume with the
+return that produced it, so the return distribution, the drift, the fat tails
+and the real calendar all survive and only the ordering dies. Each symbol gets
+its own seed -- one shared permutation would leave the cross-section intact,
+and the cross-section is what H1 and H5 rank on.
+
+Permutation removes edge that comes from the market. It cannot remove edge that
+comes from the machinery, because a rule reading a bar it should not have seen
+reads the permuted bar just as happily. **A strategy that keeps its edge on the
+null has a bug, not a finding** -- the class the zero-R target and the
+wrongly-anchored stop belonged to, both of which passed a green suite.
+
+Measured on a deliberately trending fixture: lag-1 autocorrelation +0.458 real
+against +0.020 permuted; a causal momentum rule scores 0.47x the 3-SE
+tolerance, a one-bar-lookahead rule 2.88x. The null discriminates.
+
+Not yet wired into the battery. The natural form is a `--null` arm that
+permutes the universe and reports the expectancy delta, but whether every
+battery pays that cost is a protocol decision, not a coding one.
+
 ## Non-negotiables
 
 These are not preferences. Violating any of them silently invalidates results.
@@ -152,7 +175,7 @@ It is bought and it is not connected, and the distinction matters:
 
 **The budget gate is unchanged, and the condition is the measurement, not the
 purchase.** Do not spend validation or test budget until `screener universe
-coverage` has been re-run against Polygon and shows the failures present.
+coverage` has been re-run against EODHD and shows the failures present.
 Development is unlimited and the bias direction is known, so Round 2 can run
 there. Validation (3 configs) and test (1, once) are enforced against the
 database and never regenerate; spending them on data whose coverage has not
