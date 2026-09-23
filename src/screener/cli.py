@@ -1138,7 +1138,7 @@ def diagnose_predictive(
     from .backtest.splits import get_split
     from .calc import indicators as ind
     from .calc.relative_strength import relative_strength_adjusted
-    from .diagnostics.predictive import information_coefficient
+    from .diagnostics.predictive import information_coefficient, tail_capture
 
     chosen = get_split(split)
     windows = [int(x) for x in horizons.split(",") if x.strip()]
@@ -1197,36 +1197,54 @@ def diagnose_predictive(
             for name, values in families.items():
                 for horizon in windows:
                     progress.update(task, description=f"{name} @ {horizon}d")
-                    rows.append(information_coefficient(
-                        values, bars_by_symbol,
-                        indicator=name, horizon=horizon,
-                        start=chosen.start, end=chosen.end,
-                        universe=universe, stride=stride,
+                    rows.append((
+                        information_coefficient(
+                            values, bars_by_symbol,
+                            indicator=name, horizon=horizon,
+                            start=chosen.start, end=chosen.end,
+                            universe=universe, stride=stride,
+                        ),
+                        tail_capture(
+                            values, bars_by_symbol,
+                            indicator=name, horizon=horizon,
+                            start=chosen.start, end=chosen.end,
+                            universe=universe, stride=stride,
+                        ),
                     ))
                     progress.advance(task)
 
-    table = Table(title="Information coefficient — rank(indicator) vs rank(forward return)")
-    for col in ("Indicator", "Horizon", "Dates", "Names", "IC", "t", "Positive", "Reading"):
-        numeric = col in ("Dates", "Names", "IC", "t", "Positive")
+    table = Table(title="Predictive content — the linear edge, and the tail")
+    for col in ("Indicator", "Horizon", "Dates", "IC", "t", "Tail held", "Lift", "Spread"):
+        numeric = col not in ("Indicator", "Horizon")
         table.add_column(col, justify="right" if numeric else "left")
-    for r in rows:
-        if not r.dates:
-            table.add_row(r.indicator, f"{r.horizon}d", "0", "-", "-", "-", "-", "no usable dates")
+    for ic, tail in rows:
+        if not ic.dates:
+            table.add_row(ic.indicator, f"{ic.horizon}d", "0", "-", "-", "-", "-", "-")
             continue
-        strong = abs(r.t_stat) >= 2
-        colour = "green" if strong and r.mean_ic > 0 else ("red" if strong else "white")
+        strong = abs(ic.t_stat) >= 2
+        ic_colour = "green" if strong and ic.mean_ic > 0 else ("red" if strong else "white")
+        # Lift is the convex reading: 1.0 is chance, and it is what a rule
+        # cutting losers at -1R and letting winners run actually lives on.
+        lift_colour = "green" if tail.lift >= 1.25 else ("white" if tail.lift >= 1.0 else "red")
         table.add_row(
-            r.indicator, f"{r.horizon}d", f"{r.dates}", f"{r.mean_names:.0f}",
-            f"[{colour}]{r.mean_ic:+.4f}[/]", f"[{colour}]{r.t_stat:+.2f}[/]",
-            f"{r.hit_rate:.0%}", r.verdict(),
+            ic.indicator, f"{ic.horizon}d", f"{ic.dates}",
+            f"[{ic_colour}]{ic.mean_ic:+.4f}[/]", f"[{ic_colour}]{ic.t_stat:+.2f}[/]",
+            f"{tail.capture:.1%}", f"[{lift_colour}]{tail.lift:.2f}x[/]",
+            f"{tail.spread:+.2%}",
         )
     console.print(table)
     console.print(
-        "[dim]A real equity factor sits near IC 0.02-0.05 with |t| above 3. "
-        "Anything past 0.10 on liquid large caps should be read as a lookahead "
-        "bug until proven otherwise. Forward returns are open-to-open from the "
-        "session AFTER the signal, which is what this platform can actually "
-        "fill, and windows are sampled every horizon so they do not overlap.[/]"
+        "[dim][bold]IC[/] is the linear edge: a real equity factor sits near "
+        "0.02-0.05 with |t| above 3, and anything past 0.10 on liquid names is "
+        "a lookahead bug until proven otherwise. "
+        "[bold]Tail held[/] is the share of the biggest subsequent movers that "
+        "sat in the indicator's top decile, and [bold]lift[/] is that against "
+        "chance -- 1.00x is no skill. For a rule that cuts losers small and "
+        "lets winners run, lift is the number that pays and IC is the "
+        "distraction. "
+        "[bold]Spread[/] is the top decile's mean forward return minus "
+        "everything else. Forward returns are open-to-open from the session "
+        "AFTER the signal, and windows do not overlap.[/]"
     )
 
 

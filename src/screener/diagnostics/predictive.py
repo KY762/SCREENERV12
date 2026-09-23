@@ -18,6 +18,19 @@ predictive content, with no exit rule, no stop and no portfolio in the way.
     IC above 0.10     implausible on liquid large caps. Suspect lookahead
                       before celebrating.
 
+IC IS THE WRONG PRIMARY SCREEN FOR A CONVEX STRATEGY, and that is the shape
+this project is now after: frequent small losses paid for by rare large wins.
+A rank correlation rewards sorting the whole cross-section monotonically. A
+strategy that cuts losers at -1R and lets winners run does not need that; it
+needs its top slice to CONTAIN the big winners, and is indifferent to how the
+rest of the distribution is ordered. An indicator can have mediocre IC and
+excellent tail capture, or the reverse.
+
+So `tail_capture` measures the thing that actually pays: of the names that went
+on to make the largest moves, what share did the indicator's top slice hold?
+No skill means the top decile holds a tenth of them. Holding a fifth is a real
+edge for a convex rule even where the IC is unremarkable.
+
 WHY RANKS RATHER THAN VALUES. A Spearman correlation is unaffected by outliers
 and by the indicator's scale, so a single 262x fake return of the kind the
 quarantine was built to remove cannot dominate the estimate. It also matches
@@ -201,4 +214,129 @@ def information_coefficient(
         mean_ic=float(arr.mean()),
         std_ic=float(arr.std(ddof=1)) if len(arr) > 1 else 0.0,
         hit_rate=float((arr > 0).mean()),
+    )
+
+
+@dataclass(frozen=True)
+class TailResult:
+    """How well an indicator's top slice captures the big winners."""
+
+    indicator: str
+    horizon: int
+    dates: int
+    top_pct: float
+    tail_pct: float
+    capture: float           # share of tail winners held by the top slice
+    baseline: float          # what no skill would give -- equals top_pct
+    top_mean: float          # mean forward return of the top slice
+    rest_mean: float         # mean forward return of everything else
+    top_hit: float           # share of top-slice names that were tail winners
+
+    @property
+    def lift(self) -> float:
+        """Capture relative to chance. 1.0 is no skill, 2.0 is twice chance."""
+        if self.baseline <= 0:
+            return float("nan")
+        return self.capture / self.baseline
+
+    @property
+    def spread(self) -> float:
+        """Top slice mean minus the rest. The linear edge, for comparison."""
+        return self.top_mean - self.rest_mean
+
+    def describe(self) -> str:
+        return (
+            f"{self.indicator} @ {self.horizon}d: holds {self.capture:.1%} of the "
+            f"top {self.tail_pct:.0%} of movers ({self.lift:.2f}x chance), "
+            f"spread {self.spread:+.2%} over {self.dates} date(s)"
+        )
+
+
+def tail_capture(
+    values_by_symbol: dict[str, pd.Series],
+    bars_by_symbol: dict[str, pd.DataFrame],
+    *,
+    indicator: str,
+    horizon: int,
+    start: date,
+    end: date,
+    universe: Callable[[str, date], bool] | None = None,
+    stride: int | None = None,
+    top_pct: float = 0.10,
+    tail_pct: float = 0.05,
+) -> TailResult:
+    """Does the indicator's top slice hold the biggest subsequent winners?
+
+    The measurement a convex strategy actually depends on. On each date, take
+    the top `top_pct` by indicator and the top `tail_pct` by what followed, and
+    ask what share of the second sits inside the first. With no skill the
+    answer is `top_pct` -- a tenth of the winners land in a tenth of the names.
+
+    Reported alongside it: the mean forward return of the top slice against
+    everything else, which is the linear edge a symmetric measure would see.
+    The two can disagree, and where they do the convex reading is the relevant
+    one: a slice that holds a fifth of the big movers pays for a lot of small
+    losses even if its average is unremarkable.
+    """
+    forwards = forward_returns(bars_by_symbol, horizon)
+    step = stride if stride is not None else max(1, horizon)
+
+    calendar = sorted({
+        stamp for series in values_by_symbol.values() for stamp in series.index
+    })
+    calendar = [s for s in calendar if start <= s.date() <= end][::step]
+
+    captures: list[float] = []
+    top_means: list[float] = []
+    rest_means: list[float] = []
+    hits: list[float] = []
+    for stamp in calendar:
+        day = stamp.date()
+        rows: list[tuple[float, float]] = []
+        for ticker, series in values_by_symbol.items():
+            if universe is not None and not universe(ticker, day):
+                continue
+            if stamp not in series.index:
+                continue
+            value = series.loc[stamp]
+            forward = forwards.get(ticker)
+            if forward is None or stamp not in forward.index:
+                continue
+            outcome = forward.loc[stamp]
+            if pd.isna(value) or pd.isna(outcome):
+                continue
+            rows.append((float(value), float(outcome)))
+
+        if len(rows) < MIN_NAMES:
+            continue
+        frame = pd.DataFrame(rows, columns=["signal", "forward"])
+        n_top = max(1, int(round(len(frame) * top_pct)))
+        n_tail = max(1, int(round(len(frame) * tail_pct)))
+
+        chosen = frame.nlargest(n_top, "signal")
+        winners = frame.nlargest(n_tail, "forward")
+        # Membership by index: a name in both sets is a captured winner.
+        held = len(set(chosen.index) & set(winners.index))
+
+        captures.append(held / n_tail)
+        hits.append(held / n_top)
+        top_means.append(float(chosen["forward"].mean()))
+        others = frame.drop(index=chosen.index)
+        rest_means.append(float(others["forward"].mean()) if len(others) else float("nan"))
+
+    if not captures:
+        return TailResult(indicator, horizon, 0, top_pct, tail_pct,
+                          0.0, top_pct, 0.0, 0.0, 0.0)
+
+    return TailResult(
+        indicator=indicator,
+        horizon=horizon,
+        dates=len(captures),
+        top_pct=top_pct,
+        tail_pct=tail_pct,
+        capture=float(np.mean(captures)),
+        baseline=top_pct,
+        top_mean=float(np.nanmean(top_means)),
+        rest_mean=float(np.nanmean(rest_means)),
+        top_hit=float(np.mean(hits)),
     )
