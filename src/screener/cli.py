@@ -1214,12 +1214,14 @@ def diagnose_predictive(
                     progress.advance(task)
 
     table = Table(title="Predictive content — the linear edge, and the tail")
-    for col in ("Indicator", "Horizon", "Dates", "IC", "t", "Tail held", "Lift", "Spread"):
+    columns = ("Indicator", "Horizon", "Dates", "IC", "t",
+               "Tail held", "Lift", "t(lift)", "Spread")
+    for col in columns:
         numeric = col not in ("Indicator", "Horizon")
         table.add_column(col, justify="right" if numeric else "left")
     for ic, tail in rows:
         if not ic.dates:
-            table.add_row(ic.indicator, f"{ic.horizon}d", "0", "-", "-", "-", "-", "-")
+            table.add_row(ic.indicator, f"{ic.horizon}d", "0", "-", "-", "-", "-", "-", "-")
             continue
         strong = abs(ic.t_stat) >= 2
         ic_colour = "green" if strong and ic.mean_ic > 0 else ("red" if strong else "white")
@@ -1229,7 +1231,8 @@ def diagnose_predictive(
         table.add_row(
             ic.indicator, f"{ic.horizon}d", f"{ic.dates}",
             f"[{ic_colour}]{ic.mean_ic:+.4f}[/]", f"[{ic_colour}]{ic.t_stat:+.2f}[/]",
-            f"{tail.capture:.1%}", f"[{lift_colour}]{tail.lift:.2f}x[/]",
+            f"{tail.capture:.1%}",
+            f"[{lift_colour}]{tail.lift:.2f}x[/]", f"[{lift_colour}]{tail.t_stat:+.2f}[/]",
             f"{tail.spread:+.2%}",
         )
     console.print(table)

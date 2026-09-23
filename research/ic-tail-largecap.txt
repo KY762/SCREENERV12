@@ -1,0 +1,37 @@
+2026-09-22 20:23:39,008 WARNING screener.backtest.runner: quarantine: 25 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB, GENZ, GR, INFO, JAVA, KG, NFX, PARA, PBG, PCL, RX, SHLD, SII, SPLS, UST. See data/reference/universe_quarantine.csv for the reason on each.
+25 quarantined symbol(s) excluded: their stored series is not the company that 
+was in the index. 'screener universe quarantine' lists them.
+universe: sp500_pit (point-in-time membership)
+development: 2010-01-01 to 2015-12-31. 1,020 symbols loaded.
+  atr_pct(14) @ 63d ---------------------------------------- 100%
+              Predictive content — the linear edge, and the tail               
+┌────────────┬─────────┬───────┬─────────┬───────┬───────────┬───────┬────────┐
+│ Indicator  │ Horizon │ Dates │      IC │     t │ Tail held │  Lift │ Spread │
+├────────────┼─────────┼───────┼─────────┼───────┼───────────┼───────┼────────┤
+│ RS_adj(21) │ 20d     │    74 │ +0.0008 │ +0.04 │      8.2% │ 0.82x │ -0.15% │
+│ RS_adj(21) │ 63d     │    23 │ -0.0307 │ -1.02 │     10.4% │ 1.04x │ -0.76% │
+│ RS_adj(63) │ 20d     │    72 │ +0.0169 │ +0.81 │     11.1% │ 1.11x │ +0.09% │
+│ RS_adj(63) │ 63d     │    23 │ +0.0003 │ +0.01 │     11.1% │ 1.11x │ -0.27% │
+│ RS_adj(12… │ 20d     │    69 │ +0.0109 │ +0.44 │     11.2% │ 1.12x │ +0.01% │
+│ RS_adj(12… │ 63d     │    22 │ -0.0400 │ -1.07 │     11.4% │ 1.14x │ -1.11% │
+│ RS_adj(25… │ 20d     │    63 │ +0.0411 │ +1.73 │     13.3% │ 1.33x │ +0.33% │
+│ RS_adj(25… │ 63d     │    20 │ +0.0289 │ +0.76 │     10.5% │ 1.05x │ -0.43% │
+│ ret(252)   │ 20d     │    74 │ +0.0334 │ +1.65 │     16.5% │ 1.65x │ +0.01% │
+│ skip 21    │         │       │         │       │           │       │        │
+│ ret(252)   │ 63d     │    23 │ +0.0307 │ +0.92 │     15.0% │ 1.50x │ -0.71% │
+│ skip 21    │         │       │         │       │           │       │        │
+│ pct_from_… │ 20d     │    76 │ +0.0197 │ +0.77 │      6.2% │ 0.62x │ -0.01% │
+│ pct_from_… │ 63d     │    24 │ +0.0079 │ +0.17 │      5.7% │ 0.57x │ -1.04% │
+│ rvol(20)   │ 20d     │    76 │ -0.0138 │ -1.95 │     11.3% │ 1.13x │ +0.05% │
+│ rvol(20)   │ 63d     │    24 │ -0.0037 │ -0.23 │     11.4% │ 1.14x │ -0.83% │
+│ atr_pct(1… │ 20d     │    76 │ -0.0167 │ -0.55 │     26.2% │ 2.62x │ -0.42% │
+│ atr_pct(1… │ 63d     │    24 │ -0.0051 │ -0.09 │     24.9% │ 2.49x │ -0.61% │
+└────────────┴─────────┴───────┴─────────┴───────┴───────────┴───────┴────────┘
+IC is the linear edge: a real equity factor sits near 0.02-0.05 with |t| above 
+3, and anything past 0.10 on liquid names is a lookahead bug until proven 
+otherwise. Tail held is the share of the biggest subsequent movers that sat in 
+the indicator's top decile, and lift is that against chance -- 1.00x is no 
+skill. For a rule that cuts losers small and lets winners run, lift is the 
+number that pays and IC is the distraction. Spread is the top decile's mean 
+forward return minus everything else. Forward returns are open-to-open from the
+session AFTER the signal, and windows do not overlap.

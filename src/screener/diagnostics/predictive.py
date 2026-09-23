@@ -231,6 +231,7 @@ class TailResult:
     top_mean: float          # mean forward return of the top slice
     rest_mean: float         # mean forward return of everything else
     top_hit: float           # share of top-slice names that were tail winners
+    std_capture: float = 0.0  # date-to-date spread of the capture rate
 
     @property
     def lift(self) -> float:
@@ -243,6 +244,37 @@ class TailResult:
     def spread(self) -> float:
         """Top slice mean minus the rest. The linear edge, for comparison."""
         return self.top_mean - self.rest_mean
+
+    @property
+    def t_stat(self) -> float:
+        """Standard errors between the measured capture and pure chance.
+
+        Chance is `baseline` -- a tenth of the winners in a tenth of the names
+        -- so this asks how confidently the top slice beats a coin. Dates are
+        the unit of independence, as with the IC, and the windows are
+        non-overlapping by default for the same reason.
+
+        Worth comparing against the IC's t: an IC of 0.03 needs roughly 245
+        non-overlapping 20-day windows, about nineteen years, to reach t = 3.
+        The development split has 74. Capture is a proportion resting on
+        thousands of underlying names rather than one correlation per date, so
+        it separates from its null far faster -- which is why the pivot to tail
+        measurement was not only more relevant but more MEASURABLE.
+        """
+        if self.dates < 2 or self.std_capture == 0:
+            return 0.0
+        return (self.capture - self.baseline) / (self.std_capture / sqrt(self.dates))
+
+    def verdict(self) -> str:
+        if self.dates < 2:
+            return "not enough dates"
+        if abs(self.t_stat) < 2:
+            return "indistinguishable from chance"
+        if self.lift < 1.2:
+            return "real but slight"
+        if self.lift > 3.0:
+            return "implausibly strong -- check for lookahead"
+        return "real tail concentration"
 
     def describe(self) -> str:
         return (
@@ -326,7 +358,7 @@ def tail_capture(
 
     if not captures:
         return TailResult(indicator, horizon, 0, top_pct, tail_pct,
-                          0.0, top_pct, 0.0, 0.0, 0.0)
+                          0.0, top_pct, 0.0, 0.0, 0.0, 0.0)
 
     return TailResult(
         indicator=indicator,
@@ -339,4 +371,5 @@ def tail_capture(
         top_mean=float(np.nanmean(top_means)),
         rest_mean=float(np.nanmean(rest_means)),
         top_hit=float(np.mean(hits)),
+        std_capture=float(np.std(captures, ddof=1)) if len(captures) > 1 else 0.0,
     )
