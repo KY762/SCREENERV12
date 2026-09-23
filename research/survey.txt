@@ -2,3 +2,14 @@ Sampling 72 market date(s), 2009-01-01 to 2026-09-22, every 91 days.
 Keeping US common stock on AMEX, BATS, NASDAQ, NYSE, NYSE ARCA, NYSE MKT that 
 ever cleared $2,000,000/day at $5+.
 2026-09-22 20:07:54,041 INFO    screener.universe.survey: 22724 symbol(s) pass the type and venue screen
+⠸ survey 2026-09-10 ---------------------------------------   99%
+9,244 symbol(s) cleared $2,000,000/day and $5 on at least one of 72 sampled 
+date(s) (3,037,648 rows examined)
+Written to data\reference\tradeable_candidates.csv
+A quarterly sweep misses a symbol that was liquid only between two sample 
+dates, which biases toward longer-lived names. That is the cost of not storing 
+forty million bars; --every 30 narrows the gap at three times the calls.
+
+Next: screener ingest --symbols $(cut -d, -f1 
+data\reference\tradeable_candidates.csv | tail -n +2 | paste -sd,) --start 
+2009-01-01
