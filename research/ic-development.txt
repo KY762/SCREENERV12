@@ -1,0 +1,64 @@
+2026-09-22 19:52:59,778 WARNING screener.backtest.runner: quarantine: 25 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB, GENZ, GR, INFO, JAVA, KG, NFX, PARA, PBG, PCL, RX, SHLD, SII, SPLS, UST. See data/reference/universe_quarantine.csv for the reason on each.
+25 quarantined symbol(s) excluded: their stored series is not the company that 
+was in the index. 'screener universe quarantine' lists them.
+universe: sp500_pit (point-in-time membership)
+development: 2010-01-01 to 2015-12-31. 1,020 symbols loaded.
+  atr_pct(14) @ 63d ---------------------------------------- 100%
+       Information coefficient — rank(indicator) vs rank(forward return)       
++-----------------------------------------------------------------------------+
+| Indicat… | Horizon | Dates | Names |      IC |     t | Positive | Reading   |
+|----------+---------+-------+-------+---------+-------+----------+-----------|
+| RS_adj(… | 20d     |    74 |   454 | +0.0008 | +0.04 |      49% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 63d     |    23 |   453 | -0.0307 | -1.02 |      30% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 20d     |    72 |   454 | +0.0169 | +0.81 |      53% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 63d     |    23 |   453 | +0.0003 | +0.01 |      57% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 20d     |    69 |   454 | +0.0109 | +0.44 |      52% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 63d     |    22 |   452 | -0.0400 | -1.07 |      50% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 20d     |    63 |   453 | +0.0411 | +1.73 |      63% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| RS_adj(… | 63d     |    20 |   452 | +0.0289 | +0.76 |      60% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| ret(252) | 20d     |    74 |   452 | +0.0334 | +1.65 |      59% | no        |
+| skip 21  |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| ret(252) | 63d     |    23 |   451 | +0.0307 | +0.92 |      61% | no        |
+| skip 21  |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| pct_fro… | 20d     |    76 |   451 | +0.0197 | +0.77 |      47% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| pct_fro… | 63d     |    24 |   450 | +0.0079 | +0.17 |      50% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| rvol(20) | 20d     |    76 |   454 | -0.0138 | -1.95 |      41% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| rvol(20) | 63d     |    24 |   452 | -0.0037 | -0.23 |      46% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| atr_pct… | 20d     |    76 |   454 | -0.0167 | -0.55 |      51% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
+| atr_pct… | 63d     |    24 |   452 | -0.0051 | -0.09 |      58% | no        |
+|          |         |       |       |         |       |          | detectab… |
+|          |         |       |       |         |       |          | signal    |
++-----------------------------------------------------------------------------+
+A real equity factor sits near IC 0.02-0.05 with |t| above 3. Anything past 
+0.10 on liquid large caps should be read as a lookahead bug until proven 
+otherwise. Forward returns are open-to-open from the session AFTER the signal, 
+which is what this platform can actually fill, and windows are sampled every 
+horizon so they do not overlap.

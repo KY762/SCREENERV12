@@ -821,6 +821,103 @@ def _identity_evidence(universe_name: str):
     return series, identity, left, data_ends
 
 
+@universe_app.command("survey")
+def universe_survey(
+    start: str = typer.Option("2009-01-01", "--start"),
+    end: str | None = typer.Option(None, "--end"),
+    every_days: int = typer.Option(
+        91, "--every",
+        help="Calendar days between market snapshots. 91 is quarterly.",
+    ),
+    out: str = typer.Option(
+        "data/reference/tradeable_candidates.csv", "--out",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Find every US common stock that was ever liquid enough to trade.
+
+    One bulk call per sampled date covers ~40,000 symbols, so a quarterly
+    sweep of seventeen years costs about 70 calls and decides which of ~22,000
+    NYSE and NASDAQ tickers deserve a full history. Storing all of them would
+    be roughly 40 million bars, most of it names that never traded $100,000 in
+    a day.
+
+    The roster includes DELISTED symbols, so a company that failed in 2012 is
+    a candidate on the same terms as one still trading. That is the point: a
+    universe screened from today's listings is the survivorship bias this
+    project has already been burned by twice.
+    """
+    _configure_logging(verbose)
+    import csv
+
+    from .providers.eodhd import EodhdProvider
+    from .universe import survey as survey_mod
+
+    settings = get_settings()
+    if not settings.has_eodhd:
+        console.print("[red]EODHD credentials missing.[/] See .env.example.")
+        raise typer.Exit(code=1)
+
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end) if end else date.today()
+    dates = survey_mod.sample_dates(start_date, end_date, every_days)
+
+    console.print(
+        f"Sampling [bold]{len(dates)}[/] market date(s), {start_date} to {end_date}, "
+        f"every {every_days} days."
+    )
+    console.print(
+        f"[dim]Keeping US common stock on {', '.join(sorted(survey_mod.EXCHANGES))} "
+        f"that ever cleared ${survey_mod.MIN_DOLLAR_VOLUME:,.0f}/day at "
+        f"${survey_mod.MIN_PRICE:.0f}+.[/]"
+    )
+
+    provider = EodhdProvider(settings)
+    try:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            BarColumn(), TaskProgressColumn(), console=console,
+        ) as bar:
+            task = bar.add_task("surveying", total=len(dates))
+
+            def tick(day, result):
+                bar.update(task, completed=result.dates_sampled,
+                           description=f"survey {day}")
+
+            result = survey_mod.survey(
+                provider, start=start_date, end=end_date,
+                every_days=every_days, progress=tick,
+            )
+    finally:
+        provider.close()
+
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["symbol", "peak_dollar_volume", "first_seen", "last_seen"])
+        for ticker in sorted(result.eligible_symbols):
+            writer.writerow([
+                ticker,
+                f"{result.best_dollar_volume.get(ticker, 0.0):.0f}",
+                result.first_seen.get(ticker, ""),
+                result.last_seen.get(ticker, ""),
+            ])
+
+    console.print(f"[green]{result.summary()}[/]")
+    console.print(f"Written to [bold]{path}[/]")
+    console.print(
+        "[yellow]A quarterly sweep misses a symbol that was liquid only "
+        "between two sample dates,[/] which biases toward longer-lived names. "
+        "That is the cost of not storing forty million bars; --every 30 "
+        "narrows the gap at three times the calls."
+    )
+    console.print(
+        f"\n[dim]Next: screener ingest --symbols $(cut -d, -f1 {path} | tail -n +2 | paste -sd,) "
+        f"--start {start_date}[/]"
+    )
+
+
 @universe_app.command("quarantine")
 def universe_quarantine(
     write: bool = typer.Option(

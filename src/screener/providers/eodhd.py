@@ -48,6 +48,7 @@ REQUEST_INTERVAL = 0.05
 BARS_PATH = "/api/eod/{symbol}"
 SYMBOLS_PATH = "/api/exchange-symbol-list/{exchange}"
 SPLITS_PATH = "/api/splits/{symbol}"
+BULK_PATH = "/api/eod-bulk-last-day/{exchange}"
 
 
 class SymbolNotFound(ProviderError):
@@ -172,6 +173,26 @@ class EodhdProvider:
             BARS_PATH.format(symbol=_us(symbol)),
             {"from": start.isoformat(), "to": end.isoformat(), "period": "d", "order": "a"},
         )
+
+    # -- whole-market snapshots ----------------------------------------------
+
+    def get_bulk_day(self, day: date, exchange: str = "US") -> list[dict]:
+        """Every symbol's OHLCV on one date, in a single call.
+
+        The point is scoping. Deciding which of ~22,000 NYSE and NASDAQ
+        tickers are worth a full history means knowing which ever traded
+        enough to be tradeable, and asking that per symbol is 22,000 calls
+        before a single bar is stored. One bulk call covers ~40,000 symbols
+        for one date, so a quarterly sweep of seventeen years costs about 70
+        calls and answers the question outright.
+
+        Returns raw vendor rows -- `code`, `close`, `volume` and friends. The
+        exchange field here is always the market group ("US"), not NYSE or
+        NASDAQ, so anything that needs the listing venue joins against
+        `list_symbols`.
+        """
+        rows = self._get(BULK_PATH.format(exchange=exchange), {"date": day.isoformat()})
+        return [r for r in rows if isinstance(r, dict)]
 
     # -- corporate actions ---------------------------------------------------
 
