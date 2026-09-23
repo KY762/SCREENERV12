@@ -443,6 +443,13 @@ def metrics_show(
 def universe_build(
     name: str = typer.Option("liquid_us", "--name"),
     min_price: float = typer.Option(10.0, "--min-price"),
+    max_price: float | None = typer.Option(
+        None, "--max-price",
+        help="Above this a $10,000 account cannot size a position properly: "
+             "at 0.5%% risk with a 3 x ATR stop, $200 buys two shares and "
+             "takes 72%% of the intended risk. Unset, those trades still "
+             "happen, just silently under-risked.",
+    ),
     min_dollar_volume: float = typer.Option(20_000_000.0, "--min-adv"),
     min_history: int = typer.Option(250, "--min-history"),
     rebuild: bool = typer.Option(False, "--rebuild"),
@@ -459,7 +466,7 @@ def universe_build(
     from .universe.definition import UniverseDefinition
 
     definition = UniverseDefinition(
-        name=name, min_price=min_price,
+        name=name, min_price=min_price, max_price=max_price,
         min_dollar_volume=min_dollar_volume, min_history_days=min_history,
     )
     console.print(f"[dim]{definition.describe()}[/]")
