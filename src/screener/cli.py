@@ -1610,6 +1610,7 @@ def forward_record(
     rs_lookback: int = typer.Option(63, "--rs-lookback"),
     max_positions: int = typer.Option(5, "--max-positions"),
     risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    trail_atr: float | None = typer.Option(None, "--trail-atr"),
     max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
     entry_delay: int = typer.Option(1, "--entry-delay"),
     r_multiple: float | None = typer.Option(None, "--r-multiple"),
@@ -1641,6 +1642,7 @@ def forward_record(
         max_positions=max_positions, entry_delay=entry_delay,
         r_multiple=r_multiple, time_limit=time_limit,
         risk_pct=risk_pct, max_open_risk_pct=max_open_risk_pct,
+        trail_atr=trail_atr,
     )
     key = config["hypothesis"]
     start = date.fromisoformat(since) if since else None
@@ -1701,6 +1703,7 @@ def forward_book(
     rs_lookback: int = typer.Option(63, "--rs-lookback"),
     max_positions: int = typer.Option(5, "--max-positions"),
     risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    trail_atr: float | None = typer.Option(None, "--trail-atr"),
     max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
     entry_delay: int = typer.Option(1, "--entry-delay"),
     r_multiple: float | None = typer.Option(None, "--r-multiple"),
@@ -1870,6 +1873,7 @@ def forward_snapshot(
     rs_lookback: int = typer.Option(63, "--rs-lookback"),
     max_positions: int = typer.Option(5, "--max-positions"),
     risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    trail_atr: float | None = typer.Option(None, "--trail-atr"),
     max_open_risk_pct: float = typer.Option(0.05, "--max-open-risk"),
     entry_delay: int = typer.Option(1, "--entry-delay"),
     r_multiple: float | None = typer.Option(None, "--r-multiple"),
@@ -2376,6 +2380,7 @@ def universe_candidates(
 def universe_tradeable(
     equity: float = typer.Option(10_000.0, "--equity"),
     risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    trail_atr: float | None = typer.Option(None, "--trail-atr"),
     stop_atr: float = typer.Option(2.0, "--stop-atr"),
     cap_pct: float = typer.Option(0.25, "--cap-pct", help="Concentration cap."),
     show: str = typer.Option("all", "--show", help="all, good, or tradeable."),
@@ -2976,6 +2981,7 @@ def option_cmd(
     stop_atr: float = typer.Option(2.0, "--stop-atr", help="Stop distance in ATR(14)."),
     equity: float = typer.Option(10_000.0, "--equity"),
     risk_pct: float = typer.Option(0.01, "--risk-pct"),
+    trail_atr: float | None = typer.Option(None, "--trail-atr"),
     target_delta: float = typer.Option(0.75, "--delta", help="Aim for this delta."),
     feed: str = typer.Option("indicative", "--feed", help="indicative or opra."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -3434,6 +3440,11 @@ def backtest_run(
     top_pct: float = typer.Option(0.10, "--top-pct", help="H1 selection cutoff."),
     stop_atr: float = typer.Option(2.0, "--stop-atr", help="H1 stop, in ATR(14)."),
     rs_lookback: int = typer.Option(63, "--rs-lookback", help="H1 relative-strength window."),
+    trail_atr: float | None = typer.Option(
+        None, "--trail-atr",
+        help="Ratchet the stop to (highest close since entry) minus this many "
+             "ATR, never down. Omit for a fixed stop.",
+    ),
     risk_pct: float = typer.Option(
         0.01, "--risk-pct",
         help="Risk per trade as a fraction of equity. The approved profile is "

@@ -115,6 +115,9 @@ class RunConfig:
     breakout_window: int = 20
     risk_pct_per_trade: float = 0.01
     max_position_pct: float = 0.25
+    #: Ratchet the stop to (highest close since entry) - trail_atr x ATR.
+    #: None leaves it fixed, which is every result before 2026-09-22.
+    trail_atr: float | None = None
 
     def __post_init__(self) -> None:
         if not self.use_stop and self.time_limit == 0:
@@ -367,6 +370,7 @@ def simulate(
             r_multiple=config.r_multiple,
             time_limit=config.time_limit,
             use_stop=config.use_stop,
+            trail_atr=config.trail_atr,
         ),
         costs=CostModel(slippage_bps=config.slippage_bps),
     )

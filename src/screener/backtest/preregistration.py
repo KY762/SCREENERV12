@@ -65,6 +65,7 @@ RUN_DEFAULTS: dict[str, Any] = {
     "max_positions": 5,
     "risk_pct": 0.01,
     "max_open_risk_pct": 0.05,
+    "trail_atr": None,
 }
 
 EVIDENTIAL_SPLITS = ("validation", "test")
@@ -134,6 +135,11 @@ def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
         # trades exist at all, so two runs at different risk are two runs.
         "risk_pct": float(opts["risk_pct"]),
         "max_open_risk_pct": float(opts["max_open_risk_pct"]),
+        # A trailed exit takes different trades from a fixed one, so the two
+        # are two runs and must not share a budget slot.
+        "trail_atr": (
+            float(opts["trail_atr"]) if opts["trail_atr"] is not None else None
+        ),
     }
 
 
