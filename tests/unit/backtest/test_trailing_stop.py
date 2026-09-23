@@ -138,3 +138,28 @@ def test_a_gap_through_the_trailed_stop_fills_at_the_open():
     assert trade.exit_reason == "stop_gap"
     assert trade.exit_price == pytest.approx(Decimal("90"))
     assert trade.exit_price < trade.stop, "gapped below the stop, no protection"
+
+
+def test_a_zero_time_limit_means_no_time_exit():
+    """Zero means NO time exit, exactly as it does for a target.
+
+    The engine tested `held >= time_limit`, so zero closed every position the
+    bar after entry. Found on the first run of this strategy: 687 trades, all
+    exiting on time, and a trailing stop that never fired once. Same shape as
+    the r_multiple=0 bug that voided eight battery experiments.
+    """
+    bars = series([100, 100, 110, 120, 130, 140])
+
+    result = run(bars, ExitRule(r_multiple=0, time_limit=0,
+                                use_stop=True, trail_atr=3.0))
+
+    (trade,) = result.trades
+    assert trade.exit_reason != "time", "zero is not a one-bar hold"
+    assert trade.exit_date is None, "still rising with no time limit, so still open"
+
+
+def test_a_rule_with_no_exit_at_all_is_still_refused():
+    """The guard has to survive the fix: no stop, no target, and a zero time
+    limit is a rule that never closes a position."""
+    with pytest.raises(ValueError, match="never exits"):
+        ExitRule(r_multiple=0, time_limit=0, use_stop=False)

@@ -128,12 +128,29 @@ class ExitRule:
         # that gets executed. Rewriting it made the two disagree, and a second
         # pass over RunConfig.resolved() then read the resulting None as
         # "unspecified" and handed h2-h4 their 2R default back.
-        if not self.use_stop and not self.has_target and self.time_limit is None:
+        if not self.use_stop and not self.has_target and not self.has_time_limit:
             raise ValueError("an ExitRule with no stop, no target and no time limit never exits")
 
     @property
     def has_target(self) -> bool:
         return self.r_multiple is not None and self.r_multiple > 0
+
+    @property
+    def has_time_limit(self) -> bool:
+        """Zero means NO time exit, exactly as zero means no target.
+
+        The engine tested `time_limit is not None and held >= time_limit`, so a
+        time_limit of 0 made `held >= 0` true on the first bar after entry and
+        closed every position the next day. Found 2026-09-22 on the first run
+        of the trailing-stop strategy: 687 trades, every one exiting on time,
+        expectancy -0.011R, and a trailing stop that never fired once.
+
+        This is the same shape as the r_multiple=0 bug that voided eight
+        battery experiments, in the other exit parameter, and it survived
+        because `resolved()` already treats 0 as "no time exit" -- so the
+        config that was logged and the rule that ran disagreed.
+        """
+        return self.time_limit is not None and self.time_limit > 0
 
 
 @dataclass(frozen=True)
@@ -295,7 +312,7 @@ def run_backtest(
             exit_price: Decimal | None = None
             reason: str | None = None
 
-            if exit_rule.time_limit is not None and held >= exit_rule.time_limit:
+            if exit_rule.has_time_limit and held >= exit_rule.time_limit:
                 # Chronologically first event of the day: fills at the open.
                 exit_price = costs.sell_fill(open_p)
                 reason = "time"
