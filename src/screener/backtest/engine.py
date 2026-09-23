@@ -101,6 +101,18 @@ class ExitRule:
     r_multiple: float | None = 2.0     # target at entry + R x initial risk
     time_limit: int | None = 10        # exit at the open this many bars after entry
     use_stop: bool = True
+    #: Ratchet the stop up to (highest close since entry) - trail_atr x ATR,
+    #: never down. None leaves the stop where it was set at entry.
+    #:
+    #: This is the mechanism a convex strategy lives on. Selection in small
+    #: caps was measured 2026-09-22 to pick VOLATILITY symmetrically -- the top
+    #: momentum decile's best 1% runs to +34.9% against the universe's +25.5%,
+    #: and its worst 1% to -31.4% against -22.6% -- with a median edge of
+    #: +0.05% per 20 days, which is less than the spread costs to trade. So the
+    #: selection does not pay. The asymmetry has to be manufactured by cutting
+    #: the left tail while leaving the right one alone, and that is what this
+    #: does.
+    trail_atr: float | None = None
 
     def __post_init__(self) -> None:
         # A target at 0R sits exactly on the entry price, so the next bar whose
@@ -190,6 +202,11 @@ class _Position:
     trade: Trade
     entry_bar_index: int
     sector: str | None = None
+    #: Highest close seen since entry, and the ATR the stop trails by. Both are
+    #: needed only for a trailing exit; `peak_close` starts at the fill so the
+    #: stop can never ratchet BELOW where it began.
+    peak_close: Decimal = Decimal("0")
+    atr: Decimal | None = None
 
 
 def _bar(frame: pd.DataFrame, day: pd.Timestamp) -> pd.Series | None:
@@ -264,6 +281,17 @@ def run_backtest(
             low_p = Decimal(str(row["low"]))
             high_p = Decimal(str(row["high"]))
 
+            # Ratchet BEFORE testing exits, using only closes up to YESTERDAY.
+            # Raising the stop on today's close and then testing today's low
+            # against it would exit on a level the price never traded through
+            # while the position was subject to it -- lookahead inside a single
+            # bar, and the kind that never shows up as a truncation failure.
+            if exit_rule.trail_atr is not None and position.atr is not None:
+                distance = Decimal(str(exit_rule.trail_atr)) * position.atr
+                raised = _money(position.peak_close - distance)
+                if raised > trade.stop:
+                    trade.stop = raised
+
             exit_price: Decimal | None = None
             reason: str | None = None
 
@@ -293,6 +321,10 @@ def run_backtest(
         held_value = Decimal("0")
         for ticker, position in open_positions.items():
             row = _bar(bars_by_symbol[ticker], day)
+            if row is not None:
+                close_now = Decimal(str(row["close"]))
+                if close_now > position.peak_close:
+                    position.peak_close = close_now
             price = (
                 Decimal(str(row["close"])) if row is not None else position.trade.entry_price
             )
@@ -379,7 +411,9 @@ def run_backtest(
             if candidate.sector is None:
                 entries_without_sector += 1
             open_positions[candidate.ticker] = _Position(
-                trade, bar_index[day], candidate.sector
+                trade, bar_index[day], candidate.sector,
+                peak_close=fill,
+                atr=Decimal(str(candidate.atr)) if candidate.atr else None,
             )
             cash = _money(cash - cost)
 
