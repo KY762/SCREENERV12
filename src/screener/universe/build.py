@@ -92,6 +92,7 @@ def build_universe(
             ticker=symbol.ticker,
             asset_type=symbol.asset_type,
             name=symbol.name,
+            security_type=symbol.security_type,
         )
         if ok:
             eligible_symbols.append(symbol)

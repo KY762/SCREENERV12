@@ -1,1 +1,8 @@
 Fetching splits for 1,650 symbol(s), 2009-01-01 to 2026-09-22.
+  splits ZVRA ---------------------------------------- 100%
+254 split(s) written across 490 of 1,650 symbol(s); 1 failure(s)
+1 failure(s):
+   ATGE     EODHD has no ticker at /api/splits/ATGE.US
+Rebuild metrics next. They are computed from prices and were built without this
+adjustment:
+  screener metrics build --rebuild

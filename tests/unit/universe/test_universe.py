@@ -348,3 +348,29 @@ def test_a_price_ceiling_excludes_names_the_account_cannot_size(session):
     late = cheap.index[-1].date()
 
     assert universe_members(session, "capped", late) == ["CHEAP"]
+
+
+def test_a_real_company_is_not_mistaken_for_a_leveraged_product():
+    """The heuristic reads issuer vocabulary -- Ultra, Pro, Short, Bull -- which
+    are also ordinary words in a company's name. It excluded UCTT, Ultra Clean
+    Holdings, a semiconductor equipment maker, from the small-cap universe on
+    2026-09-22. A common stock cannot be a leveraged ETF."""
+    definition = UniverseDefinition(allowed_asset_types=frozenset({"equity"}))
+
+    ok, reason = passes_static_filters(
+        definition, ticker="UCTT", asset_type="equity",
+        name="Ultra Clean Holdings Inc", security_type="Common Stock",
+    )
+    assert ok, reason
+
+
+def test_an_actual_leveraged_etf_is_still_excluded():
+    """The heuristic still has to work where it was aimed."""
+    definition = UniverseDefinition(allowed_asset_types=frozenset({"equity", "etf"}))
+
+    ok, reason = passes_static_filters(
+        definition, ticker="UST", asset_type="etf",
+        name="ProShares Ultra 7-10 Year Treasury", security_type="ETF",
+    )
+    assert not ok
+    assert reason == "leveraged or inverse product"

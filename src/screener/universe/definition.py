@@ -119,16 +119,27 @@ def passes_static_filters(
     ticker: str,
     asset_type: str,
     name: str | None = None,
+    security_type: str | None = None,
 ) -> tuple[bool, str | None]:
-    """Filters that do not depend on a date. Returns (passed, reason_if_failed)."""
+    """Filters that do not depend on a date. Returns (passed, reason_if_failed).
+
+    `security_type` is the vendor's classification, and passing it disarms the
+    leveraged-product name heuristic for ordinary companies. That heuristic
+    reads issuer vocabulary -- Ultra, Pro, Short, Bull, Daily -- which are also
+    ordinary English words in a company's name. Found 2026-09-22: it excluded
+    **UCTT, Ultra Clean Holdings**, a semiconductor equipment maker, from the
+    small-cap universe. A common stock cannot be a leveraged ETF, so where the
+    vendor says Common Stock the name is not consulted.
+    """
     upper = ticker.strip().upper()
 
     if upper in definition.restricted_tickers:
         return False, "restricted list"
     if asset_type not in definition.allowed_asset_types:
         return False, f"asset type {asset_type!r} not eligible"
-    if definition.exclude_leveraged and is_leveraged_or_inverse(upper, name):
-        return False, "leveraged or inverse product"
+    if definition.exclude_leveraged and (security_type or "") != "Common Stock":
+        if is_leveraged_or_inverse(upper, name):
+            return False, "leveraged or inverse product"
     return True, None
 
 
