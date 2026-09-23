@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -21,6 +22,17 @@ from sqlalchemy import func, select
 from .config import get_settings
 from .db.models import DataQualityLog, IngestionRun, PriceDaily, Symbol
 from .db.session import create_all, get_engine, session_scope
+
+# Windows consoles default to cp1252, and Rich's spinner draws Braille. Piping
+# any command with a progress bar then dies on UnicodeEncodeError partway
+# through -- which killed a 70-call market survey after it had done the work.
+# Reconfiguring here covers every command rather than each one remembering.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (OSError, ValueError):        # a closed or exotic stream
+        pass
 
 app = typer.Typer(
     help="SCREENERV12 -- market intelligence and trading operations.",

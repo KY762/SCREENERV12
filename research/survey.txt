@@ -1,0 +1,4 @@
+Sampling 72 market date(s), 2009-01-01 to 2026-09-22, every 91 days.
+Keeping US common stock on AMEX, BATS, NASDAQ, NYSE, NYSE ARCA, NYSE MKT that 
+ever cleared $2,000,000/day at $5+.
+2026-09-22 20:07:54,041 INFO    screener.universe.survey: 22724 symbol(s) pass the type and venue screen

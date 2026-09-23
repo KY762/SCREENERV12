@@ -141,16 +141,31 @@ predict returns.
 
 ### Retired for a different reason
 
-**H1 — Relative-strength continuation (the control).** Not disproven as an
-idea, but its specification was wrong: it ranked on 63-day relative strength,
-which `diagnose predictive` measures at IC +0.017 (t = 0.81) — effectively
-noise. The twelve-month variants are the ones carrying signal. H1 also spent
-four rounds looking like the project's one positive result, which turned out to
-be survivorship channel 2 rather than the rule: 97.7th percentile on all stored
-symbols, 49.8th on point-in-time membership.
+**H1 — Relative-strength continuation (the control). NOT RETIRED — see the
+correction below.** An earlier version of this section archived H1 and claimed
+the date-matched random benchmark could take over as the control. That was
+wrong, and the operator caught it.
 
-Its role as a control is retained without it: the date-matched random benchmark
-**is** the control, and every result is still scored against it.
+The two are different tests and only one of them was ever the benchmark:
+
+| | Question it answers |
+| --- | --- |
+| Date-matched random benchmark | Does this rule have any selection skill? |
+| **H1, the control** | Is this complexity worth anything over a simple momentum rotation? |
+
+A strategy can clear the first and fail the second — beat random while being
+worse than buying strong stocks and holding three weeks. The second test is
+what made rejecting H2, H3 and H4 mean something, and deleting H1 would have
+silently removed it.
+
+What IS wrong with H1 is only its specification: it ranked on 63-day relative
+strength, which `diagnose predictive` measures at IC +0.017 (t = 0.81) —
+noise. A control built on a noise indicator is a bar not worth clearing. It is
+respecified on the twelve-month variant in `docs/10`, and it keeps its role.
+
+Also recorded: H1 spent four rounds looking like the project's one positive
+result, which was survivorship channel 2 rather than the rule — 97.7th
+percentile on all stored symbols, 49.8th on point-in-time membership.
 
 **H5 — Canonical 12-1 momentum.** Never given a fair test. Its last numbers
 predate the split fix, the quarantine and the ranking fix. The indicator it

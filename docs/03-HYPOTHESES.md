@@ -1,11 +1,16 @@
 > # ARCHIVED 2026-09-22 — this document specifies no active hypothesis
 >
-> All seven hypotheses here are retired. Four (H2, H3, H4, H7) were rejected on
-> evidence, with survivorship bias helping them, which is the strongest form of
-> rejection available. H1's specification ranked on an indicator since measured
-> at IC +0.017 — noise. H5 and H6 were never given a fair test and their ideas
-> survive; these specifications do not, having been written for a large-cap
-> universe.
+> Six of the seven hypotheses here are retired. Four (H2, H3, H4, H7) were
+> rejected on evidence, with survivorship bias helping them, which is the
+> strongest form of rejection available. H5 and H6 were never given a fair test;
+> their ideas survive, these specifications do not, having been written for a
+> large-cap universe.
+>
+> **H1 is NOT retired.** It is the control — the test of whether complexity
+> beats a simple momentum rotation — and that is a different question from
+> "does this beat random", which is what the date-matched benchmark asks. Only
+> its ranking indicator changes: 63-day relative strength measures at IC +0.017
+> and is replaced by the twelve-month variant. Respecified in `docs/10`.
 >
 > **Verdicts are in `docs/09-REJECTED.md`.** The criteria, split policy and
 > plateau rules in §0 remain in force and are NOT archived — they are the
