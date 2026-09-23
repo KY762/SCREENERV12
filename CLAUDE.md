@@ -247,6 +247,73 @@ Each was invisible to a passing test suite and surfaced only on real data.
   membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
   `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
 
+## No edge found (2026-09-22)
+
+**Every hypothesis, and the strategy built from the measurements, on a fair
+test.** Point-in-time universe, splits adjusted, quarantine applied, ranking
+inside the universe, benchmark drawn from the same pool.
+
+| | vs random, same days |
+| --- | --- |
+| H1 relative strength | 0th-3rd percentile |
+| H2, H3, H4, H7 | at or below random |
+| H5 canonical momentum | 29th |
+| H6 earnings drift | 60th, p = 0.40 |
+| **docs/10 swing strategy** | **0.1st, p = 0.9990** |
+
+This is the charter's "no edge found" outcome. It is a result, not a failure
+to get one, and it was reached with validation and test budget never spent.
+
+**What the rebuild established, which is worth more than the verdict.**
+
+1. **Tail capture is a better screen than IC for a convex rule, and better
+   behaved statistically.** An IC of 0.03 needs ~245 non-overlapping 20-day
+   windows -- about nineteen years -- to reach t = 3; the development split has
+   74, so no amount of work there can settle it. Capture is a proportion over
+   thousands of names: momentum on small caps measures **lift 2.04x at
+   t = +9.91**, the most solid number this project has produced.
+2. **And lift alone buys nothing.** Momentum in small caps concentrates BOTH
+   tails -- best 1% +34.9% against the universe's +25.5%, worst 1% -31.4%
+   against -22.6% -- with a median edge of +0.05% per 20 days. It picks
+   volatility, symmetrically. `atr_pct` scores 2.92x lift with an IC of -0.01,
+   which is nearly definitional and shows what lift does and does not mean.
+3. **The exit can manufacture the shape and not the edge.** A 3 ATR trailing
+   stop turns the identical trade list from -1.052R and a 0% win rate into
+   +0.031R at 34.5% wins and a 1.88:1 payoff. It also unjams the portfolio:
+   with a fixed stop and no time limit only 47 positions are ever taken because
+   winners never close and the ten slots stay full for years. None of that
+   makes it beat random.
+4. **Three of the ranking inputs are noise.** `pct_from_high` at 0.52x lift is
+   ANTI-predictive for tails; `rvol` and `atr_pct` carry no direction. Two were
+   named in docs/03 as composite ranking candidates.
+5. **Raw 12-month return beats the volatility-adjusted version** for a convex
+   rule -- 1.65x lift against 1.33x on large caps. All seven original
+   hypotheses ranked on the adjusted one.
+
+**Four bugs found on 2026-09-22 alone**, each of which produced a plausible
+number rather than an error:
+
+- `time_limit=0` meant a one-bar hold rather than no time exit, so 687 trades
+  all exited on "time" and the trailing stop never fired. Same shape as the
+  `r_multiple=0` bug that voided eight battery experiments, in the other exit
+  parameter, and it survived because `resolved()` already treated 0 as "none"
+  so the logged config and the executed rule disagreed.
+- `--trail-atr` was parsed and hashed into the run identity, then dropped
+  before the engine saw it. The CLI reported -1.052R for a configuration that
+  gives +0.031R when called directly.
+- The leveraged-product name heuristic excluded **UCTT, Ultra Clean Holdings**,
+  a semiconductor equipment maker, because its name contains "Ultra".
+- `backfilled()` compared a US market date against a UTC timestamp, so a signal
+  recorded the evening it was produced was flagged as seeded history.
+
+**H6 deserves a separate note.** It looked like the one survivor at the 92nd and
+99th percentile, and it collapsed to the 60th with p = 0.40 once the benchmark
+drew from the same pool the strategy could trade. Its earnings sample is **100%
+companies still trading in 2026, zero delisted** -- EDGAR resolves 95% of live
+tickers and 1 of 309 dead ones, and EODHD fundamentals is not on the plan. So
+it cannot currently be measured without survivorship bias at all; the 60th
+percentile is already the most favourable version of its own test.
+
 ## The first battery on data with no known defect (2026-09-20)
 
 **180 configurations, 1,020 symbols, 25 quarantined, splits adjusted, lookahead

@@ -1,5 +1,33 @@
 # The swing strategy
 
+> # TESTED AND REJECTED, 2026-09-22
+>
+> Measured on development, `swing_small_mid`, with the trailing stop working:
+> **0.1st percentile against random names bought on the same days**, one-sided
+> p = 0.9990. Below random in all three regimes (0th, 8th, 15th).
+>
+> The exit mechanism works exactly as designed — 34.5% win rate, +1.42R average
+> win against -0.76R average loss, a 1.88:1 payoff and +0.031R expectancy, which
+> is the convex profile this was specified for. **A positive expectancy that
+> loses to random is not an edge.** The strategy returns +3.8% over six years
+> where random names held the same durations return far more, and SPY returns
+> +81.2%.
+>
+> Both halves were measured separately and neither works:
+>
+> - **Selection** ranks on momentum, which in small caps picks VOLATILITY
+>   symmetrically: the top decile's best 1% runs to +34.9% against the
+>   universe's +25.5% and its worst 1% to -31.4% against -22.6%, with a median
+>   edge of +0.05% per 20 days. Lift is genuinely high (2.04x, t = +9.91) and it
+>   buys nothing, because it concentrates both tails.
+> - **The exit** converts that into the right shape and cannot conjure an edge
+>   that is not there. Against a rising universe the stop costs more upside than
+>   it saves downside.
+>
+> The specification below stands as written. What follows it is the record of
+> what it cost to learn, which is the part worth keeping.
+
+
 **Written 2026-09-22.** One strategy, derived from measurement rather than from
 an idea, replacing the seven hypotheses archived in `docs/09`.
 

@@ -1,37 +1,40 @@
 development: 2010-01-01 to 2015-12-31, unlimited, exploratory -- proves nothing
-2026-09-22 22:20:27,525 WARNING screener.backtest.runner: quarantine: 25 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB, GENZ, GR, INFO, JAVA, KG, NFX, PARA, PBG, PCL, RX, SHLD, SII, SPLS, UST. See data/reference/universe_quarantine.csv for the reason on each.
+2026-09-22 22:25:24,018 WARNING screener.backtest.runner: quarantine: 25 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB, GENZ, GR, INFO, JAVA, KG, NFX, PARA, PBG, PCL, RX, SHLD, SII, SPLS, UST. See data/reference/universe_quarantine.csv for the reason on each.
 25 quarantined symbol(s) excluded: their stored series is not the company that 
 was in the index. 'screener universe quarantine' lists them.
 universe: swing_small_mid (point-in-time membership)
 3,910 candidate signal(s) before portfolio limits.
-random names, any day: 0.0th percentile
-random names, same days: 0.0th percentile, one-sided p = 1.0000
-37 trades hold about 24 independent observations (month-clustered)
+random names, any day: 2.6th percentile
+random names, same days: 0.1th percentile, one-sided p = 0.9990
+261 trades hold about 166 independent observations (month-clustered)
 
-37 trades, 0.0% win rate, expectancy -1.052R, PF 0.00, maxDD 21.8%, return 
-+65.9%
-exits: stop 30 (81%), stop_gap 7 (19%)
-signals not taken: at max concurrent positions (10) (1807), already_open (108),
-size reduced to 25% concentration cap (stop unchanged by design) (17), total 
-open risk would reach 5.02%, above the 5.00% cap (2)
+261 trades, 34.5% win rate, expectancy +0.031R, PF 1.04, maxDD 19.0%, return 
++3.8%
+exits: stop 234 (90%), stop_gap 27 (10%)
+signals not taken: insufficient_cash (1230), at max concurrent positions (10) 
+(371), already_open (114), size reduced to 25% concentration cap (stop 
+unchanged by design) (2)
 SPY buy-and-hold over the same window: +81.2%
-                             By regime                             
-┌───────────┬────────┬────────────┬────────┬──────────────────────┐
-│ Regime    │ Trades │ Expectancy │ Return │ vs random, same days │
-├───────────┼────────┼────────────┼────────┼──────────────────────┤
-│ chop_2011 │     14 │    -1.101R │  -7.5% │             0th lost │
-└───────────┴────────┴────────────┴────────┴──────────────────────┘
+                               By regime                                
+┌────────────────┬────────┬────────────┬────────┬──────────────────────┐
+│ Regime         │ Trades │ Expectancy │ Return │ vs random, same days │
+├────────────────┼────────┼────────────┼────────┼──────────────────────┤
+│ bull_2013_2014 │     65 │    -0.077R │  -1.9% │             0th lost │
+│ chop_2011      │     75 │    -0.225R │  -9.4% │             8th lost │
+│ chop_2015      │     18 │    -0.223R │  -2.1% │            15th lost │
+└────────────────┴────────┴────────────┴────────┴──────────────────────┘
               Pre-registered criteria (docs/03-HYPOTHESES.md 0.6)              
 ┌───────────────────┬────────────────────────┬───────────────────────┬────────┐
 │ Criterion         │ Observed               │ Required              │ Result │
 ├───────────────────┼────────────────────────┼───────────────────────┼────────┤
-│ trade_count       │ 24 effective (37 raw)  │ >= 200 effective      │ fail   │
-│ expectancy        │ -1.052R                │ > 0                   │ fail   │
-│ profit_factor     │ 0.00                   │ > 1.2                 │ fail   │
-│ max_drawdown      │ 21.8%                  │ < 25%                 │ pass   │
+│ trade_count       │ 166 effective (261     │ >= 200 effective      │ fail   │
+│                   │ raw)                   │                       │        │
+│ expectancy        │ +0.031R                │ > 0                   │ pass   │
+│ profit_factor     │ 1.04                   │ > 1.2                 │ fail   │
+│ max_drawdown      │ 19.0%                  │ < 25%                 │ pass   │
 │ regime_robustness │ beat random in 0 of 3, │ >= 2 of 3, none <     │ fail   │
-│                   │ worst -7.5%            │ -15%                  │        │
-│ vs_random         │ same-day p = 1.0000    │ <= 0.05               │ fail   │
+│                   │ worst -9.4%            │ -15%                  │        │
+│ vs_random         │ same-day p = 0.9990    │ <= 0.05               │ fail   │
 └───────────────────┴────────────────────────┴───────────────────────┴────────┘
 
 criteria not met -- recorded on the development split (exploratory: proves 
