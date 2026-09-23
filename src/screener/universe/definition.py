@@ -60,6 +60,12 @@ class UniverseDefinition:
     version: str = "v1"
 
     min_price: float = 10.00
+    #: Above this, a $10,000 account cannot size a position properly. At 0.5%
+    #: risk and a 3 x ATR stop on a 3% ATR name, $100 buys five shares and
+    #: takes 90% of the intended risk; $200 buys two and takes 72%. Leaving it
+    #: unset does not stop those trades, it just under-risks them silently,
+    #: which is worse. Measured 2026-09-22; None disables the ceiling.
+    max_price: float | None = None
     min_dollar_volume: float = 20_000_000.0
     min_history_days: int = 250
 
@@ -68,11 +74,28 @@ class UniverseDefinition:
     restricted_tickers: frozenset[str] = field(default_factory=frozenset)
 
     def describe(self) -> str:
+        ceiling = (
+            f" to ${self.max_price:,.2f}" if self.max_price is not None else ""
+        )
         return (
-            f"{self.name}/{self.version}: price >= ${self.min_price:,.2f}, "
+            f"{self.name}/{self.version}: price >= ${self.min_price:,.2f}{ceiling}, "
             f"ADV >= ${self.min_dollar_volume:,.0f}, "
             f">= {self.min_history_days} bars of history"
         )
+
+
+#: The universe the swing strategy trades: US mid and small caps a $10,000
+#: account can actually size. The floor keeps spreads sane; the ceiling is
+#: where share rounding starts destroying the risk budget.
+SWING_SMALL_MID = UniverseDefinition(
+    name="swing_small_mid",
+    version="v1",
+    min_price=5.00,
+    max_price=80.00,
+    min_dollar_volume=2_000_000.0,
+    min_history_days=252,
+    allowed_asset_types=frozenset({"equity"}),
+)
 
 
 def is_leveraged_or_inverse(ticker: str, name: str | None = None) -> bool:

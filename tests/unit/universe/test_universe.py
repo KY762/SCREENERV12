@@ -326,3 +326,25 @@ def test_a_quarantined_symbol_never_reaches_a_backtest(session, tmp_path, monkey
     assert universe_members(session, "liquid_us", late) == ["SPY"]
 
     quarantine.symbols.cache_clear()
+
+
+def test_a_price_ceiling_excludes_names_the_account_cannot_size(session):
+    """At 0.5% risk on $10,000 with a 3 x ATR stop, a $200 name buys two shares
+    and takes 72% of the intended risk. Leaving it eligible does not stop the
+    trade, it under-risks it silently -- so the ceiling is an eligibility rule,
+    not a sizing detail."""
+    cheap = _synthetic(320)
+    dear = _synthetic(320) * 20          # same shape, twenty times the price
+    dear["volume"] = cheap["volume"]
+    _seed(session, "CHEAP", cheap)
+    _seed(session, "DEAR", dear)
+    build_metrics(session, ["CHEAP", "DEAR"])
+
+    definition = UniverseDefinition(
+        name="capped", min_price=1.0, max_price=500.0,
+        min_dollar_volume=1_000.0, min_history_days=250,
+    )
+    build_universe(session, definition)
+    late = cheap.index[-1].date()
+
+    assert universe_members(session, "capped", late) == ["CHEAP"]

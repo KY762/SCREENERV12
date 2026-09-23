@@ -58,6 +58,12 @@ def eligible_frame(
         return pd.Series(False, index=metrics.index)
 
     price_ok = aligned_close >= definition.min_price
+    if definition.max_price is not None:
+        # A ceiling is an eligibility rule, not a sizing detail. Above it the
+        # risk budget buys so few whole shares that the position takes a
+        # fraction of the intended risk -- silently, which is why it belongs
+        # here rather than in the sizing code where nobody sees it.
+        price_ok = price_ok & (aligned_close <= definition.max_price)
     liquidity_ok = dollar_vol >= definition.min_dollar_volume
 
     bar_number = pd.Series(range(1, len(metrics) + 1), index=metrics.index)
