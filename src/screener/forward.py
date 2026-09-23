@@ -215,16 +215,30 @@ def span(session: Session, config_hash: str) -> BookSpan:
     )
 
 
+#: How far a signal date may sit behind the day its row was written before the
+#: book counts as seeded. One day, and the reason is timezones rather than
+#: leniency: a signal date is a US market date, `recorded_at` is stored in UTC,
+#: and recording after the close means UTC has already rolled over. At 8pm
+#: Eastern the two differ by a day for a signal recorded the moment it was
+#: produced, which is the most correct case there is.
+RECORDING_LAG_DAYS = 1
+
+
 def backfilled(book: BookSpan) -> bool:
-    """True when signals predate the day they were written.
+    """True when signals predate the day they were written by more than a day.
 
     Not an error -- seeding a book from history is a reasonable way to start --
     but a book in that state is a backtest wearing a forward test's clothes,
     and anything reporting on it has to say so.
+
+    The one-day allowance is not slack. Comparing a market date against a UTC
+    timestamp flags a correctly-recorded evening run as a backfill, which would
+    mark the real thing as fake and hide the distinction the module exists to
+    preserve. Two days or more is a genuine seeding.
     """
     if book.last_signal is None or book.recorded_first is None:
         return False
-    return book.first_signal < book.recorded_first
+    return (book.recorded_first - book.first_signal).days > RECORDING_LAG_DAYS
 
 
 def _money(value: float | None) -> Decimal | None:

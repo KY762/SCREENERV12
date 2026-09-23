@@ -169,10 +169,28 @@ def test_a_book_seeded_from_history_is_flagged_as_backfilled(session):
 
 
 def test_a_book_recorded_as_it_happened_is_not_flagged(session):
-    """Signals written on the day they were produced -- the real thing."""
+    """Signals written on the day they were produced -- the real thing.
+
+    The one-day allowance in `backfilled` is what makes this pass, and it is
+    not slack: a signal date is a US market date and `recorded_at` is UTC, so
+    an evening run after the close has already rolled over to tomorrow in UTC.
+    Without the allowance the most correct case there is -- recording a signal
+    the moment it was produced -- gets flagged as a backfill.
+    """
     record_signals(session, [candidate(day=date.today())], hypothesis="h1", config_hash=HASH)
 
     assert not backfilled(span(session, HASH))
+
+
+def test_two_days_behind_is_a_genuine_backfill(session):
+    """The allowance covers a timezone rollover and nothing more."""
+    record_signals(
+        session,
+        [candidate(day=date.today() - timedelta(days=3))],
+        hypothesis="h1", config_hash=HASH,
+    )
+
+    assert backfilled(span(session, HASH))
 
 
 def test_an_empty_book_is_not_a_backfill(session):
