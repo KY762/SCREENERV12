@@ -163,3 +163,19 @@ def test_a_rule_with_no_exit_at_all_is_still_refused():
     limit is a rule that never closes a position."""
     with pytest.raises(ValueError, match="never exits"):
         ExitRule(r_multiple=0, time_limit=0, use_stop=False)
+
+
+def test_the_trail_reaches_the_engine_from_a_run_config():
+    """`--trail-atr` was accepted, hashed into the run identity, and then
+    dropped before the engine saw it -- so a run reported a fixed-stop result
+    under a trailing-stop configuration. Found 2026-09-22 when the same signals
+    gave -1.052R through the CLI and +0.033R called directly.
+
+    A flag that is silently ignored is worse than one that errors: the run
+    still produces a number, and the number answers a different question.
+    """
+    from screener.backtest.runner import RunConfig
+
+    config = RunConfig(hypothesis="h5", trail_atr=3.0).resolved()
+
+    assert config.trail_atr == 3.0, "resolved() must preserve the trail"

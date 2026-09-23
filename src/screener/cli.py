@@ -3584,7 +3584,7 @@ def backtest_run(
             displacement=displacement, hold=hold, top_pct=top_pct,
             stop_atr=stop_atr, rs_lookback=rs_lookback, entry_delay=entry_delay,
             max_positions=max_positions, risk_pct_per_trade=risk_pct,
-            max_open_risk_pct=max_open_risk_pct,
+            max_open_risk_pct=max_open_risk_pct, trail_atr=trail_atr,
         ).resolved()
 
         events = _load_events(session, bars_by_symbol) if key == "h6" else None
