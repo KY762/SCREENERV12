@@ -288,3 +288,44 @@ def test_since_limits_writes_but_not_the_calculation(session):
 
     assert row.sma_200 is not None, "long-window metric must survive a --since run"
     assert row.sma_200 == pytest.approx(expected, rel=1e-12)
+
+
+def test_rolling_metrics_restart_after_a_hole_in_trading():
+    """A 21-day return on the first sessions after a ticker changed hands would
+    otherwise be measured from the previous holder's price: here 5.00 to
+    60.00, a +1,100% move no security made. It must be missing until the new
+    series has 21 bars of its own.
+
+    What breaks if this fails: momentum and every rolling filter read a ticker
+    handover as the strongest move in the market."""
+    from screener.calc.segments import MAX_GAP_DAYS
+    from screener.ingest.prices import _upsert_bars, get_or_create_symbol
+    from screener.metrics.compute import build_metrics
+
+    def bars(index, price):
+        n = len(index)
+        return pd.DataFrame(
+            {"open": np.full(n, price), "high": np.full(n, price * 1.01),
+             "low": np.full(n, price * 0.99), "close": np.full(n, price),
+             "volume": np.full(n, 1_000_000.0)},
+            index=index,
+        )
+
+    old = pd.bdate_range("2009-01-02", periods=260)
+    new = pd.bdate_range(old[-1] + pd.Timedelta(days=MAX_GAP_DAYS + 400), periods=60)
+
+    engine = create_engine("sqlite://")
+    create_all(engine)
+    with Session(engine) as s:
+        sym = get_or_create_symbol(s, "JAVA", asset_type="equity")
+        _upsert_bars(s, sym, pd.concat([bars(old, 5.0), bars(new, 60.0)]), source="test")
+        build_metrics(s, ["JAVA"], benchmark_ticker="SPY")
+        rows = {
+            r.date: r
+            for r in s.scalars(select(MetricsDaily).where(MetricsDaily.symbol_id == sym.id))
+        }
+
+    assert rows[old[-1].date()].ret_21 == pytest.approx(0.0)
+    assert rows[new[0].date()].ret_21 is None
+    assert rows[new[20].date()].ret_21 is None
+    assert rows[new[21].date()].ret_21 == pytest.approx(0.0)

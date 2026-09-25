@@ -19,6 +19,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..calc.segments import base_ticker, segment_keys, split_at_gaps
 from ..calc.sizing import RiskLimits
 from ..calc.spread import spread_table
 from ..db.models import Symbol
@@ -280,6 +281,12 @@ def load_symbol_bars(
 
     `splits_until` must be the last date the run may see. Without it a split
     years after the window changes trades inside it -- see `load_bars`.
+
+    A hole of `MAX_GAP_DAYS` or more between traded bars ENDS a series, and
+    what follows is returned under its own key -- see `calc/segments.py`. JAVA
+    comes back as ``JAVA@2010-01-26`` (Sun Microsystems) and ``JAVA`` (the ETF
+    that took the letters in 2021). Before 2026-09-24 they were one series,
+    and a twelve-month momentum reading in 2021 was measured from Sun's price.
     """
     stmt = select(Symbol).order_by(Symbol.ticker)
     if symbols:
@@ -299,14 +306,16 @@ def load_symbol_bars(
     # One query for every symbol's splits rather than one per symbol: a
     # thousand round trips for a table holding a few thousand rows.
     splits_by_symbol = load_splits_bulk(session)
-    bars = {
-        ticker: load_bars(
+    bars: dict[str, pd.DataFrame] = {}
+    for sid, ticker in rows:
+        if ticker in excluded:
+            continue
+        frame = load_bars(
             session, sid,
             splits=splits_by_symbol.get(sid, []), splits_until=splits_until,
         )
-        for sid, ticker in rows
-        if ticker not in excluded
-    }
+        pieces = split_at_gaps(frame)
+        bars.update(zip(segment_keys(ticker, pieces), pieces, strict=True))
     return {k: v for k, v in bars.items() if not v.empty}
 
 
@@ -565,7 +574,9 @@ def universe_filter(session: Session, universe_name: str | None):
     def predicate(ticker: str, day: date) -> bool:
         if day not in cache:
             cache[day] = set(universe_members(session, universe_name, day))
-        return ticker in cache[day]
+        # Membership is stored by ticker; a gap-split series carries a dated
+        # key, and only the series trading on `day` can be asked about it.
+        return base_ticker(ticker) in cache[day]
 
     return predicate
 

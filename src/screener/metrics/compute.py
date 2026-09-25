@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..calc import indicators as ind
 from ..calc.relative_strength import relative_strength, relative_strength_adjusted
+from ..calc.segments import split_at_gaps
 from ..calc.splits import Split, adjust_bars
 from ..db.models import MetricsDaily, PriceDaily, Symbol
 
@@ -231,11 +232,19 @@ def _build_one(
             error=f"only {len(bars)} bars stored; need at least {MIN_BARS_REQUIRED}",
         )
 
-    frame = compute_metrics_frame(bars)
-    if not benchmark.empty and symbol.ticker != benchmark.attrs.get("ticker"):
-        rs = compute_relative_strength_frame(bars, benchmark)
-        if not rs.empty:
-            frame = frame.join(rs)
+    # One metrics pass per series, so every rolling window restarts after a
+    # hole of MAX_GAP_DAYS: a 252-day return on JAVA in 2021 must not reach
+    # back into Sun Microsystems' 2010 prices. See calc/segments.py. The rows
+    # still land under one symbol_id because no two series share a date.
+    parts = []
+    for piece in split_at_gaps(bars):
+        part = compute_metrics_frame(piece)
+        if not benchmark.empty and symbol.ticker != benchmark.attrs.get("ticker"):
+            rs = compute_relative_strength_frame(piece, benchmark)
+            if not rs.empty:
+                part = part.join(rs)
+        parts.append(part)
+    frame = pd.concat(parts) if len(parts) > 1 else parts[0]
 
     if rebuild:
         session.execute(

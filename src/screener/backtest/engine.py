@@ -331,6 +331,11 @@ def run_backtest(
         }
     )
     bar_index = {day: i for i, day in enumerate(calendar)}
+    last_day = calendar[-1] if calendar else None
+    # The last bar each series has. A series that ends before the run does has
+    # stopped trading -- delisted, acquired, or cut at a hole by
+    # `calc/segments.py` -- and nothing after this bar will ever price it.
+    final_bar = {t: f.index[-1] for t, f in bars_by_symbol.items() if not f.empty}
 
     open_positions: dict[str, _Position] = {}
     trades: list[Trade] = []
@@ -406,6 +411,16 @@ def run_backtest(
             elif trade.target is not None and high_p >= trade.target:
                 exit_price = costs.sell_fill(trade.target, ticker, day)
                 reason = "target"
+            elif day == final_bar.get(ticker) and day != last_day:
+                # The series ends here and the run does not. Without this the
+                # position is skipped on every later day (`row is None`) and
+                # holds its slot to the end of the split, marked at its entry
+                # price -- the `no_volume` trap again, for a security whose
+                # record simply stops instead of repeating a frozen price.
+                # Exits at this bar's close: the last price at which it could
+                # demonstrably be sold.
+                exit_price = costs.sell_fill(Decimal(str(row["close"])), ticker, day)
+                reason = "series_end"
 
             if exit_price is not None:
                 trade.exit_date = day.date()
@@ -447,6 +462,11 @@ def run_backtest(
             # trade -- DENN for 39 of them. This closes that window.
             if "volume" in row.index and float(row["volume"]) <= 0:
                 rejected["no_volume"] = rejected.get("no_volume", 0) + 1
+                continue
+            # Bought at the open of a series' last bar, a position would be
+            # skipped by the exit pass today and find no bar tomorrow.
+            if day == final_bar.get(candidate.ticker) and day != last_day:
+                rejected["series_end"] = rejected.get("series_end", 0) + 1
                 continue
 
             fill = costs.buy_fill(Decimal(str(row["open"])), candidate.ticker, day)

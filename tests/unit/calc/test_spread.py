@@ -200,7 +200,10 @@ def test_spread_table_ignores_one_wild_session_but_follows_a_sustained_widening(
     window = sustained.index[50:71]
     sustained.loc[window, "high"] = 104.0
     sustained.loc[window, "low"] = 96.0
-    assert spread_table({"X": sustained})["X"].loc[frame.index[71]] > calm.loc[frame.index[71]], "a month of genuinely wider ranges failed to raise the cost"
+    wider = spread_table({"X": sustained})["X"].loc[frame.index[71]]
+    assert wider > calm.loc[frame.index[71]], (
+        "a month of genuinely wider ranges failed to raise the cost"
+    )
 
 
 def test_spread_table_skips_symbols_without_enough_history():

@@ -73,15 +73,30 @@ VARY_OPTION = typer.Option(
 
 def _load_events(session, bars_by_symbol) -> dict[str, list]:
     """Stored earnings dates keyed by ticker, for the hypotheses that need them."""
+    from .calc.segments import base_ticker
     from .ingest.events import earnings_dates
 
-    out: dict[str, list] = {}
+    by_ticker: dict[str, list] = {}
     for symbol in session.scalars(
-        select(Symbol).where(Symbol.ticker.in_(list(bars_by_symbol)))
+        select(Symbol).where(
+            Symbol.ticker.in_({base_ticker(k) for k in bars_by_symbol})
+        )
     ):
         dates = earnings_dates(session, symbol.id)
         if dates:
-            out[symbol.ticker] = dates
+            by_ticker[symbol.ticker] = dates
+
+    # A gap-split series gets only the dates inside its own life: JAVA's
+    # earnings from 2009 are Sun's and belong to JAVA@2010-01-26, not the ETF.
+    out: dict[str, list] = {}
+    for key, frame in bars_by_symbol.items():
+        dates = by_ticker.get(base_ticker(key))
+        if not dates or frame.empty:
+            continue
+        first, last = frame.index[0].date(), frame.index[-1].date()
+        mine = [d for d in dates if first <= d <= last]
+        if mine:
+            out[key] = mine
     return out
 
 

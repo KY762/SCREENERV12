@@ -363,6 +363,46 @@ that no longer existed. The trade count over the split rises from 223 to 350
 once they are released. A defect worth 0.1% of rows was worth a third of the
 book.
 
+## A hole in trading ends a series (2026-09-24)
+
+**Operator decision, 2026-09-24: 60 days.** A ticker that changed hands is
+stored as one series -- the old company, a hole while nobody held the letters,
+then the new holder. JAVA is Sun Microsystems to 2010-01-26, nothing for eleven
+years, then a JPMorgan ETF. Every rolling window crossed the hole, and a
+position open on Sun's last bar was next priced on the ETF.
+
+**Measured across 11,868 stored symbols** (holes between bars with volume > 0):
+
+| hole of at least | symbols | holes |
+| --- | --- | --- |
+| 30 days | 1,207 | 5,285 |
+| **60 days** | **801** | **2,238** |
+| 90 days | 682 | 1,485 |
+| 180 days | 483 | 761 |
+| 365 days | 317 | 372 |
+
+The `_OLD` twin scan (`diagnostics/stale_series.py`) sees about 25 of these --
+only where EODHD kept a record of the prior holder. 60 days catches every
+handover confirmed that night except OAS (42 days, a bankruptcy re-listing),
+and leaves ordinary halts of the same company whole.
+
+**It cuts rather than quarantines.** Both sides of a hole are real records of
+real securities, so both are kept as separate series (`calc/segments.py`):
+
+- `load_symbol_bars` returns the earlier side under a dated key,
+  `JAVA@2010-01-26` (the last day it TRADED); the latest keeps `JAVA`.
+- Membership and earnings dates are looked up by `base_ticker()` and apply to
+  whichever series was trading on the date.
+- Metrics are computed per series, so indicators restart after a hole: no
+  21-day return exists until the new holder has 21 bars of its own.
+- The engine exits a position on the last bar of a series that ends before
+  the run does, at that bar's close (`series_end`), and refuses to enter on
+  it. This also closes the `no_volume` trap for a delisting stored as SILENCE
+  rather than as frozen placeholder bars, which the 2026-09-24 exit missed.
+
+Whole-symbol quarantine stays for series that are wrong with no hole to cut
+at. Results computed before this change crossed holes and are not comparable.
+
 ## No edge found (2026-09-22)
 
 **Every hypothesis, and the strategy built from the measurements, on a fair

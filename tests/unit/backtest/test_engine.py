@@ -695,3 +695,73 @@ def test_a_normally_trading_symbol_is_unaffected_by_the_volume_guard():
     assert len(result.trades) == 1
     assert result.trades[0].exit_reason == "time"
     assert "no_volume" not in result.rejected
+
+
+# ---------------------------------------------------------------------------
+# Series that end before the run does
+# ---------------------------------------------------------------------------
+
+
+def test_a_position_exits_where_its_series_ends():
+    """A series that stops with no placeholder bars -- a delisting stored as
+    silence, or the earlier half of a gap-split ticker -- is skipped on every
+    later day because it has no row. Without an exit the position holds its
+    slot to the end of the split, marked at its entry price."""
+    ended = _frozen_frame(live_days=10, frozen_days=0)
+    other = _frozen_frame(live_days=40, frozen_days=0)
+    cand = Candidate(
+        ticker="GONE", setup="t",
+        signal_date=ended.index[0].date(), entry_date=ended.index[1].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"GONE": ended, "LIVE": other},
+        start=other.index[0].date(), end=other.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=None, time_limit=None, use_stop=True,
+                           trail_atr=3.0),
+        costs=NO_COSTS,
+    )
+    trade = result.trades[0]
+    assert not trade.is_open, "the position outlived its own price series"
+    assert trade.exit_reason == "series_end"
+    assert trade.exit_date == ended.index[-1].date()
+    assert trade.exit_price == Decimal(str(ended["close"].iloc[-1]))
+
+
+def test_nothing_is_bought_on_the_last_bar_of_a_series():
+    """Bought at that open, the position is skipped by today's exit pass and
+    finds no bar tomorrow -- trapped from the moment it is filled."""
+    ended = _frozen_frame(live_days=10, frozen_days=0)
+    other = _frozen_frame(live_days=40, frozen_days=0)
+    cand = Candidate(
+        ticker="GONE", setup="t",
+        signal_date=ended.index[-2].date(), entry_date=ended.index[-1].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"GONE": ended, "LIVE": other},
+        start=other.index[0].date(), end=other.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=2.0, time_limit=10),
+        costs=NO_COSTS,
+    )
+    assert result.trades == []
+    assert result.rejected.get("series_end") == 1
+
+
+def test_the_end_of_the_run_is_not_mistaken_for_the_end_of_a_series():
+    """Every series ends on the run's last day when the data does. Those
+    positions are open at the end of the window, not delisted."""
+    frame = _frozen_frame(live_days=15, frozen_days=0)
+    cand = Candidate(
+        ticker="LIVE", setup="t",
+        signal_date=frame.index[0].date(), entry_date=frame.index[1].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"LIVE": frame},
+        start=frame.index[0].date(), end=frame.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=None, time_limit=None, use_stop=True),
+        costs=NO_COSTS,
+    )
+    assert result.trades[0].is_open
+    assert "series_end" not in result.rejected

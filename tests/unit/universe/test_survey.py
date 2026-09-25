@@ -7,8 +7,6 @@ visible in what it reports.
 
 from __future__ import annotations
 
-from datetime import date
-
 import pytest
 
 from screener.universe.survey import (

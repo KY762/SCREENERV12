@@ -357,8 +357,8 @@ class TwinOverlap:
 def twin_overlap(
     ticker: str,
     twin: str,
-    stored_closes: "pd.Series",
-    twin_closes: "pd.Series",
+    stored_closes: pd.Series,
+    twin_closes: pd.Series,
     *,
     tolerance: float = TWIN_PRICE_TOLERANCE,
     min_shared_days: int = TWIN_MIN_SHARED_DAYS,
