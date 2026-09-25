@@ -47,6 +47,18 @@ EXCHANGES = frozenset({"NYSE", "NASDAQ", "AMEX", "NYSE ARCA", "NYSE MKT", "BATS"
 SECURITY_TYPE = "Common Stock"
 
 #: Ever-cleared thresholds. A symbol qualifies on ANY sampled date.
+#:
+#: These are the DEFAULTS, not a law. `survey()` takes both as arguments so a
+#: deliberately thinner sweep is an explicit choice at the call site rather
+#: than an edit to this file -- a symbol excluded by a survey can never be
+#: reconsidered without running another one, so which floor produced a stored
+#: universe has to stay visible.
+#:
+#: $2M was chosen before anything had been measured. Measured 2026-09-24, a
+#: $10,000 account at 0.5% risk takes ~$500 positions, which is 0.025% of a
+#: $2M day: the floor is roughly 20x higher than impact requires. What it buys
+#: is SPREAD, not capacity -- below it the median symbol costs 58bp a round
+#: trip against 27bp above, about $165 a year on this account.
 MIN_DOLLAR_VOLUME = 2_000_000.0
 MIN_PRICE = 5.0
 
@@ -60,12 +72,20 @@ class SurveyResult:
     best_dollar_volume: dict[str, float] = field(default_factory=dict)
     first_seen: dict[str, date] = field(default_factory=dict)
     last_seen: dict[str, date] = field(default_factory=dict)
+    #: The floors this result was actually produced with. Recorded rather than
+    #: re-read from the module constants: a survey run with an overridden floor
+    #: reported the DEFAULT in its summary, so a thin sweep announced itself as
+    #: a $2,000,000 one. The file it wrote could then never be told apart from
+    #: the default sweep by anything but its length. Found 2026-09-24 on the
+    #: first run with a non-default floor.
+    min_dollar_volume: float = MIN_DOLLAR_VOLUME
+    min_price: float = MIN_PRICE
 
     def summary(self) -> str:
         return (
             f"{len(self.eligible_symbols):,} symbol(s) cleared "
-            f"${MIN_DOLLAR_VOLUME:,.0f}/day and ${MIN_PRICE:.0f} on at least one "
-            f"of {self.dates_sampled} sampled date(s) "
+            f"${self.min_dollar_volume:,.0f}/day and ${self.min_price:.2f} on at "
+            f"least one of {self.dates_sampled} sampled date(s) "
             f"({self.rows_seen:,} rows examined)"
         )
 
@@ -89,7 +109,13 @@ def sample_dates(start: date, end: date, every_days: int) -> list[date]:
     return out
 
 
-def eligible(row: dict, allowed: dict[str, str]) -> tuple[str, float] | None:
+def eligible(
+    row: dict,
+    allowed: dict[str, str],
+    *,
+    min_price: float = MIN_PRICE,
+    min_dollar_volume: float = MIN_DOLLAR_VOLUME,
+) -> tuple[str, float] | None:
     """One bulk row, judged. Returns (ticker, dollar volume) or None.
 
     `allowed` maps ticker -> exchange for symbols that passed the type and
@@ -103,10 +129,16 @@ def eligible(row: dict, allowed: dict[str, str]) -> tuple[str, float] | None:
         volume = float(row.get("volume") or 0.0)
     except (TypeError, ValueError):
         return None
-    if close < MIN_PRICE or volume <= 0:
+    # `close <= 0` unconditionally, not just against the floor. A zero or
+    # negative price is bad data at any threshold, and the floor is now a
+    # caller's argument -- passing min_price=0 would otherwise admit rows whose
+    # price is literally zero, exactly as `volume <= 0` already refuses to.
+    if close <= 0 or volume <= 0:
+        return None
+    if close < min_price:
         return None
     dollar_volume = close * volume
-    if dollar_volume < MIN_DOLLAR_VOLUME:
+    if dollar_volume < min_dollar_volume:
         return None
     return code, dollar_volume
 
@@ -118,6 +150,8 @@ def survey(
     end: date,
     every_days: int = 91,
     progress=None,
+    min_dollar_volume: float = MIN_DOLLAR_VOLUME,
+    min_price: float = MIN_PRICE,
 ) -> SurveyResult:
     """Sweep the market on sampled dates and collect everything tradeable.
 
@@ -136,7 +170,9 @@ def survey(
     }
     log.info("%d symbol(s) pass the type and venue screen", len(allowed))
 
-    result = SurveyResult()
+    result = SurveyResult(
+        min_dollar_volume=min_dollar_volume, min_price=min_price
+    )
     for day in sample_dates(start, end, every_days):
         if progress is not None:
             progress(day, result)
@@ -151,7 +187,10 @@ def survey(
         result.dates_sampled += 1
         result.rows_seen += len(rows)
         for row in rows:
-            hit = eligible(row, allowed)
+            hit = eligible(
+                row, allowed,
+                min_price=min_price, min_dollar_volume=min_dollar_volume,
+            )
             if hit is None:
                 continue
             ticker, dollar_volume = hit

@@ -851,6 +851,19 @@ def universe_survey(
     out: str = typer.Option(
         "data/reference/tradeable_candidates.csv", "--out",
     ),
+    min_dollar_volume: float | None = typer.Option(
+        None, "--min-dollar-volume",
+        help="Override the $2,000,000 ever-cleared floor. A LOWER floor stores "
+             "thinner names, which cost more to trade rather than being "
+             "untradeable: measured 2026-09-24, below $2M the median symbol "
+             "runs 58bp a round trip against 27bp above it.",
+    ),
+    min_price: float | None = typer.Option(
+        None, "--min-price",
+        help="Override the $5 floor. Lesmond, Schill and Zhou find trading "
+             "cost runs across PRICE rather than size, so lowering this is the "
+             "more expensive of the two knobs.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Find every US common stock that was ever liquid enough to trade.
@@ -885,11 +898,21 @@ def universe_survey(
         f"Sampling [bold]{len(dates)}[/] market date(s), {start_date} to {end_date}, "
         f"every {every_days} days."
     )
+    floor_dv = (
+        survey_mod.MIN_DOLLAR_VOLUME if min_dollar_volume is None
+        else min_dollar_volume
+    )
+    floor_px = survey_mod.MIN_PRICE if min_price is None else min_price
     console.print(
         f"[dim]Keeping US common stock on {', '.join(sorted(survey_mod.EXCHANGES))} "
-        f"that ever cleared ${survey_mod.MIN_DOLLAR_VOLUME:,.0f}/day at "
-        f"${survey_mod.MIN_PRICE:.0f}+.[/]"
+        f"that ever cleared ${floor_dv:,.0f}/day at ${floor_px:.2f}+.[/]"
     )
+    if floor_dv != survey_mod.MIN_DOLLAR_VOLUME or floor_px != survey_mod.MIN_PRICE:
+        console.print(
+            "[yellow]Non-default floors.[/] A symbol this survey excludes cannot "
+            "be reconsidered without running another one, so write down which "
+            "floors produced this file."
+        )
 
     provider = EodhdProvider(settings)
     try:
@@ -906,6 +929,7 @@ def universe_survey(
             result = survey_mod.survey(
                 provider, start=start_date, end=end_date,
                 every_days=every_days, progress=tick,
+                min_dollar_volume=floor_dv, min_price=floor_px,
             )
     finally:
         provider.close()
