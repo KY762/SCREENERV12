@@ -545,3 +545,63 @@ def test_the_config_and_the_exit_rule_agree_on_the_target():
             r_multiple=resolved.r_multiple, time_limit=21, use_stop=True
         )
         assert rule.r_multiple == resolved.r_multiple
+
+
+# ---------------------------------------------------------------------------
+# Per-symbol costs
+# ---------------------------------------------------------------------------
+
+
+def test_cost_model_falls_back_to_flat_rate_without_a_table():
+    from screener.backtest.engine import CostModel
+
+    flat = CostModel(slippage_bps=5.0)
+    assert flat.half_spread_bps("ANY", pd.Timestamp("2012-06-01")) == 5.0
+    assert flat.buy_fill(Decimal("100")) == Decimal("100.05")
+
+
+def test_cost_model_charges_half_the_spread_per_side():
+    """A 40bp round-trip spread costs 20bp each way, not 40bp each way."""
+    from screener.backtest.engine import CostModel
+
+    idx = pd.bdate_range("2012-01-02", periods=10)
+    table = {"WIDE": pd.Series([0.0040] * 10, index=idx)}   # 40bp round trip
+    costs = CostModel(slippage_bps=5.0, spreads=table)
+
+    day = idx[5]
+    assert costs.half_spread_bps("WIDE", day) == pytest.approx(20.0)
+    assert costs.buy_fill(Decimal("100"), "WIDE", day) == Decimal("100.20")
+    assert costs.sell_fill(Decimal("100"), "WIDE", day) == Decimal("99.80")
+
+
+def test_cost_model_falls_back_for_a_symbol_missing_from_the_table():
+    from screener.backtest.engine import CostModel
+
+    idx = pd.bdate_range("2012-01-02", periods=10)
+    costs = CostModel(
+        slippage_bps=7.0, spreads={"KNOWN": pd.Series([0.0040] * 10, index=idx)}
+    )
+    assert costs.half_spread_bps("UNKNOWN", idx[5]) == 7.0
+
+
+def test_cost_model_falls_back_before_the_estimate_begins():
+    """A date earlier than the series must not borrow its first value."""
+    from screener.backtest.engine import CostModel
+
+    idx = pd.bdate_range("2012-06-01", periods=10)
+    costs = CostModel(
+        slippage_bps=7.0, spreads={"X": pd.Series([0.0040] * 10, index=idx)}
+    )
+    assert costs.half_spread_bps("X", pd.Timestamp("2012-01-03")) == 7.0
+
+
+def test_cost_model_stays_constructible_and_comparable_with_a_table():
+    """`spreads` is compare=False, so a frozen dataclass holding dicts of
+    Series does not explode on equality or hashing."""
+    from screener.backtest.engine import CostModel
+
+    idx = pd.bdate_range("2012-01-02", periods=3)
+    a = CostModel(slippage_bps=5.0, spreads={"X": pd.Series([0.001] * 3, index=idx)})
+    b = CostModel(slippage_bps=5.0, spreads=None)
+    assert a == b          # differ only in the excluded field
+    assert hash(a) == hash(b)

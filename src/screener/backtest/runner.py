@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..calc.sizing import RiskLimits
+from ..calc.spread import spread_table
 from ..db.models import Symbol
 from ..ingest.actions import load_splits_bulk
 from ..metrics.compute import load_bars
@@ -87,6 +88,20 @@ class RunConfig:
     r_multiple: float | None = None
     time_limit: int | None = None
     slippage_bps: float = 5.0
+    # Charge each symbol its OWN measured spread rather than the flat rate.
+    #
+    # Default True as of 2026-09-24. The flat 5bp a side was never measured and
+    # understates the mid/small-cap universe by roughly 2.7x: the median symbol
+    # above the $2M dollar-volume floor runs a 27bp round trip on development
+    # against the 10bp charged. Every result produced before this date assumed
+    # trading was cheaper than it is, which flattered them -- all of them still
+    # failed, so no verdict reverses, but a marginal one would have died here.
+    #
+    # This is part of the configuration and therefore part of its hash: a run
+    # with measured costs is not the same experiment as one without. No
+    # validation or test slot had been spent and no pre-registration was signed
+    # when it changed, so nothing already paid for was invalidated.
+    measured_spreads: bool = True
     trend_filter: bool = True
     # Whether a stop is used at all. Not a tuning knob -- a structural question.
     # If removing the stop turns a losing configuration profitable, the entry
@@ -342,6 +357,33 @@ def build_candidates(
     )
 
 
+#: Spread tables are expensive -- Corwin-Schultz across every symbol -- and the
+#: battery runs hundreds of configurations over the SAME bars. Keyed by a
+#: fingerprint of the bar set rather than its identity, so a rebuilt dict with
+#: the same content still hits.
+_SPREAD_CACHE: dict[tuple, dict[str, pd.Series]] = {}
+
+
+def _costs_for(config: RunConfig, bars_by_symbol: dict[str, pd.DataFrame]) -> CostModel:
+    """The cost model for a run, with per-symbol spreads where measurable.
+
+    Symbols too short to estimate fall back to `slippage_bps`, which is why
+    that figure stays deliberately high rather than being lowered to match the
+    mega caps it was calibrated on.
+    """
+    if not config.measured_spreads:
+        return CostModel(slippage_bps=config.slippage_bps)
+    key = (
+        tuple(sorted(bars_by_symbol)),
+        sum(len(f) for f in bars_by_symbol.values()),
+    )
+    table = _SPREAD_CACHE.get(key)
+    if table is None:
+        table = spread_table(bars_by_symbol)
+        _SPREAD_CACHE[key] = table
+    return CostModel(slippage_bps=config.slippage_bps, spreads=table)
+
+
 def simulate(
     candidates: list[Candidate],
     bars_by_symbol: dict[str, pd.DataFrame],
@@ -372,7 +414,7 @@ def simulate(
             use_stop=config.use_stop,
             trail_atr=config.trail_atr,
         ),
-        costs=CostModel(slippage_bps=config.slippage_bps),
+        costs=_costs_for(config, bars_by_symbol),
     )
 
 
@@ -422,7 +464,7 @@ def score(
     benchmark and clustered errors, the other did not.
     """
     config = config.resolved()
-    costs = CostModel(slippage_bps=config.slippage_bps)
+    costs = _costs_for(config, bars_by_symbol)
     stats = summarize(result)
     regime_stats = by_regime(result.trades, config.equity)
 

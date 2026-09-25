@@ -31,11 +31,12 @@ SIZING GOES THROUGH THE RISK MANAGER.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+import numpy as np
 import pandas as pd
 
 from ..calc.sizing import RiskLimits, plan_position
@@ -155,16 +156,72 @@ class ExitRule:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Slippage in basis points per side. Commission is zero at this broker."""
+    """What a fill gives up, per side, as basis points of the fill price.
+
+    Two modes. With `spreads` absent it charges `slippage_bps` to everything,
+    which is what this project did until 2026-09-24 and is wrong in a specific
+    direction: 5bp a side is roughly right for a mega cap and roughly a third
+    of the truth for the mid and small caps the universe moved to. Measured on
+    the development split, the median symbol above the $2M dollar-volume floor
+    runs a 27bp round trip against the 10bp this charged.
+
+    With `spreads` supplied -- a ticker-keyed table from
+    `calc.spread.spread_table` -- each symbol is charged its OWN measured
+    spread as of the fill date, and the flat rate serves only as the fallback
+    for symbols the table does not cover.
+
+    HALF the spread per side. The quoted spread spans both sides, so buying at
+    the ask and selling at the bid gives up one full spread across the round
+    trip, not two. Charging the full figure twice is the usual way this
+    arithmetic goes wrong, and it would overstate costs by 2x.
+    """
 
     slippage_bps: float = 5.0
     commission_per_trade: Decimal = Decimal("0")
+    #: ticker -> date-indexed trailing spread as a FRACTION (0.004 == 40bp
+    #: round trip). Kept out of equality and hashing: a frozen dataclass would
+    #: otherwise try to hash a dict of Series and raise.
+    spreads: Mapping[str, pd.Series] | None = field(default=None, compare=False)
 
-    def buy_fill(self, price: Decimal) -> Decimal:
-        return _money(price * (Decimal("1") + Decimal(str(self.slippage_bps)) / Decimal("10000")))
+    def half_spread_bps(self, ticker: str | None, day: pd.Timestamp | None) -> float:
+        """Basis points given up crossing ONE side, for this symbol on this day.
 
-    def sell_fill(self, price: Decimal) -> Decimal:
-        return _money(price * (Decimal("1") - Decimal(str(self.slippage_bps)) / Decimal("10000")))
+        Falls back to the flat rate whenever the table cannot answer: no table,
+        no entry for the symbol, or a date before the symbol's estimate begins.
+        `Series.asof` takes the last value at or before `day` and never looks
+        forward, and the table is already shifted a session, so the figure used
+        for a fill at today's open rests only on sessions that have closed.
+        """
+        if self.spreads is None or ticker is None or day is None:
+            return self.slippage_bps
+        series = self.spreads.get(ticker)
+        if series is None or series.empty:
+            return self.slippage_bps
+        try:
+            spread = series.asof(day)
+        except (KeyError, TypeError):
+            return self.slippage_bps
+        if spread is None or not np.isfinite(spread):
+            return self.slippage_bps
+        return float(spread) * 10_000.0 / 2.0
+
+    def buy_fill(
+        self,
+        price: Decimal,
+        ticker: str | None = None,
+        day: pd.Timestamp | None = None,
+    ) -> Decimal:
+        bps = Decimal(str(self.half_spread_bps(ticker, day)))
+        return _money(price * (Decimal("1") + bps / Decimal("10000")))
+
+    def sell_fill(
+        self,
+        price: Decimal,
+        ticker: str | None = None,
+        day: pd.Timestamp | None = None,
+    ) -> Decimal:
+        bps = Decimal(str(self.half_spread_bps(ticker, day)))
+        return _money(price * (Decimal("1") - bps / Decimal("10000")))
 
 
 @dataclass
@@ -314,16 +371,16 @@ def run_backtest(
 
             if exit_rule.has_time_limit and held >= exit_rule.time_limit:
                 # Chronologically first event of the day: fills at the open.
-                exit_price = costs.sell_fill(open_p)
+                exit_price = costs.sell_fill(open_p, ticker, day)
                 reason = "time"
             elif exit_rule.use_stop and open_p <= trade.stop:
-                exit_price = costs.sell_fill(open_p)   # gapped through: no protection
+                exit_price = costs.sell_fill(open_p, ticker, day)  # gapped through
                 reason = "stop_gap"
             elif exit_rule.use_stop and low_p <= trade.stop:
-                exit_price = costs.sell_fill(trade.stop)
+                exit_price = costs.sell_fill(trade.stop, ticker, day)
                 reason = "stop"
             elif trade.target is not None and high_p >= trade.target:
-                exit_price = costs.sell_fill(trade.target)
+                exit_price = costs.sell_fill(trade.target, ticker, day)
                 reason = "target"
 
             if exit_price is not None:
@@ -360,7 +417,7 @@ def run_backtest(
                 rejected["no_bar"] = rejected.get("no_bar", 0) + 1
                 continue
 
-            fill = costs.buy_fill(Decimal(str(row["open"])))
+            fill = costs.buy_fill(Decimal(str(row["open"])), candidate.ticker, day)
             stop = candidate.stop_for(fill)
 
             # A stop that sits just under the fill makes the R denominator tiny,

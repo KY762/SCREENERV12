@@ -44,6 +44,8 @@ number used to judge whether an edge survives costs.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 import pandas as pd
 
@@ -140,3 +142,32 @@ def annual_drag(spread: float, hold_days: int, slippage_bps: float = 0.0) -> flo
         return float("nan")
     turns = 252.0 / hold_days
     return round_trip_cost(spread, slippage_bps) * turns
+
+
+def spread_table(
+    bars_by_symbol: Mapping[str, pd.DataFrame], *, window: int = 21
+) -> dict[str, pd.Series]:
+    """Trailing per-symbol spread estimates, one series per ticker.
+
+    SHIFTED ONE SESSION, and that shift is the whole safety argument. A rolling
+    window ending on day D includes D's own high and low, which are not known
+    until D closes. The engine fills at D's OPEN. Charging a cost derived from
+    the range of the day being traded is lookahead -- small, plausible-looking,
+    and exactly the shape of the four defects already found in this project.
+    So the value stamped on day D is the median through D-1.
+
+    Symbols with too little history are absent from the table rather than
+    present with a guess; `CostModel` falls back to its flat rate for those,
+    which is the conservative direction only when the flat rate is the higher
+    of the two, so the fallback is deliberately set high.
+    """
+    table: dict[str, pd.Series] = {}
+    for ticker, frame in bars_by_symbol.items():
+        if len(frame) < window or not {"high", "low"} <= set(frame.columns):
+            continue
+        series = typical_spread(frame, window=window).shift(1)
+        series = series.dropna()
+        if series.empty:
+            continue
+        table[ticker] = series
+    return table

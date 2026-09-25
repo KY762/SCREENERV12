@@ -247,6 +247,93 @@ Each was invisible to a passing test suite and surfaced only on real data.
   membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
   `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
 
+## Trading costs were never measured, and they were understated 2.7x (2026-09-24)
+
+`CostModel` charged a flat **5bp a side** to every symbol -- 10bp a round trip
+-- and that figure was declared, never measured. `calc/spread.py` had existed
+since 2026-09-22 and was called by nothing but its own tests.
+
+Measured with Corwin-Schultz across the development split, 1,228 symbols with
+a usable estimate:
+
+| dollar volume | median spread | annual drag @ 20-day hold |
+| --- | --- | --- |
+| $250k-500k | 62bp | 7.9% |
+| $500k-1M | 58bp | 7.3% |
+| $1M-2M | 62bp | 7.8% |
+| $2M-5M | 51bp | 6.4% |
+| $5M-20M | 39bp | 5.0% |
+| $20M-100M | 26bp | 3.3% |
+| > $100M | 23bp | 2.9% |
+
+The median symbol ABOVE the $2M floor runs **27bp** against the 10bp charged.
+
+**What it changes.** The docs/10 swing strategy, same candidates, same split:
+
+| cost model | trades | expectancy | win rate | return |
+| --- | --- | --- | --- | --- |
+| flat 5bp | 223 | **+0.0252R** | 44.4% | +2.7% |
+| measured per-symbol | 277 | **-0.0696R** | 41.2% | -8.9% |
+
+A swing of **-0.0948R per trade**. No verdict reverses -- everything had already
+failed on the benchmark -- but the positive expectancy that made the strategy
+look like it "worked but lost to random" was an artifact of undercharging. It
+does not have a positive expectancy. The trade count RISES under real costs
+because worse fills produce more stop-outs, which frees slots faster.
+
+**The fix.** `CostModel` takes an optional `spreads` table from
+`calc.spread.spread_table` and charges each symbol HALF its own measured spread
+per side. `RunConfig.measured_spreads` defaults to True as of 2026-09-24. It is
+part of the config hash, so a measured run is a different experiment from a flat
+one -- correct, and free, because no validation or test slot had been spent and
+no pre-registration was signed.
+
+**The lookahead guard that makes it safe.** `spread_table` SHIFTS the rolling
+median one session. A window ending on day D includes D's own high and low,
+which are not known until D closes, and the engine fills at D's OPEN. Charging
+a cost derived from the range of the day being traded is lookahead of exactly
+the shape this project keeps finding.
+`test_spread_table_value_for_a_day_ignores_that_days_range` pins it.
+
+**Why the flat fallback stays at 5bp and not lower.** Symbols too short to
+estimate fall back to it. Lowering it toward the mega-cap truth would make the
+fallback the cheap option, and the cheap option should never be the default.
+
+### What this says about the liquidity floor
+
+Going below the $2M floor roughly DOUBLES the spread, 27bp to 58bp -- about
++4 to +5% a year at a 20-day hold. That is the price of admission to the
+small-cap tier, and it converts a vague argument into a threshold: an edge
+found in thin names has to be worth more than ~30bp a round trip more than one
+found above the floor. With per-symbol costs the floor stops being a number
+picked in advance at all; a name qualifies when its edge exceeds its own spread.
+
+## Zero-volume placeholder bars, and an exit that cannot fire (2026-09-24)
+
+Found while checking why the thinnest liquidity tier reported the TIGHTEST
+spread, which is backwards. It reported 15bp because those symbols barely
+trade: `high == low` on 11.4% of their bars, so the estimator sees no range and
+floors at zero. **An untradeable symbol reports no trading cost.**
+
+- **379 symbols carry 59,524 zero-volume bars.** 140 are frozen at the END of
+  their series -- acquired or delisted, with the last price repeating forever.
+  ARJ carries 1,355 fake bars after it stopped trading in 2011.
+- **Entry is protected, with a ~50-day lag.** `dollar_vol_50` drains over the
+  rolling window, so a frozen symbol stays eligible until it empties. DENN was
+  eligible for 39 days after its last real trade.
+- **Exit is NOT protected.** The engine has no volume, halt or delisting check
+  on an open position. A position held into an acquisition sees a flat price
+  forever: the trailing stop can never ratchet, the stop can never be hit, and
+  docs/10 specifies no time limit. It is held to the end of the backtest at a
+  frozen mark.
+- `ATEST-L` and `TMC_OLD2` are exchange TEST symbols sitting in the price
+  database.
+
+Impact is small -- 5,163 frozen bars against 5.1M, about 0.1% -- but the
+mechanism is a hole, not a rounding error. **Not yet fixed.** The fix is an
+exit on a stale or zero-volume bar, and it is a change to exit semantics, which
+is an operator decision.
+
 ## No edge found (2026-09-22)
 
 **Every hypothesis, and the strategy built from the measurements, on a fair

@@ -134,3 +134,88 @@ def test_drag_scales_with_how_often_you_turn_over():
 
 def test_a_zero_hold_is_undefined_rather_than_infinite():
     assert np.isnan(annual_drag(0.004, 0))
+
+
+# ---------------------------------------------------------------------------
+# spread_table: the point-in-time guarantee
+# ---------------------------------------------------------------------------
+
+
+def _series_frame(n: int, *, half_width: float = 0.5) -> pd.DataFrame:
+    """A flat symbol with a constant range, indexed by business day."""
+    idx = pd.bdate_range("2012-01-02", periods=n)
+    mid = 100.0
+    return pd.DataFrame(
+        {
+            "high": [mid + half_width] * n,
+            "low": [mid - half_width] * n,
+            "close": [mid] * n,
+        },
+        index=idx,
+    )
+
+
+def test_spread_table_value_for_a_day_ignores_that_days_range():
+    """The whole no-lookahead argument, as an executable claim.
+
+    A fill happens at the OPEN of day D. Any cost charged to it may rest only
+    on sessions that have already closed. Blow out the range on one day and
+    the estimate stamped on that day must not move; only LATER days may react.
+    """
+    from screener.calc.spread import spread_table
+
+    frame = _series_frame(80)
+    blown = frame.copy()
+    spike = blown.index[60]
+    blown.loc[spike, "high"] = 130.0      # enormous range, that day only
+    blown.loc[spike, "low"] = 70.0
+
+    before = spread_table({"X": frame})["X"]
+    after = spread_table({"X": blown})["X"]
+
+    assert after.loc[spike] == pytest.approx(before.loc[spike]), (
+        "the spike leaked into its own day's estimate -- that is lookahead"
+    )
+
+
+def test_spread_table_ignores_one_wild_session_but_follows_a_sustained_widening():
+    """The median is deliberately robust, and the boundary is worth pinning.
+
+    ONE blown-out session must not reprice a month of trading -- that is why
+    `typical_spread` takes a median rather than a mean. A widening that
+    PERSISTS is a real change in what the symbol costs, and must come through.
+    """
+    from screener.calc.spread import spread_table
+
+    frame = _series_frame(80)
+    calm = spread_table({"X": frame})["X"]
+
+    one_day = frame.copy()
+    one_day.loc[one_day.index[60], ["high", "low"]] = [130.0, 70.0]
+    assert spread_table({"X": one_day})["X"].loc[frame.index[70]] == pytest.approx(
+        calm.loc[frame.index[70]]
+    ), "a single session moved the median -- it should not"
+
+    sustained = frame.copy()
+    window = sustained.index[50:71]
+    sustained.loc[window, "high"] = 104.0
+    sustained.loc[window, "low"] = 96.0
+    assert spread_table({"X": sustained})["X"].loc[frame.index[71]] > calm.loc[frame.index[71]], "a month of genuinely wider ranges failed to raise the cost"
+
+
+def test_spread_table_skips_symbols_without_enough_history():
+    from screener.calc.spread import spread_table
+
+    table = spread_table({"SHORT": _series_frame(5), "LONG": _series_frame(80)})
+    assert "SHORT" not in table
+    assert "LONG" in table
+
+
+def test_spread_table_separates_wide_from_tight():
+    from screener.calc.spread import spread_table
+
+    table = spread_table(
+        {"TIGHT": _series_frame(80, half_width=0.05),
+         "WIDE": _series_frame(80, half_width=1.5)}
+    )
+    assert table["WIDE"].iloc[-1] > table["TIGHT"].iloc[-1]
