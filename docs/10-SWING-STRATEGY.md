@@ -28,12 +28,17 @@
 > what it cost to learn, which is the part worth keeping.
 >
 > **Updated 2026-09-24.** Re-run with MEASURED per-symbol spreads rather than
-> the flat 5bp that every result in this project had assumed: expectancy falls
-> from +0.0252R to **-0.0696R** and the six-year return from +2.7% to **-8.9%**.
-> The convex payoff shape was real; the positive expectancy was not. It was an
-> artifact of charging 10bp a round trip where the median symbol costs 27bp.
-> The verdict is unchanged and now rests on a cost model that was measured
-> instead of declared.
+> the flat 5bp every result in this project had assumed, and with an exit from
+> delisted symbols that did not previously exist. Like for like at 350 trades,
+> expectancy falls from +0.0108R to **-0.0170R** and the six-year return from
+> +1.6% to **-3.3%**. The convex payoff shape was real; the positive expectancy
+> was not. It was an artifact of charging 10bp a round trip where the names this
+> rule buys cost 43.5bp. The verdict is unchanged and now rests on a cost model
+> that was measured instead of declared.
+>
+> An earlier note this day put the swing at -0.0948R. That was measured before
+> the delisting exit and compared 223 trades against 277 -- different trade
+> lists, not different costs on one list. -0.0278R is the like-for-like figure.
 
 
 **Written 2026-09-22.** One strategy, derived from measurement rather than from

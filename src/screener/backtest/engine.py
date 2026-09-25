@@ -369,7 +369,31 @@ def run_backtest(
             exit_price: Decimal | None = None
             reason: str | None = None
 
-            if exit_rule.has_time_limit and held >= exit_rule.time_limit:
+            # A bar with no volume is not a session the position lived through;
+            # it is a security that did not trade. 379 symbols in this database
+            # carry 59,524 such bars and 140 are frozen at the END of a series
+            # -- acquired or delisted, with the last price repeating forever.
+            #
+            # Without this, a position held into an acquisition can never
+            # leave: the price never moves, so a trailing stop cannot ratchet
+            # and a stop can never be hit, and docs/10 specifies no time limit.
+            # The backtest then holds it to the end of the split at a frozen
+            # mark and reports it as an open position that simply went quiet.
+            #
+            # It exits at the open, which IS the frozen price, with costs
+            # charged. That is not what an acquisition really pays -- cash or
+            # stock at terms this database does not record -- but it is the
+            # last price at which the position demonstrably could be sold, and
+            # by the ambiguity rule the unrecorded half resolves against us.
+            #
+            # NOT configurable, deliberately. Holding a security that is not
+            # trading is not a strategy choice anybody could make; it is a data
+            # artifact, and a flag to disable it would only ever be used to
+            # make a result look better.
+            if "volume" in row.index and float(row["volume"]) <= 0:
+                exit_price = costs.sell_fill(open_p, ticker, day)
+                reason = "no_volume"
+            elif exit_rule.has_time_limit and held >= exit_rule.time_limit:
                 # Chronologically first event of the day: fills at the open.
                 exit_price = costs.sell_fill(open_p, ticker, day)
                 reason = "time"
@@ -415,6 +439,14 @@ def run_backtest(
             row = _bar(frame, day) if frame is not None else None
             if row is None:
                 rejected["no_bar"] = rejected.get("no_bar", 0) + 1
+                continue
+            # The same hole on the other side: a security that did not trade
+            # cannot be bought either. The universe filter catches most of
+            # these, but it drains `dollar_vol_50` over a rolling window, so a
+            # frozen symbol stays eligible for ~50 sessions after its last real
+            # trade -- DENN for 39 of them. This closes that window.
+            if "volume" in row.index and float(row["volume"]) <= 0:
+                rejected["no_volume"] = rejected.get("no_volume", 0) + 1
                 continue
 
             fill = costs.buy_fill(Decimal(str(row["open"])), candidate.ticker, day)

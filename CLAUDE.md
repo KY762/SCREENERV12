@@ -268,18 +268,27 @@ a usable estimate:
 
 The median symbol ABOVE the $2M floor runs **27bp** against the 10bp charged.
 
-**What it changes.** The docs/10 swing strategy, same candidates, same split:
+**What it changes.** The docs/10 swing strategy, same candidates, same split,
+measured AFTER the zero-volume exit below was fixed:
 
 | cost model | trades | expectancy | win rate | return |
 | --- | --- | --- | --- | --- |
-| flat 5bp | 223 | **+0.0252R** | 44.4% | +2.7% |
-| measured per-symbol | 277 | **-0.0696R** | 41.2% | -8.9% |
+| flat 5bp | 350 | **+0.0108R** | 43.7% | +1.6% |
+| measured per-symbol | 350 | **-0.0170R** | 43.1% | -3.3% |
 
-A swing of **-0.0948R per trade**. No verdict reverses -- everything had already
+A swing of **-0.0278R per trade**. No verdict reverses -- everything had already
 failed on the benchmark -- but the positive expectancy that made the strategy
 look like it "worked but lost to random" was an artifact of undercharging. It
-does not have a positive expectancy. The trade count RISES under real costs
-because worse fills produce more stop-outs, which frees slots faster.
+does not have a positive expectancy.
+
+> **Corrected same day.** The first run of this comparison reported -0.0948R,
+> from 223 trades against 277. That was measured before the zero-volume exit
+> existed, and it was confounded: with no exit from a delisted symbol the two
+> arms had DIFFERENT trade lists, because the cost level changed how fast slots
+> freed up. With the exit in place both arms run 350 trades and the comparison
+> is like for like. The direction held; the magnitude was overstated 3.4x. The
+> corrected figure also matches the arithmetic -- 33.5bp extra at a position/risk
+> ratio of 1/0.09 predicts ~0.037R, and 0.0278R is the same order.
 
 **The fix.** `CostModel` takes an optional `spreads` table from
 `calc.spread.spread_table` and charges each symbol HALF its own measured spread
@@ -329,10 +338,30 @@ floors at zero. **An untradeable symbol reports no trading cost.**
 - `ATEST-L` and `TMC_OLD2` are exchange TEST symbols sitting in the price
   database.
 
-Impact is small -- 5,163 frozen bars against 5.1M, about 0.1% -- but the
-mechanism is a hole, not a rounding error. **Not yet fixed.** The fix is an
-exit on a stale or zero-volume bar, and it is a change to exit semantics, which
-is an operator decision.
+**FIXED 2026-09-24, operator approved.** `run_backtest` now exits at the open on
+the first bar with no volume, reason `no_volume`, and refuses to enter on one.
+Not configurable: holding a security that is not trading is not a strategy
+choice anybody could make, and a flag to disable it would only ever be used to
+make a result look better.
+
+**The impact was NOT small, and the first assessment of it was wrong.** By bar
+count it is 0.1% -- 5,163 frozen bars against 5.1M -- and that is the number
+that misled. By portfolio capacity it is enormous. On development the docs/10
+strategy put five positions into companies that were acquired mid-hold:
+
+| | entered | frozen on | |
+| --- | --- | --- | --- |
+| SVVS | 2011-07-01 | 2011-07-15 | CenturyLink |
+| DRX | 2011-12-01 | 2011-12-27 | |
+| RNOW | 2012-01-03 | 2012-01-26 | Oracle |
+| DRX | 2012-05-01 | 2012-05-07 | |
+| CBE | 2012-11-01 | 2012-11-29 | Eaton |
+
+Each would have held its slot until 2015-12-31. That is **6,990 slot-days of
+21,900 -- 31.9% of total portfolio capacity** consumed by positions in companies
+that no longer existed. The trade count over the split rises from 223 to 350
+once they are released. A defect worth 0.1% of rows was worth a third of the
+book.
 
 ## No edge found (2026-09-22)
 

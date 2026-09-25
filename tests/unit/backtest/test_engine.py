@@ -605,3 +605,93 @@ def test_cost_model_stays_constructible_and_comparable_with_a_table():
     b = CostModel(slippage_bps=5.0, spreads=None)
     assert a == b          # differ only in the excluded field
     assert hash(a) == hash(b)
+
+
+# ---------------------------------------------------------------------------
+# Securities that stop trading
+# ---------------------------------------------------------------------------
+
+
+def _frozen_frame(live_days: int, frozen_days: int, price: float = 50.0):
+    """A symbol that trades normally and then is acquired: bars continue at the
+    last price with zero volume, which is what this database actually holds for
+    140 symbols."""
+    n = live_days + frozen_days
+    idx = pd.bdate_range("2012-01-03", periods=n)
+    opens = [price] * n
+    highs = [price * 1.02] * live_days + [price] * frozen_days
+    lows = [price * 0.98] * live_days + [price] * frozen_days
+    vols = [1_000_000] * live_days + [0] * frozen_days
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": opens, "volume": vols},
+        index=idx,
+    )
+
+
+def test_a_position_exits_when_the_security_stops_trading():
+    """The trap: no volume means no movement, so a trailing stop can never
+    ratchet and a stop can never be hit. Without an explicit exit the position
+    is held to the end of the split at a frozen mark."""
+    from screener.backtest.engine import Candidate, ExitRule, run_backtest
+
+    frame = _frozen_frame(live_days=10, frozen_days=40)
+    cand = Candidate(
+        ticker="DEAD", setup="t",
+        signal_date=frame.index[0].date(), entry_date=frame.index[1].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"DEAD": frame},
+        start=frame.index[0].date(), end=frame.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=None, time_limit=None, use_stop=True,
+                           trail_atr=3.0),
+        costs=NO_COSTS,
+    )
+    assert len(result.trades) == 1
+    trade = result.trades[0]
+    assert not trade.is_open, "the position never got out of a delisted symbol"
+    assert trade.exit_reason == "no_volume"
+    # It must leave on the FIRST dead bar, not linger through them.
+    assert trade.exit_date == frame.index[10].date()
+
+
+def test_a_candidate_is_not_bought_on_a_bar_with_no_volume():
+    """The universe filter drains dollar_vol_50 over a rolling window, so a
+    frozen symbol stays eligible for ~50 sessions after its last real trade."""
+    from screener.backtest.engine import Candidate, ExitRule, run_backtest
+
+    frame = _frozen_frame(live_days=2, frozen_days=30)
+    cand = Candidate(
+        ticker="DEAD", setup="t",
+        signal_date=frame.index[3].date(), entry_date=frame.index[4].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"DEAD": frame},
+        start=frame.index[0].date(), end=frame.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=2.0, time_limit=10),
+        costs=NO_COSTS,
+    )
+    assert result.trades == []
+    assert result.rejected.get("no_volume") == 1
+
+
+def test_a_normally_trading_symbol_is_unaffected_by_the_volume_guard():
+    """The guard must not change anything for a symbol that trades every day."""
+    from screener.backtest.engine import Candidate, ExitRule, run_backtest
+
+    frame = _frozen_frame(live_days=40, frozen_days=0)
+    cand = Candidate(
+        ticker="LIVE", setup="t",
+        signal_date=frame.index[0].date(), entry_date=frame.index[1].date(),
+        stop_distance=5.0, atr=2.0,
+    )
+    result = run_backtest(
+        [cand], {"LIVE": frame},
+        start=frame.index[0].date(), end=frame.index[-1].date(),
+        exit_rule=ExitRule(r_multiple=None, time_limit=10, use_stop=True),
+        costs=NO_COSTS,
+    )
+    assert len(result.trades) == 1
+    assert result.trades[0].exit_reason == "time"
+    assert "no_volume" not in result.rejected
