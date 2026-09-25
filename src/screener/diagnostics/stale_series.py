@@ -284,9 +284,32 @@ def identity_conflicts(
 # shell still traded, so an overlap is expected and our series is correct.
 #
 # So this compares PRICES rather than dates. If our stored closes match the
-# twin's closes on the days they share, our series IS the old company over that
-# window and the ticker is contaminated. If they differ, they are two genuinely
-# different securities and the overlap means nothing.
+# twin's closes on the days they share, the two records describe the SAME
+# security over that window. If they differ, they are two different securities
+# and the date overlap means nothing.
+#
+# WHAT A MATCH DOES NOT ESTABLISH, corrected 2026-09-24 after the first full
+# scan. "Same security over the shared window" is not the same as "our series
+# is contaminated", because a `_OLD` record is sometimes a DUPLICATE of the
+# security we hold rather than its predecessor. Measured over 664 twinned
+# symbols, 60 matched on price, and among those:
+#
+#   AZN    twin spans 1993..2026-01-30, ours 2009..2026 -- a parallel duplicate
+#          the vendor stopped updating. AstraZeneca's data is correct.
+#   COIN   twin spans 2021-04-07..2021-06-23, a ten-week stub written at
+#          listing. Coinbase's data is correct.
+#   JAVA   twin ends 2010-01-26, the day Oracle took Sun, and ours runs sixteen
+#          more years. Those years are somebody else's prices.
+#
+# All three look identical to a price match, and all three look identical to
+# "our series continues past the twin". Separating them needs the twin's END
+# date read against what happened to the company, which is a fact this
+# database does not hold.
+#
+# So a match RANKS a symbol for review; it does not convict one. Quarantine
+# rows are still written by hand, which is what `quarantine.py` already
+# requires and why hand-entered rows survive `--write`. The value here is
+# narrowing 878 twinned tickers to a few dozen worth a person's attention.
 
 #: Closes within a tenth of a percent count as the same price. Not exact
 #: equality: the two records can be rounded differently or adjusted at
@@ -309,7 +332,11 @@ class TwinOverlap:
     twin: str
     shared_days: int
     matching_days: int
-    verdict: str          # "contaminated" | "separate" | "insufficient"
+    #: "same_security" -- the records agree on price over the shared window, so
+    #: this ticker is worth REVIEWING; it is not a finding of contamination.
+    #: "separate" -- they disagree, so the overlap is meaningless.
+    #: "insufficient" -- too few shared days to say anything.
+    verdict: str
 
     @property
     def match_rate(self) -> float:
@@ -337,7 +364,11 @@ def twin_overlap(
     min_shared_days: int = TWIN_MIN_SHARED_DAYS,
     min_match_rate: float = TWIN_MIN_MATCH_RATE,
 ) -> TwinOverlap:
-    """Is our series for `ticker` actually the prices of `twin`?
+    """Do our series for `ticker` and the twin's describe the same security?
+
+    A "same_security" verdict makes the ticker a CANDIDATE for quarantine, not
+    a confirmed case -- see the note above on AZN, COIN and JAVA, which are
+    indistinguishable here and are not the same situation.
 
     Both arguments are date-indexed closes. Only the dates they SHARE are
     compared; a twin that stopped trading before our series began shares
@@ -356,5 +387,5 @@ def twin_overlap(
     matching = int(np.sum(np.isfinite(rel) & (rel <= tolerance)))
 
     rate = matching / len(shared)
-    verdict = "contaminated" if rate >= min_match_rate else "separate"
+    verdict = "same_security" if rate >= min_match_rate else "separate"
     return TwinOverlap(ticker, twin, len(shared), matching, verdict)

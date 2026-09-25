@@ -12,13 +12,15 @@ def _closes(start: str, values: list[float]) -> pd.Series:
     return pd.Series(values, index=pd.bdate_range(start, periods=len(values)))
 
 
-def test_identical_prices_over_the_shared_window_means_contaminated():
-    """The definitive case: our JAVA is Sun's prices, so JAVA is not the
-    company the universe thinks it is."""
+def test_identical_prices_over_the_shared_window_means_one_security():
+    """Our JAVA carries Sun's prices over the window they share. That makes
+    JAVA worth reviewing -- it does not by itself convict it, because a `_OLD`
+    record is sometimes a duplicate of the security we hold rather than its
+    predecessor. AZN and COIN match identically and are both fine."""
     theirs = _closes("2012-01-02", [10.0, 10.5, 11.0, 10.8, 11.2, 11.5, 11.1])
     ours = theirs.copy()
     out = twin_overlap("JAVA", "JAVA_OLD", ours, theirs)
-    assert out.verdict == "contaminated"
+    assert out.verdict == "same_security"
     assert out.match_rate == 1.0
 
 
@@ -30,6 +32,16 @@ def test_different_prices_over_the_same_dates_means_two_securities():
     out = twin_overlap("GM", "GM_OLD", ours, theirs)
     assert out.verdict == "separate"
     assert out.matching_days == 0
+
+
+def test_a_match_is_a_candidate_not_a_verdict():
+    """Pinning the vocabulary, because the first version of this module called
+    a match "contaminated" and a scan of 664 symbols then produced a list that
+    would have quarantined AstraZeneca and Coinbase."""
+    theirs = _closes("2012-01-02", [10.0] * 8)
+    out = twin_overlap("AZN", "AZN_OLD", theirs.copy(), theirs)
+    assert out.verdict == "same_security"
+    assert out.verdict != "contaminated"
 
 
 def test_a_twin_that_ended_before_our_series_began_shares_nothing():
@@ -52,7 +64,7 @@ def test_rounding_differences_still_count_as_the_same_price():
     expensive direction to be wrong in."""
     theirs = _closes("2012-01-02", [10.00, 10.50, 11.00, 10.80, 11.20, 11.50])
     ours = _closes("2012-01-02", [10.001, 10.499, 11.002, 10.799, 11.201, 11.498])
-    assert twin_overlap("X", "X_OLD", ours, theirs).verdict == "contaminated"
+    assert twin_overlap("X", "X_OLD", ours, theirs).verdict == "same_security"
 
 
 def test_a_partial_match_below_the_threshold_is_separate():
