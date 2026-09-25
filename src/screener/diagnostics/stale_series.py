@@ -48,6 +48,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -258,3 +262,99 @@ def identity_conflicts(
                 f"series starts {s.first_bar}, after this ticker left on {left}",
             ))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Superseded-instrument twins
+# ---------------------------------------------------------------------------
+#
+# The checks above all read S&P 500 membership -- "too illiquid to be a member"
+# is arithmetic about the index, and `left_universe` is an index date. The
+# universe moved to 11,794 surveyed names on 2026-09-24 and there is no index
+# membership for those, so none of it fires. This test is universe-independent.
+#
+# EODHD records a reused ticker by keeping the prior instrument under a
+# suffixed code: JAVA_OLD is Sun Microsystems, JAVA is whoever holds the
+# letters now. 1,845 such twins exist and 878 of them are tickers in the new
+# candidate set, against a quarantine of 25 built for the old universe.
+#
+# The naive test -- does our stored series reach back before the twin stopped
+# trading? -- flags 30% of them and is WRONG about a good share of those. GM is
+# the counter-example: new GM listed in November 2010 while old GM's bankrupt
+# shell still traded, so an overlap is expected and our series is correct.
+#
+# So this compares PRICES rather than dates. If our stored closes match the
+# twin's closes on the days they share, our series IS the old company over that
+# window and the ticker is contaminated. If they differ, they are two genuinely
+# different securities and the overlap means nothing.
+
+#: Closes within a tenth of a percent count as the same price. Not exact
+#: equality: the two records can be rounded differently or adjusted at
+#: different times, and demanding equality would report every contaminated
+#: symbol as clean -- a false clean, which is the direction that costs most.
+TWIN_PRICE_TOLERANCE = 0.001
+
+#: Below this many shared days the comparison is noise either way.
+TWIN_MIN_SHARED_DAYS = 5
+
+#: Share of shared days that must match before the series is called the twin's.
+TWIN_MIN_MATCH_RATE = 0.90
+
+
+@dataclass(frozen=True)
+class TwinOverlap:
+    """One stored series judged against its superseded twin."""
+
+    ticker: str
+    twin: str
+    shared_days: int
+    matching_days: int
+    verdict: str          # "contaminated" | "separate" | "insufficient"
+
+    @property
+    def match_rate(self) -> float:
+        return self.matching_days / self.shared_days if self.shared_days else 0.0
+
+    def describe(self) -> str:
+        if self.verdict == "insufficient":
+            return (
+                f"{self.ticker}: only {self.shared_days} day(s) shared with "
+                f"{self.twin}; not enough to judge"
+            )
+        return (
+            f"{self.ticker}: {self.matching_days}/{self.shared_days} closes "
+            f"({self.match_rate:.0%}) match {self.twin} -- {self.verdict}"
+        )
+
+
+def twin_overlap(
+    ticker: str,
+    twin: str,
+    stored_closes: "pd.Series",
+    twin_closes: "pd.Series",
+    *,
+    tolerance: float = TWIN_PRICE_TOLERANCE,
+    min_shared_days: int = TWIN_MIN_SHARED_DAYS,
+    min_match_rate: float = TWIN_MIN_MATCH_RATE,
+) -> TwinOverlap:
+    """Is our series for `ticker` actually the prices of `twin`?
+
+    Both arguments are date-indexed closes. Only the dates they SHARE are
+    compared; a twin that stopped trading before our series began shares
+    nothing and is correctly reported as insufficient rather than clean.
+    """
+    import numpy as np
+
+    shared = stored_closes.index.intersection(twin_closes.index)
+    if len(shared) < min_shared_days:
+        return TwinOverlap(ticker, twin, len(shared), 0, "insufficient")
+
+    ours = stored_closes.loc[shared].to_numpy(dtype="float64")
+    theirs = twin_closes.loc[shared].to_numpy(dtype="float64")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.abs(ours - theirs) / np.where(theirs == 0, np.nan, np.abs(theirs))
+    matching = int(np.sum(np.isfinite(rel) & (rel <= tolerance)))
+
+    rate = matching / len(shared)
+    verdict = "contaminated" if rate >= min_match_rate else "separate"
+    return TwinOverlap(ticker, twin, len(shared), matching, verdict)
