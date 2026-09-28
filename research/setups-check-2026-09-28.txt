@@ -1,0 +1,119 @@
+# The four selectable setups from 20260928-development-battery, full criteria, both universes
+# Development split only. Code: HEAD ee419a8 plus the uncommitted calc/validity.py repair step
+# (sha256 4081153158...), universe swing_small_mid as rebuilt 2026-09-28 09:39 with it.
+# S&P runs use the 09-22 battery's 1,020 symbols. Configs built exactly as research/battery.py builds a cell.
+
+SPY buy-and-hold, development window: +81.2%
+
+=== Momentum, no stop (h5_no_stop {'hold': 63}) on sp500_pit
+  3,369 signals; 102 trades, 69.6% win rate, expectancy +0.942R, PF 2.32, maxDD 18.3%, return +117.5%
+  independent observations: 69; vs random same days: 80.6th, p = 0.1948
+    bull_2013_2014    34 trades  +1.703R  +73.4%  95th beat
+    chop_2011         21 trades  +0.949R  +16.9%  94th beat
+    chop_2015         13 trades  +1.074R  +20.6%  89th beat
+    [FAIL] trade_count: 69 effective (102 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.942R (needs > 0)
+    [pass] profit_factor: 2.32 (needs > 1.2)
+    [pass] max_drawdown: 18.3% (needs < 25%)
+    [pass] regime_robustness: beat random in 3 of 3, worst +16.9% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.1948 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Momentum, no skip (h5_skip_matters {'mom_skip': 0}) on sp500_pit
+  3,369 signals; 146 trades, 47.9% win rate, expectancy +0.331R, PF 1.63, maxDD 12.6%, return +53.1%
+  independent observations: 99; vs random same days: 59.5th, p = 0.4056
+    bull_2013_2014    49 trades  +0.758R  +44.9%  98th beat
+    chop_2011         27 trades  -0.319R  -7.6%  14th lost
+    chop_2015         21 trades  -0.058R  -5.2%  58th beat
+    [FAIL] trade_count: 99 effective (146 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.331R (needs > 0)
+    [pass] profit_factor: 1.63 (needs > 1.2)
+    [pass] max_drawdown: 12.6% (needs < 25%)
+    [pass] regime_robustness: beat random in 2 of 3, worst -7.6% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.4056 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Squeeze, no stop (h7_no_stop {'time_limit': 40}) on sp500_pit
+  23,880 signals; 182 trades, 65.4% win rate, expectancy +0.291R, PF 1.86, maxDD 16.2%, return +59.6%
+  independent observations: 147; vs random same days: 86.8th, p = 0.1329
+    bull_2013_2014    64 trades  +0.328R  +28.7%  31th lost
+    chop_2011         29 trades  +0.259R  +6.9%  94th beat
+    chop_2015         24 trades  -0.030R  -3.2%  52th beat
+    [FAIL] trade_count: 147 effective (182 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.291R (needs > 0)
+    [pass] profit_factor: 1.86 (needs > 1.2)
+    [pass] max_drawdown: 16.2% (needs < 25%)
+    [pass] regime_robustness: beat random in 2 of 3, worst -3.2% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.1329 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Earnings drift (h6_entry_delay {'entry_delay': 2}) on sp500_pit
+  285 signals; 89 trades, 60.7% win rate, expectancy +0.618R, PF 2.27, maxDD 19.9%, return +60.8%
+  independent observations: 48; vs random same days: 95.9th, p = 0.0420
+    bull_2013_2014    29 trades  +1.209R  +45.1%  92th beat
+    chop_2011         17 trades  -0.188R  -4.0%  81th beat
+    chop_2015         11 trades  +0.061R  -0.2%  78th beat
+    [FAIL] trade_count: 48 effective (89 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.618R (needs > 0)
+    [pass] profit_factor: 2.27 (needs > 1.2)
+    [pass] max_drawdown: 19.9% (needs < 25%)
+    [pass] regime_robustness: beat random in 3 of 3, worst -4.0% (needs >= 2 of 3, none < -15%)
+    [pass] vs_random: same-day p = 0.0420 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Momentum, no stop (h5_no_stop {'hold': 63}) on swing_small_mid
+  13,487 signals; 127 trades, 58.3% win rate, expectancy +0.612R, PF 1.28, maxDD 32.5%, return +49.9%
+  independent observations: 85; vs random same days: 47.0th, p = 0.5305
+    bull_2013_2014    44 trades  +0.164R  -0.9%  9th lost
+    chop_2011         19 trades  -0.197R  -9.6%  33th lost
+    chop_2015         22 trades  -0.147R  -9.5%  22th lost
+    [FAIL] trade_count: 85 effective (127 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.612R (needs > 0)
+    [pass] profit_factor: 1.28 (needs > 1.2)
+    [FAIL] max_drawdown: 32.5% (needs < 25%)
+    [FAIL] regime_robustness: beat random in 0 of 3, worst -9.6% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.5305 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Momentum, no skip (h5_skip_matters {'mom_skip': 0}) on swing_small_mid
+  13,487 signals; 166 trades, 46.4% win rate, expectancy +0.309R, PF 1.46, maxDD 19.3%, return +52.2%
+  independent observations: 103; vs random same days: 31.3th, p = 0.6873
+    bull_2013_2014    55 trades  +0.096R  +3.1%  0th lost
+    chop_2011         25 trades  -0.177R  -7.1%  52th beat
+    chop_2015         34 trades  -0.116R  -5.8%  9th lost
+    [FAIL] trade_count: 103 effective (166 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.309R (needs > 0)
+    [pass] profit_factor: 1.46 (needs > 1.2)
+    [pass] max_drawdown: 19.3% (needs < 25%)
+    [FAIL] regime_robustness: beat random in 1 of 3, worst -7.1% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.6873 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Squeeze, no stop (h7_no_stop {'time_limit': 40}) on swing_small_mid
+  79,542 signals; 197 trades, 58.9% win rate, expectancy +0.185R, PF 1.50, maxDD 12.0%, return +37.9%
+  independent observations: 136; vs random same days: 67.0th, p = 0.3307
+    bull_2013_2014    66 trades  +0.302R  +22.3%  52th beat
+    chop_2011         34 trades  -0.006R  -0.2%  64th beat
+    chop_2015         27 trades  -0.111R  -3.9%  49th lost
+    [FAIL] trade_count: 136 effective (197 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.185R (needs > 0)
+    [pass] profit_factor: 1.50 (needs > 1.2)
+    [pass] max_drawdown: 12.0% (needs < 25%)
+    [pass] regime_robustness: beat random in 2 of 3, worst -3.9% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.3307 (needs <= 0.05)
+  ALL CRITERIA: not met
+
+=== Earnings drift (h6_entry_delay {'entry_delay': 2}) on swing_small_mid
+  511 signals; 109 trades, 57.8% win rate, expectancy +0.297R, PF 1.41, maxDD 19.8%, return +30.7%
+  independent observations: 73; vs random same days: 75.0th, p = 0.2507
+    bull_2013_2014    38 trades  +0.877R  +38.8%  75th beat
+    chop_2011         17 trades  -0.339R  -6.6%  86th beat
+    chop_2015         15 trades  -0.679R  -14.5%  25th lost
+    [FAIL] trade_count: 73 effective (109 raw) (needs >= 200 effective)
+    [pass] expectancy: +0.297R (needs > 0)
+    [pass] profit_factor: 1.41 (needs > 1.2)
+    [pass] max_drawdown: 19.8% (needs < 25%)
+    [pass] regime_robustness: beat random in 2 of 3, worst -14.5% (needs >= 2 of 3, none < -15%)
+    [FAIL] vs_random: same-day p = 0.2507 (needs <= 0.05)
+  ALL CRITERIA: not met
+
