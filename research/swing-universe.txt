@@ -1,6 +1,6 @@
 swing_small_mid/v1: price >= $5.00 to $80.00, ADV >= $2,000,000, >= 252 bars of
 history
-swing_small_mid/v1: 2,643,438 membership row(s) across 4209 date(s); 3 
+swing_small_mid/v1: 9,868,591 membership row(s) across 4257 date(s); 3 
 symbol(s) excluded outright
   NFX: leveraged or inverse product
   UST: leveraged or inverse product
