@@ -363,6 +363,33 @@ that no longer existed. The trade count over the split rises from 223 to 350
 once they are released. A defect worth 0.1% of rows was worth a third of the
 book.
 
+## The battery after the gap rule and the series-end exit (2026-09-28)
+
+`research/20260928-development-battery.md`: the same 1,020 symbols as
+20260922 (1,046 series once holes are cut), measured spreads, `no_volume`,
+the 60-day gap rule and the `series_end` exit.
+
+| | 09-22 | real costs | + gap rule and series_end |
+| --- | --- | --- | --- |
+| experiments with a cell above the 50th pct, same days | 14 of 28 | 10 | 13 |
+| selectable configurations | h4_no_stop, h7_compression_depth, three H6 | three H6 | h5_skip_matters, h5_no_stop (hold 63), h7_no_stop (time 40), three H6 |
+| trades across all cells | 182,353 | 182,607 | 199,928 |
+
+**Why it moved: capacity, not the gap rule.** Positions in companies that were
+acquired inside 2010-2015 had no exit -- their series simply stops -- and each
+held a slot to the end of the split at its entry price. `h5_no_stop` went from
+170 trades to 394 across its cells; only 18 of them are `series_end` exits.
+Checked for bias on hold 63: all five `series_end` exits are acquisitions
+exited at the deal price -- MFE $47.95 (Intel paid $48), CEPH $81.47 (Teva
+$81.50), HNZ $72.48 ($72.50), CVH, HSP. Heinz had held a slot from June 2013 to
+the end of 2015. **Not tested: failures.** Exiting a failed company at its
+last exchange price would overstate it, and failures are still mostly
+missing from this data (see Survivorship).
+
+Nothing here is evidence -- development split, best cell of several per
+experiment -- but the ranking of what is worth a validation slot has changed
+and the earlier readings are superseded.
+
 ## The expanded database had no splits, and vendor volume was adjusted twice (2026-09-28)
 
 **Splits.** The 10,218 symbols ingested 2026-09-24 carried **zero** rows in

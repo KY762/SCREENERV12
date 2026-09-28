@@ -1,0 +1,4197 @@
+{
+  "generated_at": "2026-09-28T03:26:32-04:00",
+  "split": {
+    "name": "development",
+    "start": "2010-01-01",
+    "end": "2015-12-31"
+  },
+  "context": {
+    "symbols": 1046,
+    "slippage_bps": 5.0,
+    "equity": 10000.0,
+    "universe": "sp500_pit",
+    "quarantined": [
+      "ACS",
+      "AYE",
+      "BBBY",
+      "BBT",
+      "CA",
+      "CAM",
+      "CPWR",
+      "CSRA",
+      "EMC",
+      "EP",
+      "FB",
+      "GENZ",
+      "GR",
+      "INFO",
+      "JAVA",
+      "KG",
+      "NFX",
+      "PARA",
+      "PBG",
+      "PCL",
+      "RX",
+      "SHLD",
+      "SII",
+      "SPLS",
+      "UST"
+    ]
+  },
+  "experiments": [
+    {
+      "name": "h1_exits",
+      "hypothesis": "h1",
+      "kind": "parameter",
+      "question": "Is there any hold horizon and stop width at which momentum rotation is profitable?",
+      "base": {},
+      "base_resolved": {},
+      "varied": {
+        "hold": [
+          10,
+          20
+        ],
+        "stop_atr": [
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ]
+      },
+      "configurations_tested": 10,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 10 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "hold": 20,
+          "stop_atr": 3.0
+        }
+      },
+      "cells": [
+        {
+          "hold": 20,
+          "stop_atr": 3.0,
+          "trades": 340,
+          "expectancy_r": 0.0145,
+          "win_rate": 0.4794,
+          "profit_factor": 1.009,
+          "max_drawdown_pct": 0.1244,
+          "total_return_pct": 0.0134,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 1.7,
+          "exits": {
+            "stop": 100,
+            "stop_gap": 9,
+            "time": 227,
+            "series_end": 4
+          }
+        },
+        {
+          "hold": 20,
+          "stop_atr": 1.5,
+          "trades": 280,
+          "expectancy_r": 0.0131,
+          "win_rate": 0.375,
+          "profit_factor": 1.033,
+          "max_drawdown_pct": 0.148,
+          "total_return_pct": 0.0521,
+          "random_percentile": 12.7,
+          "date_matched_percentile": 18.0,
+          "exits": {
+            "stop": 140,
+            "stop_gap": 19,
+            "time": 119,
+            "series_end": 2
+          }
+        },
+        {
+          "hold": 10,
+          "stop_atr": 3.0,
+          "trades": 690,
+          "expectancy_r": -0.0031,
+          "win_rate": 0.513,
+          "profit_factor": 0.966,
+          "max_drawdown_pct": 0.173,
+          "total_return_pct": -0.0595,
+          "random_percentile": 1.0,
+          "date_matched_percentile": 0.7,
+          "exits": {
+            "time": 566,
+            "stop": 108,
+            "stop_gap": 13,
+            "series_end": 3
+          }
+        },
+        {
+          "hold": 20,
+          "stop_atr": 1.0,
+          "trades": 279,
+          "expectancy_r": -0.0095,
+          "win_rate": 0.2867,
+          "profit_factor": 1.013,
+          "max_drawdown_pct": 0.1409,
+          "total_return_pct": 0.0228,
+          "random_percentile": 14.3,
+          "date_matched_percentile": 37.3,
+          "exits": {
+            "stop": 150,
+            "stop_gap": 43,
+            "time": 84,
+            "series_end": 2
+          }
+        },
+        {
+          "hold": 10,
+          "stop_atr": 2.5,
+          "trades": 669,
+          "expectancy_r": -0.0177,
+          "win_rate": 0.4903,
+          "profit_factor": 0.931,
+          "max_drawdown_pct": 0.2081,
+          "total_return_pct": -0.1329,
+          "random_percentile": 1.7,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop": 145,
+            "time": 497,
+            "stop_gap": 24,
+            "series_end": 3
+          }
+        },
+        {
+          "hold": 20,
+          "stop_atr": 2.5,
+          "trades": 330,
+          "expectancy_r": -0.0216,
+          "win_rate": 0.4424,
+          "profit_factor": 0.943,
+          "max_drawdown_pct": 0.1852,
+          "total_return_pct": -0.0759,
+          "random_percentile": 0.7,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop": 115,
+            "time": 192,
+            "series_end": 3,
+            "stop_gap": 20
+          }
+        },
+        {
+          "hold": 10,
+          "stop_atr": 1.5,
+          "trades": 567,
+          "expectancy_r": -0.0228,
+          "win_rate": 0.425,
+          "profit_factor": 0.966,
+          "max_drawdown_pct": 0.211,
+          "total_return_pct": -0.0645,
+          "random_percentile": 5.0,
+          "date_matched_percentile": 1.3,
+          "exits": {
+            "stop_gap": 38,
+            "time": 307,
+            "stop": 220,
+            "series_end": 2
+          }
+        },
+        {
+          "hold": 10,
+          "stop_atr": 2.0,
+          "trades": 622,
+          "expectancy_r": -0.0311,
+          "win_rate": 0.4662,
+          "profit_factor": 0.912,
+          "max_drawdown_pct": 0.2095,
+          "total_return_pct": -0.1792,
+          "random_percentile": 1.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 192,
+            "time": 405,
+            "stop_gap": 22,
+            "series_end": 3
+          }
+        },
+        {
+          "hold": 20,
+          "stop_atr": 2.0,
+          "trades": 309,
+          "expectancy_r": -0.0311,
+          "win_rate": 0.411,
+          "profit_factor": 0.93,
+          "max_drawdown_pct": 0.1736,
+          "total_return_pct": -0.0912,
+          "random_percentile": 2.3,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop_gap": 20,
+            "stop": 129,
+            "time": 157,
+            "series_end": 3
+          }
+        },
+        {
+          "hold": 10,
+          "stop_atr": 1.0,
+          "trades": 564,
+          "expectancy_r": -0.0682,
+          "win_rate": 0.3387,
+          "profit_factor": 0.931,
+          "max_drawdown_pct": 0.2257,
+          "total_return_pct": -0.1269,
+          "random_percentile": 6.0,
+          "date_matched_percentile": 2.3,
+          "exits": {
+            "stop_gap": 76,
+            "stop": 263,
+            "time": 223,
+            "series_end": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "h1_no_stop",
+      "hypothesis": "h1",
+      "kind": "structural",
+      "question": "Is the STOP what loses the money? Same entries, no stop.",
+      "base": {
+        "use_stop": false
+      },
+      "base_resolved": {
+        "use_stop": false
+      },
+      "varied": {
+        "hold": [
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 3,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 3 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "hold": 40
+        }
+      },
+      "cells": [
+        {
+          "hold": 40,
+          "trades": 150,
+          "expectancy_r": 0.1846,
+          "win_rate": 0.5333,
+          "profit_factor": 1.102,
+          "max_drawdown_pct": 0.2271,
+          "total_return_pct": 0.15,
+          "random_percentile": 1.7,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 146,
+            "series_end": 4
+          }
+        },
+        {
+          "hold": 20,
+          "trades": 307,
+          "expectancy_r": 0.1065,
+          "win_rate": 0.5179,
+          "profit_factor": 1.149,
+          "max_drawdown_pct": 0.2184,
+          "total_return_pct": 0.2405,
+          "random_percentile": 5.0,
+          "date_matched_percentile": 6.0,
+          "exits": {
+            "time": 303,
+            "series_end": 4
+          }
+        },
+        {
+          "hold": 10,
+          "trades": 619,
+          "expectancy_r": 0.0303,
+          "win_rate": 0.5202,
+          "profit_factor": 1.029,
+          "max_drawdown_pct": 0.2307,
+          "total_return_pct": 0.067,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 3.7,
+          "exits": {
+            "time": 616,
+            "series_end": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "h1_selection",
+      "hypothesis": "h1",
+      "kind": "parameter",
+      "question": "Does the momentum lookback or the selection cutoff matter, holding exits fixed?",
+      "base": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "base_resolved": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "varied": {
+        "rs_lookback": [
+          21,
+          63,
+          126,
+          252
+        ],
+        "top_pct": [
+          0.05,
+          0.1,
+          0.2
+        ]
+      },
+      "configurations_tested": 12,
+      "verdict": {
+        "shape": "spike",
+        "detail": "1 of 12 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "rs_lookback": 21,
+          "top_pct": 0.1
+        }
+      },
+      "cells": [
+        {
+          "rs_lookback": 21,
+          "top_pct": 0.1,
+          "trades": 343,
+          "expectancy_r": 0.1216,
+          "win_rate": 0.5102,
+          "profit_factor": 1.325,
+          "max_drawdown_pct": 0.1312,
+          "total_return_pct": 0.4582,
+          "random_percentile": 29.7,
+          "date_matched_percentile": 32.3,
+          "exits": {
+            "time": 257,
+            "stop": 76,
+            "series_end": 3,
+            "stop_gap": 7
+          }
+        },
+        {
+          "rs_lookback": 21,
+          "top_pct": 0.2,
+          "trades": 351,
+          "expectancy_r": 0.1198,
+          "win_rate": 0.5071,
+          "profit_factor": 1.306,
+          "max_drawdown_pct": 0.1427,
+          "total_return_pct": 0.4599,
+          "random_percentile": 27.7,
+          "date_matched_percentile": 32.7,
+          "exits": {
+            "time": 263,
+            "stop": 77,
+            "series_end": 3,
+            "stop_gap": 8
+          }
+        },
+        {
+          "rs_lookback": 21,
+          "top_pct": 0.05,
+          "trades": 322,
+          "expectancy_r": 0.1126,
+          "win_rate": 0.5031,
+          "profit_factor": 1.292,
+          "max_drawdown_pct": 0.1374,
+          "total_return_pct": 0.3889,
+          "random_percentile": 28.7,
+          "date_matched_percentile": 44.0,
+          "exits": {
+            "time": 239,
+            "stop": 74,
+            "series_end": 3,
+            "stop_gap": 6
+          }
+        },
+        {
+          "rs_lookback": 126,
+          "top_pct": 0.2,
+          "trades": 333,
+          "expectancy_r": 0.1012,
+          "win_rate": 0.5285,
+          "profit_factor": 1.284,
+          "max_drawdown_pct": 0.1189,
+          "total_return_pct": 0.3676,
+          "random_percentile": 29.3,
+          "date_matched_percentile": 41.0,
+          "exits": {
+            "time": 238,
+            "stop_gap": 11,
+            "stop": 81,
+            "series_end": 3
+          }
+        },
+        {
+          "rs_lookback": 126,
+          "top_pct": 0.1,
+          "trades": 329,
+          "expectancy_r": 0.0998,
+          "win_rate": 0.5258,
+          "profit_factor": 1.279,
+          "max_drawdown_pct": 0.1098,
+          "total_return_pct": 0.3579,
+          "random_percentile": 29.3,
+          "date_matched_percentile": 44.7,
+          "exits": {
+            "time": 235,
+            "stop_gap": 11,
+            "stop": 80,
+            "series_end": 3
+          }
+        },
+        {
+          "rs_lookback": 126,
+          "top_pct": 0.05,
+          "trades": 312,
+          "expectancy_r": 0.0884,
+          "win_rate": 0.5224,
+          "profit_factor": 1.252,
+          "max_drawdown_pct": 0.1478,
+          "total_return_pct": 0.2927,
+          "random_percentile": 29.3,
+          "date_matched_percentile": 50.7,
+          "exits": {
+            "time": 222,
+            "stop_gap": 11,
+            "stop": 76,
+            "series_end": 3
+          }
+        },
+        {
+          "rs_lookback": 252,
+          "top_pct": 0.1,
+          "trades": 300,
+          "expectancy_r": 0.0685,
+          "win_rate": 0.54,
+          "profit_factor": 1.161,
+          "max_drawdown_pct": 0.1058,
+          "total_return_pct": 0.1971,
+          "random_percentile": 14.0,
+          "date_matched_percentile": 14.3,
+          "exits": {
+            "time": 210,
+            "stop_gap": 8,
+            "stop": 82
+          }
+        },
+        {
+          "rs_lookback": 252,
+          "top_pct": 0.2,
+          "trades": 304,
+          "expectancy_r": 0.0663,
+          "win_rate": 0.5395,
+          "profit_factor": 1.158,
+          "max_drawdown_pct": 0.1133,
+          "total_return_pct": 0.1961,
+          "random_percentile": 12.3,
+          "date_matched_percentile": 10.7,
+          "exits": {
+            "time": 212,
+            "stop_gap": 8,
+            "stop": 83,
+            "series_end": 1
+          }
+        },
+        {
+          "rs_lookback": 252,
+          "top_pct": 0.05,
+          "trades": 284,
+          "expectancy_r": 0.0369,
+          "win_rate": 0.5282,
+          "profit_factor": 1.083,
+          "max_drawdown_pct": 0.1098,
+          "total_return_pct": 0.0947,
+          "random_percentile": 7.3,
+          "date_matched_percentile": 8.7,
+          "exits": {
+            "time": 196,
+            "stop_gap": 8,
+            "stop": 80
+          }
+        },
+        {
+          "rs_lookback": 63,
+          "top_pct": 0.1,
+          "trades": 340,
+          "expectancy_r": 0.0145,
+          "win_rate": 0.4794,
+          "profit_factor": 1.009,
+          "max_drawdown_pct": 0.1244,
+          "total_return_pct": 0.0134,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 1.7,
+          "exits": {
+            "stop": 100,
+            "stop_gap": 9,
+            "time": 227,
+            "series_end": 4
+          }
+        },
+        {
+          "rs_lookback": 63,
+          "top_pct": 0.2,
+          "trades": 345,
+          "expectancy_r": 0.0094,
+          "win_rate": 0.4783,
+          "profit_factor": 0.997,
+          "max_drawdown_pct": 0.1244,
+          "total_return_pct": -0.0024,
+          "random_percentile": 2.3,
+          "date_matched_percentile": 2.0,
+          "exits": {
+            "stop": 101,
+            "stop_gap": 10,
+            "time": 230,
+            "series_end": 4
+          }
+        },
+        {
+          "rs_lookback": 63,
+          "top_pct": 0.05,
+          "trades": 319,
+          "expectancy_r": -0.0039,
+          "win_rate": 0.4702,
+          "profit_factor": 0.962,
+          "max_drawdown_pct": 0.1557,
+          "total_return_pct": -0.0441,
+          "random_percentile": 2.0,
+          "date_matched_percentile": 1.7,
+          "exits": {
+            "stop": 95,
+            "stop_gap": 9,
+            "time": 211,
+            "series_end": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "h1_entry_delay",
+      "hypothesis": "h1",
+      "kind": "structural",
+      "question": "Does waiting after the ranking help? Momentum's return is reported absent in the weeks after ranking (Jegadeesh & Titman 1993). Delayed names are re-checked at the last close before the buy and dropped if they no longer rank or trend, so this measures waiting AND re-selection together.",
+      "base": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "base_resolved": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "varied": {
+        "entry_delay": [
+          1,
+          3,
+          6
+        ]
+      },
+      "configurations_tested": 3,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 3 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "entry_delay": 3
+        }
+      },
+      "cells": [
+        {
+          "entry_delay": 3,
+          "trades": 328,
+          "expectancy_r": 0.0153,
+          "win_rate": 0.5,
+          "profit_factor": 1.017,
+          "max_drawdown_pct": 0.1531,
+          "total_return_pct": 0.0131,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 2.3,
+          "exits": {
+            "stop": 89,
+            "stop_gap": 14,
+            "time": 222,
+            "series_end": 3
+          }
+        },
+        {
+          "entry_delay": 1,
+          "trades": 340,
+          "expectancy_r": 0.0145,
+          "win_rate": 0.4794,
+          "profit_factor": 1.009,
+          "max_drawdown_pct": 0.1244,
+          "total_return_pct": 0.0134,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 1.7,
+          "exits": {
+            "stop": 100,
+            "stop_gap": 9,
+            "time": 227,
+            "series_end": 4
+          }
+        },
+        {
+          "entry_delay": 6,
+          "trades": 317,
+          "expectancy_r": -0.0419,
+          "win_rate": 0.47,
+          "profit_factor": 0.883,
+          "max_drawdown_pct": 0.2388,
+          "total_return_pct": -0.1442,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 95,
+            "stop_gap": 17,
+            "time": 203,
+            "series_end": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "h1_trend_filter",
+      "hypothesis": "h1",
+      "kind": "structural",
+      "question": "Does requiring an uptrend help, or is it just fewer trades?",
+      "base": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "base_resolved": {
+        "hold": 20,
+        "stop_atr": 3.0
+      },
+      "varied": {
+        "trend_filter": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "trend_filter=True at +0.015R versus trend_filter=False at +0.004R, a gap of +0.011R, but that gap is 0.0 standard errors on mean per-trade return (unpaired, month-clustered) -- under the 2 required.",
+        "positive_cells": 2,
+        "recommended": null,
+        "best": {
+          "trend_filter": true
+        }
+      },
+      "cells": [
+        {
+          "trend_filter": true,
+          "trades": 340,
+          "expectancy_r": 0.0145,
+          "win_rate": 0.4794,
+          "profit_factor": 1.009,
+          "max_drawdown_pct": 0.1244,
+          "total_return_pct": 0.0134,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 1.7,
+          "exits": {
+            "stop": 100,
+            "stop_gap": 9,
+            "time": 227,
+            "series_end": 4
+          }
+        },
+        {
+          "trend_filter": false,
+          "trades": 351,
+          "expectancy_r": 0.0038,
+          "win_rate": 0.4786,
+          "profit_factor": 0.996,
+          "max_drawdown_pct": 0.1395,
+          "total_return_pct": -0.0036,
+          "random_percentile": 2.0,
+          "date_matched_percentile": 2.0,
+          "exits": {
+            "stop": 105,
+            "stop_gap": 11,
+            "time": 231,
+            "series_end": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "h2_exits",
+      "hypothesis": "h2",
+      "kind": "parameter",
+      "question": "Is there a target and holding period at which the FVG continuation is profitable?",
+      "base": {},
+      "base_resolved": {},
+      "varied": {
+        "r_multiple": [
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "time_limit": [
+          5,
+          10,
+          15,
+          20
+        ]
+      },
+      "configurations_tested": 20,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 20 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "r_multiple": 2.5,
+          "time_limit": 20
+        }
+      },
+      "cells": [
+        {
+          "r_multiple": 2.5,
+          "time_limit": 20,
+          "trades": 1001,
+          "expectancy_r": -0.1956,
+          "win_rate": 0.3497,
+          "profit_factor": 0.882,
+          "max_drawdown_pct": 0.4293,
+          "total_return_pct": -0.3296,
+          "random_percentile": 3.7,
+          "date_matched_percentile": 3.7,
+          "exits": {
+            "stop": 433,
+            "stop_gap": 180,
+            "target": 227,
+            "time": 161
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 10,
+          "trades": 1288,
+          "expectancy_r": -0.1967,
+          "win_rate": 0.3548,
+          "profit_factor": 0.8,
+          "max_drawdown_pct": 0.6048,
+          "total_return_pct": -0.5683,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 378,
+            "stop_gap": 219,
+            "stop": 504,
+            "target": 187
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 15,
+          "trades": 1377,
+          "expectancy_r": -0.2079,
+          "win_rate": 0.4321,
+          "profit_factor": 0.896,
+          "max_drawdown_pct": 0.4483,
+          "total_return_pct": -0.3795,
+          "random_percentile": 2.7,
+          "date_matched_percentile": 2.7,
+          "exits": {
+            "stop": 508,
+            "target": 481,
+            "stop_gap": 212,
+            "time": 176
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 5,
+          "trades": 1936,
+          "expectancy_r": -0.213,
+          "win_rate": 0.3936,
+          "profit_factor": 0.783,
+          "max_drawdown_pct": 0.7054,
+          "total_return_pct": -0.6872,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 829,
+            "stop_gap": 313,
+            "stop": 606,
+            "target": 188
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 10,
+          "trades": 1359,
+          "expectancy_r": -0.215,
+          "win_rate": 0.3606,
+          "profit_factor": 0.788,
+          "max_drawdown_pct": 0.6553,
+          "total_return_pct": -0.6188,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 351,
+            "stop_gap": 225,
+            "stop": 535,
+            "target": 248
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 5,
+          "trades": 2090,
+          "expectancy_r": -0.2161,
+          "win_rate": 0.4057,
+          "profit_factor": 0.743,
+          "max_drawdown_pct": 0.7577,
+          "total_return_pct": -0.7484,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 767,
+            "stop_gap": 311,
+            "stop": 645,
+            "target": 367
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 15,
+          "trades": 1195,
+          "expectancy_r": -0.2191,
+          "win_rate": 0.3833,
+          "profit_factor": 0.822,
+          "max_drawdown_pct": 0.5593,
+          "total_return_pct": -0.5001,
+          "random_percentile": 1.0,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop": 471,
+            "time": 202,
+            "stop_gap": 206,
+            "target": 316
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 5,
+          "trades": 1994,
+          "expectancy_r": -0.2207,
+          "win_rate": 0.3957,
+          "profit_factor": 0.765,
+          "max_drawdown_pct": 0.7246,
+          "total_return_pct": -0.7111,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 809,
+            "stop_gap": 315,
+            "stop": 620,
+            "target": 250
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 20,
+          "trades": 1237,
+          "expectancy_r": -0.2216,
+          "win_rate": 0.426,
+          "profit_factor": 0.897,
+          "max_drawdown_pct": 0.4631,
+          "total_return_pct": -0.3481,
+          "random_percentile": 3.7,
+          "date_matched_percentile": 7.3,
+          "exits": {
+            "stop": 473,
+            "target": 440,
+            "stop_gap": 201,
+            "time": 123
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 5,
+          "trades": 2263,
+          "expectancy_r": -0.2257,
+          "win_rate": 0.4317,
+          "profit_factor": 0.764,
+          "max_drawdown_pct": 0.7464,
+          "total_return_pct": -0.737,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 693,
+            "stop_gap": 333,
+            "stop": 670,
+            "target": 567
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 10,
+          "trades": 1627,
+          "expectancy_r": -0.2365,
+          "win_rate": 0.4179,
+          "profit_factor": 0.782,
+          "max_drawdown_pct": 0.7043,
+          "total_return_pct": -0.6642,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 297,
+            "stop_gap": 240,
+            "stop": 591,
+            "target": 499
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 15,
+          "trades": 1115,
+          "expectancy_r": -0.2378,
+          "win_rate": 0.3516,
+          "profit_factor": 0.847,
+          "max_drawdown_pct": 0.5461,
+          "total_return_pct": -0.4476,
+          "random_percentile": 0.7,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop": 459,
+            "time": 218,
+            "stop_gap": 205,
+            "target": 233
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 5,
+          "trades": 2573,
+          "expectancy_r": -0.2475,
+          "win_rate": 0.4765,
+          "profit_factor": 0.719,
+          "max_drawdown_pct": 0.8261,
+          "total_return_pct": -0.8175,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 930,
+            "time": 593,
+            "stop_gap": 348,
+            "stop": 701,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 10,
+          "trades": 1466,
+          "expectancy_r": -0.2484,
+          "win_rate": 0.3765,
+          "profit_factor": 0.765,
+          "max_drawdown_pct": 0.6916,
+          "total_return_pct": -0.6767,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 328,
+            "stop_gap": 246,
+            "stop": 552,
+            "target": 340
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 20,
+          "trades": 1086,
+          "expectancy_r": -0.2524,
+          "win_rate": 0.3748,
+          "profit_factor": 0.829,
+          "max_drawdown_pct": 0.6043,
+          "total_return_pct": -0.5011,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 436,
+            "stop_gap": 206,
+            "target": 302,
+            "time": 142
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 10,
+          "trades": 1988,
+          "expectancy_r": -0.2582,
+          "win_rate": 0.4839,
+          "profit_factor": 0.731,
+          "max_drawdown_pct": 0.7572,
+          "total_return_pct": -0.7505,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 838,
+            "time": 228,
+            "stop_gap": 305,
+            "stop": 617
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 20,
+          "trades": 917,
+          "expectancy_r": -0.2605,
+          "win_rate": 0.3184,
+          "profit_factor": 0.861,
+          "max_drawdown_pct": 0.4748,
+          "total_return_pct": -0.3664,
+          "random_percentile": 2.7,
+          "date_matched_percentile": 0.7,
+          "exits": {
+            "stop": 419,
+            "stop_gap": 171,
+            "time": 170,
+            "target": 157
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 15,
+          "trades": 1738,
+          "expectancy_r": -0.2658,
+          "win_rate": 0.4804,
+          "profit_factor": 0.782,
+          "max_drawdown_pct": 0.7093,
+          "total_return_pct": -0.6706,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 768,
+            "stop_gap": 268,
+            "stop": 574,
+            "time": 128
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 15,
+          "trades": 1085,
+          "expectancy_r": -0.2806,
+          "win_rate": 0.3217,
+          "profit_factor": 0.814,
+          "max_drawdown_pct": 0.6205,
+          "total_return_pct": -0.5272,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "stop": 465,
+            "time": 233,
+            "stop_gap": 212,
+            "target": 175
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 20,
+          "trades": 1648,
+          "expectancy_r": -0.2835,
+          "win_rate": 0.4751,
+          "profit_factor": 0.765,
+          "max_drawdown_pct": 0.7422,
+          "total_return_pct": -0.6953,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 739,
+            "stop_gap": 265,
+            "stop": 557,
+            "time": 87
+          }
+        }
+      ]
+    },
+    {
+      "name": "h2_no_stop",
+      "hypothesis": "h2",
+      "kind": "structural",
+      "question": "Same entries with no stop -- entry rule or exit design?",
+      "base": {
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "time_limit": [
+          5,
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "spike",
+        "detail": "1 of 4 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "time_limit": 40
+        }
+      },
+      "cells": [
+        {
+          "time_limit": 40,
+          "trades": 166,
+          "expectancy_r": 0.7957,
+          "win_rate": 0.6145,
+          "profit_factor": 1.76,
+          "max_drawdown_pct": 0.2169,
+          "total_return_pct": 1.1357,
+          "random_percentile": 48.0,
+          "date_matched_percentile": 72.7,
+          "exits": {
+            "time": 166
+          }
+        },
+        {
+          "time_limit": 20,
+          "trades": 320,
+          "expectancy_r": 0.343,
+          "win_rate": 0.5344,
+          "profit_factor": 1.152,
+          "max_drawdown_pct": 0.2362,
+          "total_return_pct": 0.2388,
+          "random_percentile": 6.3,
+          "date_matched_percentile": 7.3,
+          "exits": {
+            "time": 320
+          }
+        },
+        {
+          "time_limit": 10,
+          "trades": 619,
+          "expectancy_r": 0.1357,
+          "win_rate": 0.5525,
+          "profit_factor": 1.122,
+          "max_drawdown_pct": 0.3269,
+          "total_return_pct": 0.309,
+          "random_percentile": 22.0,
+          "date_matched_percentile": 31.7,
+          "exits": {
+            "time": 618,
+            "series_end": 1
+          }
+        },
+        {
+          "time_limit": 5,
+          "trades": 1205,
+          "expectancy_r": 0.0078,
+          "win_rate": 0.4996,
+          "profit_factor": 0.956,
+          "max_drawdown_pct": 0.2799,
+          "total_return_pct": -0.1512,
+          "random_percentile": 5.7,
+          "date_matched_percentile": 5.0,
+          "exits": {
+            "time": 1205
+          }
+        }
+      ]
+    },
+    {
+      "name": "h2_displacement",
+      "hypothesis": "h2",
+      "kind": "structural",
+      "question": "Does the displacement filter contribute anything? 'off' is the null the specification leaves live.",
+      "base": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "displacement": [
+          null,
+          1.0,
+          1.5,
+          2.0
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "spike",
+        "detail": "1 of 4 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "displacement": 2.0
+        }
+      },
+      "cells": [
+        {
+          "displacement": 2.0,
+          "trades": 376,
+          "expectancy_r": 0.0287,
+          "win_rate": 0.4229,
+          "profit_factor": 1.117,
+          "max_drawdown_pct": 0.1578,
+          "total_return_pct": 0.2058,
+          "random_percentile": 45.7,
+          "date_matched_percentile": 67.0,
+          "exits": {
+            "stop": 148,
+            "target": 35,
+            "stop_gap": 29,
+            "time": 164
+          }
+        },
+        {
+          "displacement": 1.5,
+          "trades": 546,
+          "expectancy_r": -0.0927,
+          "win_rate": 0.3791,
+          "profit_factor": 0.963,
+          "max_drawdown_pct": 0.3298,
+          "total_return_pct": -0.0841,
+          "random_percentile": 7.7,
+          "date_matched_percentile": 7.0,
+          "exits": {
+            "stop": 230,
+            "time": 184,
+            "target": 69,
+            "stop_gap": 63
+          }
+        },
+        {
+          "displacement": 1.0,
+          "trades": 746,
+          "expectancy_r": -0.1716,
+          "win_rate": 0.3552,
+          "profit_factor": 0.832,
+          "max_drawdown_pct": 0.4558,
+          "total_return_pct": -0.4055,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 1.3,
+          "exits": {
+            "stop": 335,
+            "stop_gap": 112,
+            "target": 120,
+            "time": 178,
+            "series_end": 1
+          }
+        },
+        {
+          "displacement": null,
+          "trades": 917,
+          "expectancy_r": -0.2605,
+          "win_rate": 0.3184,
+          "profit_factor": 0.861,
+          "max_drawdown_pct": 0.4748,
+          "total_return_pct": -0.3664,
+          "random_percentile": 2.7,
+          "date_matched_percentile": 0.7,
+          "exits": {
+            "stop": 419,
+            "stop_gap": 171,
+            "time": 170,
+            "target": 157
+          }
+        }
+      ]
+    },
+    {
+      "name": "h3_exits",
+      "hypothesis": "h3",
+      "kind": "parameter",
+      "question": "Is there a target and holding period at which sweep-reclaim is profitable?",
+      "base": {},
+      "base_resolved": {},
+      "varied": {
+        "r_multiple": [
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "time_limit": [
+          5,
+          10,
+          15,
+          20
+        ]
+      },
+      "configurations_tested": 20,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 20 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "r_multiple": 3.0,
+          "time_limit": 5
+        }
+      },
+      "cells": [
+        {
+          "r_multiple": 3.0,
+          "time_limit": 5,
+          "trades": 1683,
+          "expectancy_r": -0.1862,
+          "win_rate": 0.3916,
+          "profit_factor": 0.783,
+          "max_drawdown_pct": 0.6324,
+          "total_return_pct": -0.6212,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 516,
+            "time": 666,
+            "target": 193,
+            "stop_gap": 308
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 5,
+          "trades": 1736,
+          "expectancy_r": -0.2022,
+          "win_rate": 0.3998,
+          "profit_factor": 0.767,
+          "max_drawdown_pct": 0.6703,
+          "total_return_pct": -0.6618,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 548,
+            "time": 625,
+            "target": 262,
+            "stop_gap": 301
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 10,
+          "trades": 1347,
+          "expectancy_r": -0.2052,
+          "win_rate": 0.3653,
+          "profit_factor": 0.802,
+          "max_drawdown_pct": 0.5807,
+          "total_return_pct": -0.5555,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 511,
+            "target": 283,
+            "time": 278,
+            "stop_gap": 275
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 5,
+          "trades": 1815,
+          "expectancy_r": -0.2118,
+          "win_rate": 0.4132,
+          "profit_factor": 0.779,
+          "max_drawdown_pct": 0.6662,
+          "total_return_pct": -0.6545,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 364,
+            "stop": 540,
+            "time": 598,
+            "stop_gap": 313
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 20,
+          "trades": 1017,
+          "expectancy_r": -0.2165,
+          "win_rate": 0.353,
+          "profit_factor": 0.82,
+          "max_drawdown_pct": 0.4774,
+          "total_return_pct": -0.45,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 424,
+            "target": 257,
+            "stop_gap": 212,
+            "time": 124
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 10,
+          "trades": 1299,
+          "expectancy_r": -0.2344,
+          "win_rate": 0.338,
+          "profit_factor": 0.755,
+          "max_drawdown_pct": 0.6592,
+          "total_return_pct": -0.6402,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 503,
+            "target": 217,
+            "time": 294,
+            "stop_gap": 285
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 20,
+          "trades": 1147,
+          "expectancy_r": -0.238,
+          "win_rate": 0.3731,
+          "profit_factor": 0.824,
+          "max_drawdown_pct": 0.5351,
+          "total_return_pct": -0.5063,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 351,
+            "stop": 466,
+            "stop_gap": 228,
+            "time": 102
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 10,
+          "trades": 1424,
+          "expectancy_r": -0.2386,
+          "win_rate": 0.3869,
+          "profit_factor": 0.793,
+          "max_drawdown_pct": 0.622,
+          "total_return_pct": -0.5897,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 373,
+            "stop": 519,
+            "stop_gap": 277,
+            "time": 255
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 5,
+          "trades": 1963,
+          "expectancy_r": -0.2452,
+          "win_rate": 0.433,
+          "profit_factor": 0.743,
+          "max_drawdown_pct": 0.746,
+          "total_return_pct": -0.7384,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 538,
+            "stop": 578,
+            "time": 519,
+            "stop_gap": 328
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 10,
+          "trades": 1605,
+          "expectancy_r": -0.2469,
+          "win_rate": 0.4237,
+          "profit_factor": 0.771,
+          "max_drawdown_pct": 0.66,
+          "total_return_pct": -0.6473,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 555,
+            "stop": 550,
+            "time": 200,
+            "stop_gap": 300
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 20,
+          "trades": 1320,
+          "expectancy_r": -0.2474,
+          "win_rate": 0.4205,
+          "profit_factor": 0.797,
+          "max_drawdown_pct": 0.5884,
+          "total_return_pct": -0.5718,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 499,
+            "stop": 491,
+            "stop_gap": 250,
+            "time": 80
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 15,
+          "trades": 1418,
+          "expectancy_r": -0.2614,
+          "win_rate": 0.4161,
+          "profit_factor": 0.779,
+          "max_drawdown_pct": 0.6315,
+          "total_return_pct": -0.6186,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 512,
+            "stop": 514,
+            "stop_gap": 269,
+            "time": 123
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 20,
+          "trades": 1017,
+          "expectancy_r": -0.2677,
+          "win_rate": 0.3068,
+          "profit_factor": 0.745,
+          "max_drawdown_pct": 0.612,
+          "total_return_pct": -0.5987,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 466,
+            "target": 210,
+            "stop_gap": 216,
+            "time": 124,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 15,
+          "trades": 1179,
+          "expectancy_r": -0.2689,
+          "win_rate": 0.3367,
+          "profit_factor": 0.749,
+          "max_drawdown_pct": 0.6304,
+          "total_return_pct": -0.6168,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 496,
+            "target": 268,
+            "stop_gap": 246,
+            "time": 169
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 15,
+          "trades": 1259,
+          "expectancy_r": -0.2692,
+          "win_rate": 0.3693,
+          "profit_factor": 0.777,
+          "max_drawdown_pct": 0.6291,
+          "total_return_pct": -0.6036,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 356,
+            "stop": 494,
+            "stop_gap": 255,
+            "time": 154
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 15,
+          "trades": 1734,
+          "expectancy_r": -0.2763,
+          "win_rate": 0.4902,
+          "profit_factor": 0.713,
+          "max_drawdown_pct": 0.7395,
+          "total_return_pct": -0.7256,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 806,
+            "stop": 542,
+            "stop_gap": 302,
+            "time": 84
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 20,
+          "trades": 1665,
+          "expectancy_r": -0.2808,
+          "win_rate": 0.4865,
+          "profit_factor": 0.728,
+          "max_drawdown_pct": 0.7274,
+          "total_return_pct": -0.7129,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 782,
+            "stop": 535,
+            "stop_gap": 295,
+            "time": 53
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 10,
+          "trades": 1908,
+          "expectancy_r": -0.2877,
+          "win_rate": 0.4827,
+          "profit_factor": 0.695,
+          "max_drawdown_pct": 0.7861,
+          "total_return_pct": -0.7748,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 845,
+            "stop": 577,
+            "stop_gap": 331,
+            "time": 155
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 5,
+          "trades": 2259,
+          "expectancy_r": -0.289,
+          "win_rate": 0.4781,
+          "profit_factor": 0.679,
+          "max_drawdown_pct": 0.8466,
+          "total_return_pct": -0.8407,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 881,
+            "stop": 610,
+            "stop_gap": 367,
+            "time": 400,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 15,
+          "trades": 1117,
+          "expectancy_r": -0.298,
+          "win_rate": 0.3107,
+          "profit_factor": 0.734,
+          "max_drawdown_pct": 0.6679,
+          "total_return_pct": -0.6562,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 480,
+            "target": 217,
+            "stop_gap": 249,
+            "time": 169,
+            "no_volume": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "h3_no_stop",
+      "hypothesis": "h3",
+      "kind": "structural",
+      "question": "Same entries with no stop -- entry rule or exit design?",
+      "base": {
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "time_limit": [
+          5,
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 4 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "time_limit": 40
+        }
+      },
+      "cells": [
+        {
+          "time_limit": 40,
+          "trades": 156,
+          "expectancy_r": 1.0527,
+          "win_rate": 0.5449,
+          "profit_factor": 1.592,
+          "max_drawdown_pct": 0.2234,
+          "total_return_pct": 0.7094,
+          "random_percentile": 25.3,
+          "date_matched_percentile": 39.7,
+          "exits": {
+            "time": 155,
+            "no_volume": 1
+          }
+        },
+        {
+          "time_limit": 20,
+          "trades": 286,
+          "expectancy_r": 0.5823,
+          "win_rate": 0.5559,
+          "profit_factor": 1.148,
+          "max_drawdown_pct": 0.193,
+          "total_return_pct": 0.247,
+          "random_percentile": 11.3,
+          "date_matched_percentile": 17.0,
+          "exits": {
+            "time": 286
+          }
+        },
+        {
+          "time_limit": 10,
+          "trades": 547,
+          "expectancy_r": 0.1807,
+          "win_rate": 0.5283,
+          "profit_factor": 1.079,
+          "max_drawdown_pct": 0.1887,
+          "total_return_pct": 0.1838,
+          "random_percentile": 8.0,
+          "date_matched_percentile": 10.7,
+          "exits": {
+            "time": 547
+          }
+        },
+        {
+          "time_limit": 5,
+          "trades": 1027,
+          "expectancy_r": 0.0918,
+          "win_rate": 0.5141,
+          "profit_factor": 1.022,
+          "max_drawdown_pct": 0.2727,
+          "total_return_pct": 0.0613,
+          "random_percentile": 15.0,
+          "date_matched_percentile": 13.7,
+          "exits": {
+            "time": 1027
+          }
+        }
+      ]
+    },
+    {
+      "name": "h3_lookback",
+      "hypothesis": "h3",
+      "kind": "structural",
+      "question": "Which liquidity reference is swept? Varying the lookback is the cheapest version of that question.",
+      "base": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "sweep_lookback": [
+          5,
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 4 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "sweep_lookback": 40
+        }
+      },
+      "cells": [
+        {
+          "sweep_lookback": 40,
+          "trades": 44,
+          "expectancy_r": -0.0052,
+          "win_rate": 0.4318,
+          "profit_factor": 0.954,
+          "max_drawdown_pct": 0.0661,
+          "total_return_pct": -0.007,
+          "random_percentile": 28.3,
+          "date_matched_percentile": 60.0,
+          "exits": {
+            "time": 27,
+            "target": 2,
+            "stop": 14,
+            "stop_gap": 1
+          }
+        },
+        {
+          "sweep_lookback": 20,
+          "trades": 732,
+          "expectancy_r": -0.1016,
+          "win_rate": 0.3689,
+          "profit_factor": 0.943,
+          "max_drawdown_pct": 0.2266,
+          "total_return_pct": -0.1375,
+          "random_percentile": 5.3,
+          "date_matched_percentile": 0.7,
+          "exits": {
+            "stop": 294,
+            "target": 159,
+            "stop_gap": 150,
+            "time": 128,
+            "series_end": 1
+          }
+        },
+        {
+          "sweep_lookback": 5,
+          "trades": 1020,
+          "expectancy_r": -0.2557,
+          "win_rate": 0.3245,
+          "profit_factor": 0.832,
+          "max_drawdown_pct": 0.4779,
+          "total_return_pct": -0.4644,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop_gap": 242,
+            "stop": 424,
+            "target": 212,
+            "time": 142
+          }
+        },
+        {
+          "sweep_lookback": 10,
+          "trades": 1017,
+          "expectancy_r": -0.2677,
+          "win_rate": 0.3068,
+          "profit_factor": 0.745,
+          "max_drawdown_pct": 0.612,
+          "total_return_pct": -0.5987,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 466,
+            "target": 210,
+            "stop_gap": 216,
+            "time": 124,
+            "no_volume": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h1_exit_isolated",
+      "hypothesis": "h1",
+      "kind": "structural",
+      "question": "With portfolio competition removed so both arms take the same signals, does the stop help or cost?",
+      "base": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "use_stop": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "use_stop=False at +0.017R versus use_stop=True at -0.051R, a gap of +0.068R, but that gap is 0.8 standard errors on mean per-trade return (paired over 1,275 shared signals, month-clustered) -- under the 2 required.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "use_stop": false
+        }
+      },
+      "cells": [
+        {
+          "use_stop": false,
+          "trades": 1275,
+          "expectancy_r": 0.0171,
+          "win_rate": 0.5161,
+          "profit_factor": 0.987,
+          "max_drawdown_pct": 0.0112,
+          "total_return_pct": -0.0008,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 6.3,
+          "exits": {
+            "time": 1271,
+            "series_end": 4
+          }
+        },
+        {
+          "use_stop": true,
+          "trades": 1276,
+          "expectancy_r": -0.0512,
+          "win_rate": 0.4005,
+          "profit_factor": 0.882,
+          "max_drawdown_pct": 0.0085,
+          "total_return_pct": -0.0069,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop_gap": 85,
+            "stop": 557,
+            "time": 631,
+            "series_end": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "h2_exit_isolated",
+      "hypothesis": "h2",
+      "kind": "structural",
+      "question": "With portfolio competition removed so both arms take the same signals, does the stop help or cost?",
+      "base": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "use_stop": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "use_stop=False at +0.167R versus use_stop=True at -0.136R, a gap of +0.302R, but the arms differ by 27.7% in trade count (11,554 vs 15,990). They did not take the same signals, so this measures exit design and selection together and the gap is not attributable to the exit rule.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "use_stop": false
+        }
+      },
+      "cells": [
+        {
+          "use_stop": false,
+          "trades": 11554,
+          "expectancy_r": 0.1666,
+          "win_rate": 0.5416,
+          "profit_factor": 1.101,
+          "max_drawdown_pct": 0.0806,
+          "total_return_pct": 0.0525,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 11535,
+            "series_end": 15,
+            "no_volume": 4
+          }
+        },
+        {
+          "use_stop": true,
+          "trades": 15990,
+          "expectancy_r": -0.1356,
+          "win_rate": 0.256,
+          "profit_factor": 0.898,
+          "max_drawdown_pct": 0.0779,
+          "total_return_pct": -0.0513,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 8486,
+            "stop_gap": 2998,
+            "time": 4493,
+            "series_end": 9,
+            "no_volume": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "h3_exit_isolated",
+      "hypothesis": "h3",
+      "kind": "structural",
+      "question": "With portfolio competition removed so both arms take the same signals, does the stop help or cost?",
+      "base": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "use_stop": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "use_stop=False at +0.434R versus use_stop=True at -0.094R, a gap of +0.528R, but the arms differ by 30.2% in trade count (5,993 vs 8,590). They did not take the same signals, so this measures exit design and selection together and the gap is not attributable to the exit rule.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "use_stop": false
+        }
+      },
+      "cells": [
+        {
+          "use_stop": false,
+          "trades": 5993,
+          "expectancy_r": 0.4336,
+          "win_rate": 0.5455,
+          "profit_factor": 1.214,
+          "max_drawdown_pct": 0.0405,
+          "total_return_pct": 0.0576,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 5.7,
+          "exits": {
+            "time": 5982,
+            "series_end": 8,
+            "no_volume": 3
+          }
+        },
+        {
+          "use_stop": true,
+          "trades": 8590,
+          "expectancy_r": -0.094,
+          "win_rate": 0.2531,
+          "profit_factor": 0.899,
+          "max_drawdown_pct": 0.0295,
+          "total_return_pct": -0.0281,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "stop": 4582,
+            "stop_gap": 1653,
+            "time": 2348,
+            "series_end": 4,
+            "no_volume": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "h4_exit_isolated",
+      "hypothesis": "h4",
+      "kind": "structural",
+      "question": "With portfolio competition removed so both arms take the same signals, does the stop help or cost?",
+      "base": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "use_stop": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "use_stop=False at +0.147R versus use_stop=True at -0.186R, a gap of +0.334R, but that gap is 1.5 standard errors on mean per-trade return (paired over 5,885 shared signals, month-clustered) -- under the 2 required.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "use_stop": false
+        }
+      },
+      "cells": [
+        {
+          "use_stop": false,
+          "trades": 5963,
+          "expectancy_r": 0.1473,
+          "win_rate": 0.5348,
+          "profit_factor": 1.058,
+          "max_drawdown_pct": 0.0477,
+          "total_return_pct": 0.0153,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 5956,
+            "series_end": 3,
+            "no_volume": 4
+          }
+        },
+        {
+          "use_stop": true,
+          "trades": 7377,
+          "expectancy_r": -0.1864,
+          "win_rate": 0.2376,
+          "profit_factor": 0.839,
+          "max_drawdown_pct": 0.0476,
+          "total_return_pct": -0.0383,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 1882,
+            "stop": 3943,
+            "stop_gap": 1548,
+            "series_end": 1,
+            "no_volume": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "h5_exit_isolated",
+      "hypothesis": "h5",
+      "kind": "structural",
+      "question": "H5 shows +0.055R yet ranks below random selection. With portfolio competition removed so both arms take the same signals, is that the entries or the exit?",
+      "base": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0,
+        "time_limit": 21
+      },
+      "base_resolved": {
+        "equity": 5000000.0,
+        "max_positions": 400,
+        "max_open_risk_pct": 0.6,
+        "risk_pct_per_trade": 0.0005,
+        "max_position_pct": 0.002,
+        "r_multiple": 0.0,
+        "time_limit": 21
+      },
+      "varied": {
+        "use_stop": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "use_stop=False at +0.160R versus use_stop=True at +0.069R, a gap of +0.092R, but that gap is 1.3 standard errors on mean per-trade return (paired over 1,106 shared signals, month-clustered) -- under the 2 required.",
+        "positive_cells": 2,
+        "recommended": null,
+        "best": {
+          "use_stop": false
+        }
+      },
+      "cells": [
+        {
+          "use_stop": false,
+          "trades": 1112,
+          "expectancy_r": 0.1602,
+          "win_rate": 0.5612,
+          "profit_factor": 1.22,
+          "max_drawdown_pct": 0.0133,
+          "total_return_pct": 0.012,
+          "random_percentile": 1.3,
+          "date_matched_percentile": 49.0,
+          "exits": {
+            "time": 1100,
+            "series_end": 10,
+            "no_volume": 2
+          }
+        },
+        {
+          "use_stop": true,
+          "trades": 1171,
+          "expectancy_r": 0.0686,
+          "win_rate": 0.433,
+          "profit_factor": 1.077,
+          "max_drawdown_pct": 0.012,
+          "total_return_pct": 0.0042,
+          "random_percentile": 1.0,
+          "date_matched_percentile": 12.3,
+          "exits": {
+            "time": 563,
+            "stop": 528,
+            "stop_gap": 68,
+            "series_end": 10,
+            "no_volume": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "h4_exits",
+      "hypothesis": "h4",
+      "kind": "parameter",
+      "question": "Is there a target and holding period at which the inverted gap is profitable?",
+      "base": {},
+      "base_resolved": {},
+      "varied": {
+        "r_multiple": [
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "time_limit": [
+          5,
+          10,
+          15,
+          20
+        ]
+      },
+      "configurations_tested": 20,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 20 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "r_multiple": 3.0,
+          "time_limit": 5
+        }
+      },
+      "cells": [
+        {
+          "r_multiple": 3.0,
+          "time_limit": 5,
+          "trades": 1905,
+          "expectancy_r": -0.2143,
+          "win_rate": 0.3706,
+          "profit_factor": 0.749,
+          "max_drawdown_pct": 0.7309,
+          "total_return_pct": -0.7129,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "time": 663,
+            "stop": 615,
+            "stop_gap": 381,
+            "target": 246
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 5,
+          "trades": 1971,
+          "expectancy_r": -0.2304,
+          "win_rate": 0.3825,
+          "profit_factor": 0.759,
+          "max_drawdown_pct": 0.7311,
+          "total_return_pct": -0.7121,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 323,
+            "stop": 625,
+            "time": 631,
+            "stop_gap": 392
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 15,
+          "trades": 1163,
+          "expectancy_r": -0.2402,
+          "win_rate": 0.3181,
+          "profit_factor": 0.821,
+          "max_drawdown_pct": 0.5386,
+          "total_return_pct": -0.5232,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 242,
+            "stop": 500,
+            "stop_gap": 256,
+            "time": 165
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 15,
+          "trades": 1283,
+          "expectancy_r": -0.2493,
+          "win_rate": 0.3336,
+          "profit_factor": 0.801,
+          "max_drawdown_pct": 0.607,
+          "total_return_pct": -0.5838,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 328,
+            "stop": 535,
+            "stop_gap": 283,
+            "time": 137
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 10,
+          "trades": 1368,
+          "expectancy_r": -0.2626,
+          "win_rate": 0.3377,
+          "profit_factor": 0.785,
+          "max_drawdown_pct": 0.6231,
+          "total_return_pct": -0.5991,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 236,
+            "stop": 538,
+            "stop_gap": 312,
+            "time": 282
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 5,
+          "trades": 2093,
+          "expectancy_r": -0.2643,
+          "win_rate": 0.3937,
+          "profit_factor": 0.725,
+          "max_drawdown_pct": 0.7899,
+          "total_return_pct": -0.7799,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 445,
+            "stop": 655,
+            "time": 590,
+            "stop_gap": 403
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 20,
+          "trades": 1061,
+          "expectancy_r": -0.2661,
+          "win_rate": 0.3073,
+          "profit_factor": 0.837,
+          "max_drawdown_pct": 0.5584,
+          "total_return_pct": -0.4818,
+          "random_percentile": 0.3,
+          "date_matched_percentile": 0.3,
+          "exits": {
+            "target": 229,
+            "stop": 471,
+            "stop_gap": 251,
+            "time": 110
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 10,
+          "trades": 1579,
+          "expectancy_r": -0.2671,
+          "win_rate": 0.3813,
+          "profit_factor": 0.809,
+          "max_drawdown_pct": 0.6269,
+          "total_return_pct": -0.5938,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 430,
+            "stop": 579,
+            "stop_gap": 338,
+            "time": 232
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 20,
+          "trades": 1311,
+          "expectancy_r": -0.2683,
+          "win_rate": 0.3638,
+          "profit_factor": 0.85,
+          "max_drawdown_pct": 0.5547,
+          "total_return_pct": -0.5067,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.7,
+          "exits": {
+            "target": 415,
+            "stop": 533,
+            "stop_gap": 291,
+            "time": 72
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 15,
+          "trades": 1426,
+          "expectancy_r": -0.2737,
+          "win_rate": 0.3675,
+          "profit_factor": 0.795,
+          "max_drawdown_pct": 0.6455,
+          "total_return_pct": -0.6334,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 436,
+            "stop": 560,
+            "stop_gap": 312,
+            "time": 118
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 5,
+          "trades": 2243,
+          "expectancy_r": -0.2764,
+          "win_rate": 0.4226,
+          "profit_factor": 0.679,
+          "max_drawdown_pct": 0.8485,
+          "total_return_pct": -0.8461,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 642,
+            "stop": 665,
+            "time": 515,
+            "stop_gap": 420,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 10,
+          "trades": 1465,
+          "expectancy_r": -0.278,
+          "win_rate": 0.3502,
+          "profit_factor": 0.773,
+          "max_drawdown_pct": 0.6615,
+          "total_return_pct": -0.6398,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 310,
+            "stop": 563,
+            "stop_gap": 330,
+            "time": 262
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 20,
+          "trades": 1149,
+          "expectancy_r": -0.2822,
+          "win_rate": 0.3316,
+          "profit_factor": 0.805,
+          "max_drawdown_pct": 0.591,
+          "total_return_pct": -0.5513,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 303,
+            "stop": 496,
+            "stop_gap": 258,
+            "time": 92
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 15,
+          "trades": 1653,
+          "expectancy_r": -0.3031,
+          "win_rate": 0.4102,
+          "profit_factor": 0.734,
+          "max_drawdown_pct": 0.736,
+          "total_return_pct": -0.7352,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 609,
+            "stop": 585,
+            "stop_gap": 354,
+            "time": 104,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 10,
+          "trades": 1829,
+          "expectancy_r": -0.305,
+          "win_rate": 0.4177,
+          "profit_factor": 0.739,
+          "max_drawdown_pct": 0.7653,
+          "total_return_pct": -0.7556,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 629,
+            "stop": 612,
+            "stop_gap": 392,
+            "time": 195,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 20,
+          "trades": 1548,
+          "expectancy_r": -0.3087,
+          "win_rate": 0.4005,
+          "profit_factor": 0.753,
+          "max_drawdown_pct": 0.7083,
+          "total_return_pct": -0.6999,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 581,
+            "stop": 575,
+            "stop_gap": 334,
+            "time": 57,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 5,
+          "trades": 2543,
+          "expectancy_r": -0.3216,
+          "win_rate": 0.4652,
+          "profit_factor": 0.621,
+          "max_drawdown_pct": 0.8991,
+          "total_return_pct": -0.899,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 975,
+            "stop": 707,
+            "stop_gap": 446,
+            "time": 414,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 10,
+          "trades": 2176,
+          "expectancy_r": -0.326,
+          "win_rate": 0.4752,
+          "profit_factor": 0.674,
+          "max_drawdown_pct": 0.8441,
+          "total_return_pct": -0.8439,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 960,
+            "stop": 656,
+            "stop_gap": 422,
+            "time": 137,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 20,
+          "trades": 1969,
+          "expectancy_r": -0.3265,
+          "win_rate": 0.481,
+          "profit_factor": 0.712,
+          "max_drawdown_pct": 0.8077,
+          "total_return_pct": -0.8075,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 926,
+            "stop": 622,
+            "stop_gap": 387,
+            "time": 33,
+            "series_end": 1
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 15,
+          "trades": 2021,
+          "expectancy_r": -0.3297,
+          "win_rate": 0.4765,
+          "profit_factor": 0.694,
+          "max_drawdown_pct": 0.8277,
+          "total_return_pct": -0.8275,
+          "random_percentile": 0.0,
+          "date_matched_percentile": 0.0,
+          "exits": {
+            "target": 932,
+            "stop": 635,
+            "stop_gap": 395,
+            "time": 58,
+            "series_end": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h4_no_stop",
+      "hypothesis": "h4",
+      "kind": "structural",
+      "question": "Same entries with no stop -- entry rule or exit design?",
+      "base": {
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "time_limit": [
+          5,
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "none",
+        "detail": "no configuration of 4 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is evidence against the hypothesis, not an invitation to widen the search.",
+        "positive_cells": 0,
+        "recommended": null,
+        "best": {
+          "time_limit": 40
+        }
+      },
+      "cells": [
+        {
+          "time_limit": 40,
+          "trades": 150,
+          "expectancy_r": 1.2162,
+          "win_rate": 0.5933,
+          "profit_factor": 1.517,
+          "max_drawdown_pct": 0.2407,
+          "total_return_pct": 0.7237,
+          "random_percentile": 29.3,
+          "date_matched_percentile": 34.0,
+          "exits": {
+            "time": 150
+          }
+        },
+        {
+          "time_limit": 20,
+          "trades": 301,
+          "expectancy_r": 0.5455,
+          "win_rate": 0.5714,
+          "profit_factor": 1.179,
+          "max_drawdown_pct": 0.3787,
+          "total_return_pct": 0.3541,
+          "random_percentile": 14.3,
+          "date_matched_percentile": 28.3,
+          "exits": {
+            "time": 301
+          }
+        },
+        {
+          "time_limit": 10,
+          "trades": 587,
+          "expectancy_r": 0.2348,
+          "win_rate": 0.569,
+          "profit_factor": 1.139,
+          "max_drawdown_pct": 0.267,
+          "total_return_pct": 0.3928,
+          "random_percentile": 21.3,
+          "date_matched_percentile": 34.7,
+          "exits": {
+            "time": 587
+          }
+        },
+        {
+          "time_limit": 5,
+          "trades": 1139,
+          "expectancy_r": -0.0555,
+          "win_rate": 0.5127,
+          "profit_factor": 0.942,
+          "max_drawdown_pct": 0.3879,
+          "total_return_pct": -0.1883,
+          "random_percentile": 7.0,
+          "date_matched_percentile": 8.3,
+          "exits": {
+            "time": 1139
+          }
+        }
+      ]
+    },
+    {
+      "name": "h5_momentum_canonical",
+      "hypothesis": "h5",
+      "kind": "parameter",
+      "question": "Does 12-1 momentum -- the version with decades of replication -- work where H1's 63-day no-skip variant did not?",
+      "base": {
+        "stop_atr": 3.0,
+        "monthly_rebalance": true
+      },
+      "base_resolved": {
+        "stop_atr": 3.0,
+        "monthly_rebalance": true
+      },
+      "varied": {
+        "hold": [
+          21,
+          63,
+          126
+        ],
+        "top_pct": [
+          0.05,
+          0.1,
+          0.2
+        ]
+      },
+      "configurations_tested": 9,
+      "verdict": {
+        "shape": "spike",
+        "detail": "2 of 9 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 2,
+        "recommended": null,
+        "best": {
+          "hold": 126,
+          "top_pct": 0.05
+        }
+      },
+      "cells": [
+        {
+          "hold": 126,
+          "top_pct": 0.05,
+          "trades": 91,
+          "expectancy_r": 0.5475,
+          "win_rate": 0.3956,
+          "profit_factor": 1.707,
+          "max_drawdown_pct": 0.1712,
+          "total_return_pct": 0.5365,
+          "random_percentile": 38.0,
+          "date_matched_percentile": 66.7,
+          "exits": {
+            "stop": 40,
+            "time": 31,
+            "series_end": 6,
+            "stop_gap": 13,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 126,
+          "top_pct": 0.1,
+          "trades": 91,
+          "expectancy_r": 0.5283,
+          "win_rate": 0.3956,
+          "profit_factor": 1.722,
+          "max_drawdown_pct": 0.1894,
+          "total_return_pct": 0.5603,
+          "random_percentile": 33.7,
+          "date_matched_percentile": 52.3,
+          "exits": {
+            "stop": 41,
+            "time": 31,
+            "series_end": 6,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 126,
+          "top_pct": 0.2,
+          "trades": 94,
+          "expectancy_r": 0.4874,
+          "win_rate": 0.383,
+          "profit_factor": 1.72,
+          "max_drawdown_pct": 0.1923,
+          "total_return_pct": 0.5401,
+          "random_percentile": 36.0,
+          "date_matched_percentile": 46.3,
+          "exits": {
+            "stop": 46,
+            "time": 32,
+            "series_end": 6,
+            "stop_gap": 9,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 63,
+          "top_pct": 0.05,
+          "trades": 140,
+          "expectancy_r": 0.233,
+          "win_rate": 0.45,
+          "profit_factor": 1.396,
+          "max_drawdown_pct": 0.1724,
+          "total_return_pct": 0.3616,
+          "random_percentile": 25.3,
+          "date_matched_percentile": 33.7,
+          "exits": {
+            "time": 59,
+            "stop": 59,
+            "series_end": 7,
+            "stop_gap": 14,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 63,
+          "top_pct": 0.1,
+          "trades": 148,
+          "expectancy_r": 0.1991,
+          "win_rate": 0.4527,
+          "profit_factor": 1.372,
+          "max_drawdown_pct": 0.1813,
+          "total_return_pct": 0.3026,
+          "random_percentile": 24.7,
+          "date_matched_percentile": 26.0,
+          "exits": {
+            "time": 64,
+            "stop": 64,
+            "series_end": 7,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 63,
+          "top_pct": 0.2,
+          "trades": 151,
+          "expectancy_r": 0.1851,
+          "win_rate": 0.4503,
+          "profit_factor": 1.33,
+          "max_drawdown_pct": 0.1958,
+          "total_return_pct": 0.2729,
+          "random_percentile": 19.3,
+          "date_matched_percentile": 26.3,
+          "exits": {
+            "time": 65,
+            "stop": 66,
+            "series_end": 7,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 21,
+          "top_pct": 0.2,
+          "trades": 284,
+          "expectancy_r": 0.0867,
+          "win_rate": 0.5176,
+          "profit_factor": 1.21,
+          "max_drawdown_pct": 0.1252,
+          "total_return_pct": 0.2236,
+          "random_percentile": 17.0,
+          "date_matched_percentile": 12.7,
+          "exits": {
+            "time": 191,
+            "stop": 73,
+            "stop_gap": 12,
+            "series_end": 7,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 21,
+          "top_pct": 0.1,
+          "trades": 278,
+          "expectancy_r": 0.0791,
+          "win_rate": 0.5144,
+          "profit_factor": 1.19,
+          "max_drawdown_pct": 0.1297,
+          "total_return_pct": 0.1999,
+          "random_percentile": 13.0,
+          "date_matched_percentile": 16.3,
+          "exits": {
+            "time": 185,
+            "stop": 73,
+            "stop_gap": 12,
+            "series_end": 7,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 21,
+          "top_pct": 0.05,
+          "trades": 259,
+          "expectancy_r": 0.0619,
+          "win_rate": 0.5097,
+          "profit_factor": 1.136,
+          "max_drawdown_pct": 0.1296,
+          "total_return_pct": 0.1369,
+          "random_percentile": 8.7,
+          "date_matched_percentile": 23.3,
+          "exits": {
+            "time": 168,
+            "stop": 71,
+            "stop_gap": 12,
+            "series_end": 7,
+            "no_volume": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h5_skip_matters",
+      "hypothesis": "h5",
+      "kind": "structural",
+      "question": "Is the skip month load-bearing, or decoration? skip=0 is H1's formation; skip=21 is the literature's.",
+      "base": {
+        "hold": 63,
+        "stop_atr": 3.0
+      },
+      "base_resolved": {
+        "hold": 63,
+        "stop_atr": 3.0
+      },
+      "varied": {
+        "mom_skip": [
+          0,
+          5,
+          21,
+          42
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "1 of 2 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (mom_skip=0, +0.331R) rather than the peak (mom_skip=5, +0.433R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 2,
+        "recommended": {
+          "mom_skip": 0
+        },
+        "best": {
+          "mom_skip": 5
+        }
+      },
+      "cells": [
+        {
+          "mom_skip": 5,
+          "trades": 147,
+          "expectancy_r": 0.433,
+          "win_rate": 0.4966,
+          "profit_factor": 1.84,
+          "max_drawdown_pct": 0.1034,
+          "total_return_pct": 0.7678,
+          "random_percentile": 72.0,
+          "date_matched_percentile": 80.0,
+          "exits": {
+            "time": 68,
+            "stop": 59,
+            "series_end": 8,
+            "stop_gap": 11,
+            "no_volume": 1
+          }
+        },
+        {
+          "mom_skip": 0,
+          "trades": 146,
+          "expectancy_r": 0.3313,
+          "win_rate": 0.4795,
+          "profit_factor": 1.631,
+          "max_drawdown_pct": 0.1257,
+          "total_return_pct": 0.5306,
+          "random_percentile": 46.3,
+          "date_matched_percentile": 58.7,
+          "exits": {
+            "time": 67,
+            "stop": 59,
+            "series_end": 8,
+            "stop_gap": 11,
+            "no_volume": 1
+          }
+        },
+        {
+          "mom_skip": 21,
+          "trades": 148,
+          "expectancy_r": 0.1991,
+          "win_rate": 0.4527,
+          "profit_factor": 1.372,
+          "max_drawdown_pct": 0.1813,
+          "total_return_pct": 0.3026,
+          "random_percentile": 24.7,
+          "date_matched_percentile": 26.0,
+          "exits": {
+            "time": 64,
+            "stop": 64,
+            "series_end": 7,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        },
+        {
+          "mom_skip": 42,
+          "trades": 154,
+          "expectancy_r": 0.1086,
+          "win_rate": 0.4156,
+          "profit_factor": 1.172,
+          "max_drawdown_pct": 0.2103,
+          "total_return_pct": 0.1465,
+          "random_percentile": 9.0,
+          "date_matched_percentile": 11.3,
+          "exits": {
+            "time": 60,
+            "stop": 73,
+            "series_end": 8,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h5_no_stop",
+      "hypothesis": "h5",
+      "kind": "structural",
+      "question": "Does momentum survive without a stop, as the literature's version has none at all?",
+      "base": {
+        "use_stop": false,
+        "top_pct": 0.1
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "top_pct": 0.1
+      },
+      "varied": {
+        "hold": [
+          21,
+          63,
+          126
+        ]
+      },
+      "configurations_tested": 3,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "3 of 3 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (hold=63, +0.942R) rather than the peak (hold=126, +2.300R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 3,
+        "recommended": {
+          "hold": 63
+        },
+        "best": {
+          "hold": 126
+        }
+      },
+      "cells": [
+        {
+          "hold": 126,
+          "trades": 54,
+          "expectancy_r": 2.2999,
+          "win_rate": 0.7963,
+          "profit_factor": 6.64,
+          "max_drawdown_pct": 0.1681,
+          "total_return_pct": 1.811,
+          "random_percentile": 88.0,
+          "date_matched_percentile": 94.7,
+          "exits": {
+            "time": 47,
+            "series_end": 6,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 63,
+          "trades": 102,
+          "expectancy_r": 0.9417,
+          "win_rate": 0.6961,
+          "profit_factor": 2.318,
+          "max_drawdown_pct": 0.1825,
+          "total_return_pct": 1.1754,
+          "random_percentile": 72.0,
+          "date_matched_percentile": 82.0,
+          "exits": {
+            "time": 96,
+            "series_end": 5,
+            "no_volume": 1
+          }
+        },
+        {
+          "hold": 21,
+          "trades": 238,
+          "expectancy_r": 0.3341,
+          "win_rate": 0.6092,
+          "profit_factor": 1.892,
+          "max_drawdown_pct": 0.202,
+          "total_return_pct": 0.9885,
+          "random_percentile": 72.3,
+          "date_matched_percentile": 90.3,
+          "exits": {
+            "time": 230,
+            "series_end": 7,
+            "no_volume": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h5_rebalance",
+      "hypothesis": "h5",
+      "kind": "structural",
+      "question": "Monthly versus daily rebalancing -- does the documented frequency matter, or is it convention?",
+      "base": {
+        "hold": 63,
+        "stop_atr": 3.0
+      },
+      "base_resolved": {
+        "hold": 63,
+        "stop_atr": 3.0
+      },
+      "varied": {
+        "monthly_rebalance": [
+          true,
+          false
+        ]
+      },
+      "configurations_tested": 2,
+      "verdict": {
+        "shape": "indistinct",
+        "detail": "monthly_rebalance=True at +0.199R versus monthly_rebalance=False at +0.135R, a gap of +0.064R, but that gap is 0.4 standard errors on mean per-trade return (unpaired, month-clustered) -- under the 2 required.",
+        "positive_cells": 2,
+        "recommended": null,
+        "best": {
+          "monthly_rebalance": true
+        }
+      },
+      "cells": [
+        {
+          "monthly_rebalance": true,
+          "trades": 148,
+          "expectancy_r": 0.1991,
+          "win_rate": 0.4527,
+          "profit_factor": 1.372,
+          "max_drawdown_pct": 0.1813,
+          "total_return_pct": 0.3026,
+          "random_percentile": 24.7,
+          "date_matched_percentile": 26.0,
+          "exits": {
+            "time": 64,
+            "stop": 64,
+            "series_end": 7,
+            "stop_gap": 12,
+            "no_volume": 1
+          }
+        },
+        {
+          "monthly_rebalance": false,
+          "trades": 206,
+          "expectancy_r": 0.1351,
+          "win_rate": 0.3835,
+          "profit_factor": 1.21,
+          "max_drawdown_pct": 0.1738,
+          "total_return_pct": 0.2768,
+          "random_percentile": 6.3,
+          "date_matched_percentile": 3.3,
+          "exits": {
+            "time": 85,
+            "stop": 98,
+            "stop_gap": 16,
+            "series_end": 7
+          }
+        }
+      ]
+    },
+    {
+      "name": "h7_squeeze_exits",
+      "hypothesis": "h7",
+      "kind": "parameter",
+      "question": "Is there a target and holding period where range expansion after compression is profitable?",
+      "base": {},
+      "base_resolved": {},
+      "varied": {
+        "r_multiple": [
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "time_limit": [
+          5,
+          10,
+          15,
+          20
+        ]
+      },
+      "configurations_tested": 20,
+      "verdict": {
+        "shape": "spike",
+        "detail": "1 of 20 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "r_multiple": 1.0,
+          "time_limit": 20
+        }
+      },
+      "cells": [
+        {
+          "r_multiple": 1.0,
+          "time_limit": 20,
+          "trades": 411,
+          "expectancy_r": 0.1014,
+          "win_rate": 0.5718,
+          "profit_factor": 1.452,
+          "max_drawdown_pct": 0.0829,
+          "total_return_pct": 0.4765,
+          "random_percentile": 39.7,
+          "date_matched_percentile": 60.0,
+          "exits": {
+            "stop": 44,
+            "time": 278,
+            "target": 76,
+            "series_end": 3,
+            "stop_gap": 9,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 20,
+          "trades": 372,
+          "expectancy_r": 0.0912,
+          "win_rate": 0.5645,
+          "profit_factor": 1.373,
+          "max_drawdown_pct": 0.0899,
+          "total_return_pct": 0.3558,
+          "random_percentile": 21.3,
+          "date_matched_percentile": 29.7,
+          "exits": {
+            "stop": 46,
+            "time": 317,
+            "series_end": 2,
+            "stop_gap": 6,
+            "target": 1
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 20,
+          "trades": 376,
+          "expectancy_r": 0.0894,
+          "win_rate": 0.5532,
+          "profit_factor": 1.362,
+          "max_drawdown_pct": 0.0852,
+          "total_return_pct": 0.3459,
+          "random_percentile": 16.3,
+          "date_matched_percentile": 16.3,
+          "exits": {
+            "stop": 48,
+            "time": 314,
+            "series_end": 2,
+            "stop_gap": 5,
+            "target": 7
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 20,
+          "trades": 371,
+          "expectancy_r": 0.0824,
+          "win_rate": 0.5526,
+          "profit_factor": 1.348,
+          "max_drawdown_pct": 0.0956,
+          "total_return_pct": 0.3261,
+          "random_percentile": 17.0,
+          "date_matched_percentile": 16.3,
+          "exits": {
+            "stop": 44,
+            "time": 318,
+            "series_end": 2,
+            "stop_gap": 5,
+            "target": 2
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 20,
+          "trades": 383,
+          "expectancy_r": 0.0759,
+          "win_rate": 0.5535,
+          "profit_factor": 1.307,
+          "max_drawdown_pct": 0.1042,
+          "total_return_pct": 0.3063,
+          "random_percentile": 24.7,
+          "date_matched_percentile": 26.7,
+          "exits": {
+            "stop": 50,
+            "time": 304,
+            "target": 18,
+            "series_end": 3,
+            "stop_gap": 8
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 15,
+          "trades": 489,
+          "expectancy_r": 0.069,
+          "win_rate": 0.5665,
+          "profit_factor": 1.319,
+          "max_drawdown_pct": 0.1299,
+          "total_return_pct": 0.3758,
+          "random_percentile": 28.3,
+          "date_matched_percentile": 45.0,
+          "exits": {
+            "time": 417,
+            "stop": 44,
+            "series_end": 4,
+            "stop_gap": 7,
+            "target": 17
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 15,
+          "trades": 501,
+          "expectancy_r": 0.0654,
+          "win_rate": 0.5489,
+          "profit_factor": 1.295,
+          "max_drawdown_pct": 0.1598,
+          "total_return_pct": 0.3616,
+          "random_percentile": 27.3,
+          "date_matched_percentile": 47.7,
+          "exits": {
+            "time": 385,
+            "stop": 49,
+            "target": 60,
+            "series_end": 3,
+            "stop_gap": 3,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 15,
+          "trades": 485,
+          "expectancy_r": 0.0517,
+          "win_rate": 0.5608,
+          "profit_factor": 1.225,
+          "max_drawdown_pct": 0.1283,
+          "total_return_pct": 0.2625,
+          "random_percentile": 19.0,
+          "date_matched_percentile": 25.7,
+          "exits": {
+            "time": 417,
+            "stop": 47,
+            "series_end": 4,
+            "stop_gap": 10,
+            "target": 7
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 15,
+          "trades": 484,
+          "expectancy_r": 0.0453,
+          "win_rate": 0.5434,
+          "profit_factor": 1.178,
+          "max_drawdown_pct": 0.1238,
+          "total_return_pct": 0.2095,
+          "random_percentile": 12.0,
+          "date_matched_percentile": 19.3,
+          "exits": {
+            "time": 423,
+            "stop": 47,
+            "series_end": 5,
+            "stop_gap": 8,
+            "target": 1
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 15,
+          "trades": 486,
+          "expectancy_r": 0.039,
+          "win_rate": 0.5391,
+          "profit_factor": 1.148,
+          "max_drawdown_pct": 0.1239,
+          "total_return_pct": 0.1772,
+          "random_percentile": 11.7,
+          "date_matched_percentile": 19.0,
+          "exits": {
+            "time": 419,
+            "stop": 50,
+            "series_end": 5,
+            "stop_gap": 8,
+            "target": 4
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 10,
+          "trades": 679,
+          "expectancy_r": 0.0353,
+          "win_rate": 0.5243,
+          "profit_factor": 1.154,
+          "max_drawdown_pct": 0.146,
+          "total_return_pct": 0.2266,
+          "random_percentile": 18.7,
+          "date_matched_percentile": 31.0,
+          "exits": {
+            "time": 623,
+            "stop": 42,
+            "series_end": 3,
+            "target": 7,
+            "stop_gap": 3,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 10,
+          "trades": 674,
+          "expectancy_r": 0.033,
+          "win_rate": 0.5148,
+          "profit_factor": 1.144,
+          "max_drawdown_pct": 0.1586,
+          "total_return_pct": 0.2037,
+          "random_percentile": 12.7,
+          "date_matched_percentile": 29.0,
+          "exits": {
+            "time": 627,
+            "stop": 41,
+            "series_end": 3,
+            "no_volume": 1,
+            "stop_gap": 2
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 10,
+          "trades": 677,
+          "expectancy_r": 0.0308,
+          "win_rate": 0.5155,
+          "profit_factor": 1.129,
+          "max_drawdown_pct": 0.1576,
+          "total_return_pct": 0.1869,
+          "random_percentile": 14.7,
+          "date_matched_percentile": 31.0,
+          "exits": {
+            "time": 623,
+            "stop": 44,
+            "series_end": 3,
+            "target": 3,
+            "stop_gap": 3,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 10,
+          "trades": 681,
+          "expectancy_r": 0.0274,
+          "win_rate": 0.5154,
+          "profit_factor": 1.119,
+          "max_drawdown_pct": 0.1551,
+          "total_return_pct": 0.172,
+          "random_percentile": 6.7,
+          "date_matched_percentile": 13.7,
+          "exits": {
+            "time": 615,
+            "stop": 44,
+            "target": 17,
+            "series_end": 3,
+            "no_volume": 1,
+            "stop_gap": 1
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 10,
+          "trades": 691,
+          "expectancy_r": 0.0246,
+          "win_rate": 0.5181,
+          "profit_factor": 1.118,
+          "max_drawdown_pct": 0.1527,
+          "total_return_pct": 0.1686,
+          "random_percentile": 11.0,
+          "date_matched_percentile": 19.7,
+          "exits": {
+            "time": 601,
+            "target": 43,
+            "stop": 40,
+            "series_end": 3,
+            "stop_gap": 3,
+            "no_volume": 1
+          }
+        },
+        {
+          "r_multiple": 2.5,
+          "time_limit": 5,
+          "trades": 1210,
+          "expectancy_r": -0.006,
+          "win_rate": 0.495,
+          "profit_factor": 0.963,
+          "max_drawdown_pct": 0.1222,
+          "total_return_pct": -0.0674,
+          "random_percentile": 4.7,
+          "date_matched_percentile": 9.3,
+          "exits": {
+            "time": 1175,
+            "stop": 26,
+            "series_end": 3,
+            "stop_gap": 5,
+            "target": 1
+          }
+        },
+        {
+          "r_multiple": 3.0,
+          "time_limit": 5,
+          "trades": 1208,
+          "expectancy_r": -0.0067,
+          "win_rate": 0.4942,
+          "profit_factor": 0.958,
+          "max_drawdown_pct": 0.1222,
+          "total_return_pct": -0.0752,
+          "random_percentile": 4.0,
+          "date_matched_percentile": 10.0,
+          "exits": {
+            "time": 1175,
+            "stop": 25,
+            "series_end": 3,
+            "stop_gap": 5
+          }
+        },
+        {
+          "r_multiple": 2.0,
+          "time_limit": 5,
+          "trades": 1211,
+          "expectancy_r": -0.0072,
+          "win_rate": 0.4938,
+          "profit_factor": 0.955,
+          "max_drawdown_pct": 0.1222,
+          "total_return_pct": -0.0798,
+          "random_percentile": 4.7,
+          "date_matched_percentile": 7.7,
+          "exits": {
+            "time": 1175,
+            "stop": 26,
+            "series_end": 3,
+            "stop_gap": 5,
+            "target": 2
+          }
+        },
+        {
+          "r_multiple": 1.5,
+          "time_limit": 5,
+          "trades": 1212,
+          "expectancy_r": -0.0085,
+          "win_rate": 0.4942,
+          "profit_factor": 0.947,
+          "max_drawdown_pct": 0.1222,
+          "total_return_pct": -0.0926,
+          "random_percentile": 4.0,
+          "date_matched_percentile": 7.3,
+          "exits": {
+            "time": 1175,
+            "stop": 26,
+            "series_end": 3,
+            "target": 3,
+            "stop_gap": 5
+          }
+        },
+        {
+          "r_multiple": 1.0,
+          "time_limit": 5,
+          "trades": 1221,
+          "expectancy_r": -0.0096,
+          "win_rate": 0.493,
+          "profit_factor": 0.942,
+          "max_drawdown_pct": 0.1368,
+          "total_return_pct": -0.102,
+          "random_percentile": 3.0,
+          "date_matched_percentile": 4.0,
+          "exits": {
+            "time": 1156,
+            "target": 28,
+            "stop": 29,
+            "series_end": 3,
+            "stop_gap": 5
+          }
+        }
+      ]
+    },
+    {
+      "name": "h7_compression_depth",
+      "hypothesis": "h7",
+      "kind": "parameter",
+      "question": "How quiet must it get first? A threshold that only works at one depth is a threshold fitted to noise.",
+      "base": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "base_resolved": {
+        "r_multiple": 3.0,
+        "time_limit": 20
+      },
+      "varied": {
+        "squeeze_percentile": [
+          0.1,
+          0.2,
+          0.3,
+          0.4
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "spike",
+        "detail": "1 of 4 cells were positive and beat random on the same days, but none has neighbours that also were. One value working while its neighbours fail is what noise looks like. Per docs/03 0.7 rule 3, the peak is not selectable.",
+        "positive_cells": 1,
+        "recommended": null,
+        "best": {
+          "squeeze_percentile": 0.3
+        }
+      },
+      "cells": [
+        {
+          "squeeze_percentile": 0.3,
+          "trades": 377,
+          "expectancy_r": 0.0915,
+          "win_rate": 0.5756,
+          "profit_factor": 1.419,
+          "max_drawdown_pct": 0.1258,
+          "total_return_pct": 0.4103,
+          "random_percentile": 35.3,
+          "date_matched_percentile": 53.7,
+          "exits": {
+            "stop": 45,
+            "time": 322,
+            "series_end": 3,
+            "stop_gap": 6,
+            "no_volume": 1
+          }
+        },
+        {
+          "squeeze_percentile": 0.2,
+          "trades": 372,
+          "expectancy_r": 0.0912,
+          "win_rate": 0.5645,
+          "profit_factor": 1.373,
+          "max_drawdown_pct": 0.0899,
+          "total_return_pct": 0.3558,
+          "random_percentile": 21.3,
+          "date_matched_percentile": 29.7,
+          "exits": {
+            "stop": 46,
+            "time": 317,
+            "series_end": 2,
+            "stop_gap": 6,
+            "target": 1
+          }
+        },
+        {
+          "squeeze_percentile": 0.1,
+          "trades": 370,
+          "expectancy_r": 0.0697,
+          "win_rate": 0.5216,
+          "profit_factor": 1.25,
+          "max_drawdown_pct": 0.1063,
+          "total_return_pct": 0.2681,
+          "random_percentile": 15.7,
+          "date_matched_percentile": 18.7,
+          "exits": {
+            "stop": 52,
+            "time": 310,
+            "series_end": 1,
+            "stop_gap": 5,
+            "target": 1,
+            "no_volume": 1
+          }
+        },
+        {
+          "squeeze_percentile": 0.4,
+          "trades": 384,
+          "expectancy_r": 0.0453,
+          "win_rate": 0.5443,
+          "profit_factor": 1.214,
+          "max_drawdown_pct": 0.1325,
+          "total_return_pct": 0.1974,
+          "random_percentile": 18.0,
+          "date_matched_percentile": 38.0,
+          "exits": {
+            "stop": 48,
+            "time": 325,
+            "series_end": 2,
+            "stop_gap": 8,
+            "target": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "h7_no_stop",
+      "hypothesis": "h7",
+      "kind": "structural",
+      "question": "Same entries with no stop -- entry rule or exit design?",
+      "base": {
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "time_limit": [
+          5,
+          10,
+          20,
+          40
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "1 of 2 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (time_limit=40, +0.291R) rather than the peak (time_limit=40, +0.291R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 2,
+        "recommended": {
+          "time_limit": 40
+        },
+        "best": {
+          "time_limit": 40
+        }
+      },
+      "cells": [
+        {
+          "time_limit": 40,
+          "trades": 182,
+          "expectancy_r": 0.291,
+          "win_rate": 0.6538,
+          "profit_factor": 1.857,
+          "max_drawdown_pct": 0.162,
+          "total_return_pct": 0.5965,
+          "random_percentile": 65.0,
+          "date_matched_percentile": 91.3,
+          "exits": {
+            "time": 178,
+            "series_end": 4
+          }
+        },
+        {
+          "time_limit": 20,
+          "trades": 352,
+          "expectancy_r": 0.1486,
+          "win_rate": 0.5795,
+          "profit_factor": 1.599,
+          "max_drawdown_pct": 0.1188,
+          "total_return_pct": 0.57,
+          "random_percentile": 47.7,
+          "date_matched_percentile": 74.0,
+          "exits": {
+            "time": 350,
+            "series_end": 2
+          }
+        },
+        {
+          "time_limit": 10,
+          "trades": 661,
+          "expectancy_r": 0.0422,
+          "win_rate": 0.5234,
+          "profit_factor": 1.213,
+          "max_drawdown_pct": 0.1168,
+          "total_return_pct": 0.288,
+          "random_percentile": 24.0,
+          "date_matched_percentile": 40.3,
+          "exits": {
+            "time": 657,
+            "series_end": 3,
+            "no_volume": 1
+          }
+        },
+        {
+          "time_limit": 5,
+          "trades": 1196,
+          "expectancy_r": -0.0017,
+          "win_rate": 0.4925,
+          "profit_factor": 0.978,
+          "max_drawdown_pct": 0.1083,
+          "total_return_pct": -0.0427,
+          "random_percentile": 5.3,
+          "date_matched_percentile": 11.0,
+          "exits": {
+            "time": 1193,
+            "series_end": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "h6_drift_exits",
+      "hypothesis": "h6",
+      "kind": "parameter",
+      "question": "Does price drift after an earnings filing, and over what horizon?",
+      "base": {
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "time_limit": [
+          5,
+          10,
+          20,
+          40,
+          60
+        ]
+      },
+      "configurations_tested": 5,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "1 of 3 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (time_limit=60, +0.921R) rather than the peak (time_limit=60, +0.921R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 3,
+        "recommended": {
+          "time_limit": 60
+        },
+        "best": {
+          "time_limit": 60
+        }
+      },
+      "cells": [
+        {
+          "time_limit": 60,
+          "trades": 75,
+          "expectancy_r": 0.921,
+          "win_rate": 0.6933,
+          "profit_factor": 2.235,
+          "max_drawdown_pct": 0.1785,
+          "total_return_pct": 0.7859,
+          "random_percentile": 56.3,
+          "date_matched_percentile": 65.3,
+          "exits": {
+            "time": 75
+          }
+        },
+        {
+          "time_limit": 40,
+          "trades": 89,
+          "expectancy_r": 0.5444,
+          "win_rate": 0.6067,
+          "profit_factor": 1.968,
+          "max_drawdown_pct": 0.2026,
+          "total_return_pct": 0.5154,
+          "random_percentile": 53.7,
+          "date_matched_percentile": 93.3,
+          "exits": {
+            "time": 89
+          }
+        },
+        {
+          "time_limit": 5,
+          "trades": 117,
+          "expectancy_r": 0.1032,
+          "win_rate": 0.6239,
+          "profit_factor": 1.393,
+          "max_drawdown_pct": 0.0667,
+          "total_return_pct": 0.1094,
+          "random_percentile": 72.0,
+          "date_matched_percentile": 76.0,
+          "exits": {
+            "time": 117
+          }
+        },
+        {
+          "time_limit": 20,
+          "trades": 104,
+          "expectancy_r": 0.0609,
+          "win_rate": 0.5673,
+          "profit_factor": 1.059,
+          "max_drawdown_pct": 0.196,
+          "total_return_pct": 0.0298,
+          "random_percentile": 12.3,
+          "date_matched_percentile": 31.7,
+          "exits": {
+            "time": 104
+          }
+        },
+        {
+          "time_limit": 10,
+          "trades": 112,
+          "expectancy_r": 0.0525,
+          "win_rate": 0.5357,
+          "profit_factor": 1.115,
+          "max_drawdown_pct": 0.1085,
+          "total_return_pct": 0.0459,
+          "random_percentile": 25.3,
+          "date_matched_percentile": 37.0,
+          "exits": {
+            "time": 112
+          }
+        }
+      ]
+    },
+    {
+      "name": "h6_reaction_size",
+      "hypothesis": "h6",
+      "kind": "parameter",
+      "question": "Does the size of the reaction sort the drift? The literature sorts on surprise; this substitutes the market's response.",
+      "base": {
+        "time_limit": 40,
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "time_limit": 40,
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "reaction_pct": [
+          0.0,
+          0.02,
+          0.03,
+          0.05,
+          0.08
+        ]
+      },
+      "configurations_tested": 5,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "1 of 3 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (reaction_pct=0.03, +0.544R) rather than the peak (reaction_pct=0.05, +0.596R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 3,
+        "recommended": {
+          "reaction_pct": 0.03
+        },
+        "best": {
+          "reaction_pct": 0.05
+        }
+      },
+      "cells": [
+        {
+          "reaction_pct": 0.05,
+          "trades": 43,
+          "expectancy_r": 0.5958,
+          "win_rate": 0.6279,
+          "profit_factor": 2.459,
+          "max_drawdown_pct": 0.0632,
+          "total_return_pct": 0.2709,
+          "random_percentile": 66.3,
+          "date_matched_percentile": 88.7,
+          "exits": {
+            "time": 43
+          }
+        },
+        {
+          "reaction_pct": 0.03,
+          "trades": 89,
+          "expectancy_r": 0.5444,
+          "win_rate": 0.6067,
+          "profit_factor": 1.968,
+          "max_drawdown_pct": 0.2026,
+          "total_return_pct": 0.5154,
+          "random_percentile": 53.7,
+          "date_matched_percentile": 93.3,
+          "exits": {
+            "time": 89
+          }
+        },
+        {
+          "reaction_pct": 0.02,
+          "trades": 92,
+          "expectancy_r": 0.3181,
+          "win_rate": 0.587,
+          "profit_factor": 1.386,
+          "max_drawdown_pct": 0.2345,
+          "total_return_pct": 0.2318,
+          "random_percentile": 19.3,
+          "date_matched_percentile": 57.0,
+          "exits": {
+            "time": 92
+          }
+        },
+        {
+          "reaction_pct": 0.0,
+          "trades": 108,
+          "expectancy_r": 0.152,
+          "win_rate": 0.5093,
+          "profit_factor": 1.199,
+          "max_drawdown_pct": 0.2252,
+          "total_return_pct": 0.1323,
+          "random_percentile": 9.7,
+          "date_matched_percentile": 29.3,
+          "exits": {
+            "time": 108
+          }
+        },
+        {
+          "reaction_pct": 0.08,
+          "trades": 10,
+          "expectancy_r": -0.4747,
+          "win_rate": 0.5,
+          "profit_factor": 0.367,
+          "max_drawdown_pct": 0.0719,
+          "total_return_pct": -0.047,
+          "random_percentile": 7.0,
+          "date_matched_percentile": 17.7,
+          "exits": {
+            "time": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "h6_entry_delay",
+      "hypothesis": "h6",
+      "kind": "parameter",
+      "question": "How much of the drift is gone by the time we could act? A day-one edge that vanishes by day three is not tradeable.",
+      "base": {
+        "time_limit": 40,
+        "use_stop": false,
+        "r_multiple": 0
+      },
+      "base_resolved": {
+        "time_limit": 40,
+        "use_stop": false,
+        "r_multiple": 0.0
+      },
+      "varied": {
+        "entry_delay": [
+          1,
+          2,
+          3,
+          5
+        ]
+      },
+      "configurations_tested": 4,
+      "verdict": {
+        "shape": "plateau",
+        "detail": "4 of 4 qualifying cells sit inside a qualifying neighbourhood (positive and beat random on the same days). Selected the plateau centre (entry_delay=2, +0.618R) rather than the peak (entry_delay=2, +0.618R) -- the peak's margin over its neighbours is the part least likely to survive.",
+        "positive_cells": 4,
+        "recommended": {
+          "entry_delay": 2
+        },
+        "best": {
+          "entry_delay": 2
+        }
+      },
+      "cells": [
+        {
+          "entry_delay": 2,
+          "trades": 89,
+          "expectancy_r": 0.6178,
+          "win_rate": 0.6067,
+          "profit_factor": 2.271,
+          "max_drawdown_pct": 0.1986,
+          "total_return_pct": 0.6085,
+          "random_percentile": 64.3,
+          "date_matched_percentile": 95.0,
+          "exits": {
+            "time": 89
+          }
+        },
+        {
+          "entry_delay": 1,
+          "trades": 89,
+          "expectancy_r": 0.5444,
+          "win_rate": 0.6067,
+          "profit_factor": 1.968,
+          "max_drawdown_pct": 0.2026,
+          "total_return_pct": 0.5154,
+          "random_percentile": 53.7,
+          "date_matched_percentile": 93.3,
+          "exits": {
+            "time": 89
+          }
+        },
+        {
+          "entry_delay": 3,
+          "trades": 89,
+          "expectancy_r": 0.4391,
+          "win_rate": 0.573,
+          "profit_factor": 1.821,
+          "max_drawdown_pct": 0.1987,
+          "total_return_pct": 0.3888,
+          "random_percentile": 32.0,
+          "date_matched_percentile": 82.0,
+          "exits": {
+            "time": 89
+          }
+        },
+        {
+          "entry_delay": 5,
+          "trades": 90,
+          "expectancy_r": 0.3405,
+          "win_rate": 0.6111,
+          "profit_factor": 1.546,
+          "max_drawdown_pct": 0.2047,
+          "total_return_pct": 0.275,
+          "random_percentile": 20.0,
+          "date_matched_percentile": 73.0,
+          "exits": {
+            "time": 90
+          }
+        }
+      ]
+    }
+  ]
+}
