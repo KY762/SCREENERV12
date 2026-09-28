@@ -15,6 +15,13 @@ new work; give the evidence instead. Nothing has replaced it yet. The split
 budgets, success criteria and pre-registration below are enforced in code and
 did not change.
 
+**The $10,000 hold-back is lifted (operator, 2026-09-28).** Asked whether the
+charter's testing rules and its hold-back (`docs/02` §6: nothing invested until
+Stage E) carry over to new projects: "no we can spend to prove or search". Money
+may be spent to prove a strategy or to search for one. This did not sign any
+pre-registration; spending validation or test budget is still the operator's
+explicit act.
+
 ## How to work here
 
 Full protocol in `docs/08-OPERATING-PROTOCOL.md`. The parts that bite:

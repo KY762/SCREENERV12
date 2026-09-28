@@ -212,6 +212,10 @@ attached to it. Position size is therefore computed by the system with no manual
 Forward-test (Stage F) on paper. Nothing is lost by waiting — no validated strategy will exist for
 months regardless.
 
+> **Lifted, 2026-09-28 (operator).** Asked whether this hold-back and the charter's testing rules carry
+> over to new projects: "no we can spend to prove or search". Money may be spent to prove a strategy or to
+> search for one. The recommendation above stays as the record of what was advised.
+
 ## 7. Risk Profile
 
 | Parameter | Value | Notes |
