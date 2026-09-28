@@ -1,0 +1,41 @@
+development: 2010-01-01 to 2015-12-31, unlimited, exploratory -- proves nothing
+2026-09-28 02:56:09,178 WARNING screener.backtest.runner: quarantine: 25 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB, GENZ, GR, INFO, JAVA, KG, NFX, PARA, PBG, PCL, RX, SHLD, SII, SPLS, UST. See data/reference/universe_quarantine.csv for the reason on each.
+25 quarantined symbol(s) excluded: their stored series is not the company that 
+was in the index. 'screener universe quarantine' lists them.
+universe: swing_small_mid (point-in-time membership)
+13,573 candidate signal(s) before portfolio limits.
+random names, any day: 3.7th percentile
+random names, same days: 0.2th percentile, one-sided p = 0.9980
+417 trades hold about 282 independent observations (month-clustered)
+
+417 trades, 35.7% win rate, expectancy +0.018R, PF 0.99, maxDD 27.3%, return 
+-0.8%
+exits: stop 335 (80%), stop_gap 42 (10%), series_end 36 (9%), no_volume 4 (1%)
+signals not taken: at max concurrent positions (10) (2909), insufficient_cash 
+(2064), already_open (162), size reduced to 25% concentration cap (stop 
+unchanged by design) (45)
+SPY buy-and-hold over the same window: +81.2%
+                               By regime                                
+┌────────────────┬────────┬────────────┬────────┬──────────────────────┐
+│ Regime         │ Trades │ Expectancy │ Return │ vs random, same days │
+├────────────────┼────────┼────────────┼────────┼──────────────────────┤
+│ bull_2013_2014 │    137 │    -0.159R │ -13.1% │             1th lost │
+│ chop_2011      │     85 │    -0.351R │ -17.6% │             1th lost │
+│ chop_2015      │     70 │    -0.144R │  -5.2% │             7th lost │
+└────────────────┴────────┴────────────┴────────┴──────────────────────┘
+              Pre-registered criteria (docs/03-HYPOTHESES.md 0.6)              
+┌───────────────────┬────────────────────────┬───────────────────────┬────────┐
+│ Criterion         │ Observed               │ Required              │ Result │
+├───────────────────┼────────────────────────┼───────────────────────┼────────┤
+│ trade_count       │ 282 effective (417     │ >= 200 effective      │ pass   │
+│                   │ raw)                   │                       │        │
+│ expectancy        │ +0.018R                │ > 0                   │ pass   │
+│ profit_factor     │ 0.99                   │ > 1.2                 │ fail   │
+│ max_drawdown      │ 27.3%                  │ < 25%                 │ fail   │
+│ regime_robustness │ beat random in 0 of 3, │ >= 2 of 3, none <     │ fail   │
+│                   │ worst -17.6%           │ -15%                  │        │
+│ vs_random         │ same-day p = 0.9980    │ <= 0.05               │ fail   │
+└───────────────────┴────────────────────────┴───────────────────────┴────────┘
+
+criteria not met -- recorded on the development split (exploratory: proves 
+nothing)
