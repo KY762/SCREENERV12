@@ -363,6 +363,50 @@ that no longer existed. The trade count over the split rises from 223 to 350
 once they are released. A defect worth 0.1% of rows was worth a third of the
 book.
 
+## The expanded database had no splits, and vendor volume was adjusted twice (2026-09-28)
+
+**Splits.** The 10,218 symbols ingested 2026-09-24 carried **zero** rows in
+`corporate_actions` -- the same defect that inverted momentum in September, now
+on 86% of the database. `ingest-actions` wrote 4,052 splits across 2,515 of
+them. The pass ran across a machine sleep and 110 fetches failed with network
+errors while the log reported the pass complete; they were retried and every
+symbol has now been fetched cleanly at least once. Verify by counting, never
+by the exit code.
+
+**Volume.** EODHD stores RAW prices but volume already expressed in today's
+shares, and `adjust_bars` multiplied it by the split factor again. Measured on
+every stored split (log change in median share volume, 30 days either side):
+
+| source | forward splits | raw volume would be | reverse splits | raw volume would be |
+| --- | --- | --- | --- | --- |
+| eodhd (4,103 splits) | **-0.03** | +0.69 | +0.47 | -2.30 |
+| tiingo (62 splits) | **+0.54** | +0.69 | **-1.22** | -1.61 |
+
+EODHD's volume does not step at a split; Tiingo's does. Adjusted twice, dollar
+volume was wrong by the product of every LATER split: a 2020 split decided
+whether a stock cleared the liquidity floor in 2012 (lookahead), forward
+splitters read as more liquid than they were and reverse splitters -- mostly
+distressed small caps -- as thinner. ML read $10,000 a day before its 1-for-30.
+Fixed in 98e594f: `VENDOR_ADJUSTED_VOLUME` in `calc/splits.py`, rows converted
+by their own source. Prices, returns and spreads were never affected.
+
+**Open:** `universe survey` computes dollar volume from EODHD's bulk endpoint,
+which very likely carries the same adjusted volume. If so, the candidate lists
+that decided what was ingested under-counted reverse splitters and may have
+left some liquid ones out. Not measured.
+
+## Real costs on the 2026-09-22 battery (2026-09-28)
+
+`research/20260928-development-battery-before-gap-rule.md`: the 09-22 battery,
+same 1,020 symbols, with per-symbol measured spreads and the `no_volume` exit,
+and nothing else changed. Experiments with any cell above the 50th percentile
+of random on the same days fell from **14 to 10 of 28**. `h4_no_stop`, the
+only configuration selected on 09-22, is no longer selectable (plateau ->
+spike, best cell 90th -> 78th). H6 holds at the 94th-95th percentile with
+three selected cells -- the best of 4-5 configurations each, on a sample that
+is 100% surviving companies. The 60th-percentile H6 figure recorded under "No
+edge found" came from a different run and has not been reconciled with these.
+
 ## A hole in trading ends a series (2026-09-24)
 
 **Operator decision, 2026-09-24: 60 days.** A ticker that changed hands is
