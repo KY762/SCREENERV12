@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from ..calc import indicators as ind
 from ..calc.relative_strength import relative_strength, relative_strength_adjusted
 from ..calc.segments import split_at_gaps
-from ..calc.splits import Split, adjust_bars
+from ..calc.splits import VENDOR_ADJUSTED_VOLUME, Split, adjust_bars
 from ..db.models import MetricsDaily, PriceDaily, Symbol
 
 log = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def load_bars(
     rows = session.execute(
         select(
             PriceDaily.date, PriceDaily.open, PriceDaily.high,
-            PriceDaily.low, PriceDaily.close, PriceDaily.volume,
+            PriceDaily.low, PriceDaily.close, PriceDaily.volume, PriceDaily.source,
         )
         .where(PriceDaily.symbol_id == symbol_id)
         .order_by(PriceDaily.date)
@@ -100,18 +100,28 @@ def load_bars(
     if not rows:
         return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
-    frame = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
+    frame = pd.DataFrame(
+        rows, columns=["date", "open", "high", "low", "close", "volume", "source"]
+    )
     frame = frame.set_index("date")
     frame.index = pd.to_datetime(frame.index)
-    frame = frame.astype("float64").sort_index()
+    frame = frame.sort_index()
+    source = frame.pop("source")
+    frame = frame.astype("float64")
     if not adjusted:
         return frame
     if splits is None:
         from ..ingest.actions import load_splits
         splits = load_splits(session, symbol_id)
+    visible = splits
     if splits_until is not None:
-        splits = [x for x in splits if x.ex_date <= splits_until]
-    return adjust_bars(frame, splits)
+        visible = [x for x in splits if x.ex_date <= splits_until]
+    # EODHD stores volume already adjusted for every split it knows; see
+    # calc/splits.VENDOR_ADJUSTED_VOLUME for the measurement.
+    return adjust_bars(
+        frame, visible, all_splits=splits,
+        volume_already_adjusted=source.isin(VENDOR_ADJUSTED_VOLUME),
+    )
 
 
 def compute_metrics_frame(bars: pd.DataFrame) -> pd.DataFrame:

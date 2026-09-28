@@ -167,3 +167,88 @@ def test_a_nonpositive_ratio_is_ignored_rather_than_dividing_by_zero():
     bars = frame([100.0, 101.0])
 
     assert adjust_bars(bars, [Split(date(2014, 6, 3), 0.0)]).equals(bars)
+
+
+# --- vendor volume that is already adjusted ---------------------------------
+#
+# EODHD stores raw prices but volume already expressed in today's shares. The
+# AAPL case as stored: $645.57 on 2014-06-06 on ~335M shares, $93.70 on
+# 2014-06-09 on ~300M -- no step in volume, a 7x step in price.
+
+
+def _aapl_as_eodhd_stores_it():
+    bars = frame([645.57, 93.70], start="2014-06-06")
+    bars.index = pd.to_datetime(["2014-06-06", "2014-06-09"])
+    raw_shares = [12_000_000.0, 84_000_000.0]            # what actually traded
+    bars["volume"] = [raw_shares[0] * 7, raw_shares[1]]  # vendor: today's shares
+    return bars, raw_shares
+
+
+def test_vendor_adjusted_volume_is_not_adjusted_twice():
+    """Multiplying volume that is already in post-split shares by the split
+    again made pre-split AAPL look seven times as liquid as it was."""
+    bars, raw = _aapl_as_eodhd_stores_it()
+    split = [Split(date(2014, 6, 9), 7.0)]
+
+    adjusted = adjust_bars(bars, split, volume_already_adjusted=True)
+
+    assert list(adjusted["volume"]) == pytest.approx([raw[0] * 7, raw[1]])
+
+
+def test_vendor_dollar_volume_is_the_money_that_actually_traded():
+    """Dollar volume is what the universe's liquidity floor reads."""
+    bars, raw = _aapl_as_eodhd_stores_it()
+    split = [Split(date(2014, 6, 9), 7.0)]
+
+    adjusted = adjust_bars(bars, split, volume_already_adjusted=True)
+    dv = adjusted["close"] * adjusted["volume"]
+
+    assert list(dv) == pytest.approx([645.57 * raw[0], 93.70 * raw[1]])
+
+
+def test_a_split_the_run_cannot_see_does_not_move_past_liquidity():
+    """The lookahead case. With the 2014 split beyond the run's horizon, the
+    vendor's volume still carries it; it must be taken back out, or whether a
+    stock cleared a liquidity floor in 2012 depends on a split in 2014."""
+    bars, raw = _aapl_as_eodhd_stores_it()
+    split = [Split(date(2014, 6, 9), 7.0)]
+
+    adjusted = adjust_bars(
+        bars, [], all_splits=split, volume_already_adjusted=True,
+    )
+
+    assert adjusted["close"].iloc[0] == pytest.approx(645.57)
+    assert adjusted["volume"].iloc[0] == pytest.approx(raw[0])
+    assert adjusted["close"].iloc[0] * adjusted["volume"].iloc[0] == pytest.approx(
+        645.57 * raw[0]
+    )
+
+
+def test_a_reverse_split_does_not_make_a_small_cap_look_thin():
+    """1-for-30, stored as ML's was: $0.42 on 23,767 vendor shares, which is
+    ~713,000 shares actually traded. Adjusted twice, it read as $10,000 a day."""
+    bars = frame([0.4195, 9.19], start="2023-04-24")
+    bars.index = pd.to_datetime(["2023-04-24", "2023-04-25"])
+    bars["volume"] = [23_767.0, 562_670.0]
+    split = [Split(date(2023, 4, 25), 1 / 30)]
+
+    adjusted = adjust_bars(bars, split, volume_already_adjusted=True)
+
+    assert adjusted["close"].iloc[0] * adjusted["volume"].iloc[0] == pytest.approx(
+        0.4195 * 23_767.0 * 30
+    )
+
+
+def test_rows_are_converted_by_their_own_source():
+    """One stored symbol has bars from both vendors. Each row is converted by
+    whether ITS volume was raw."""
+    bars = frame([645.57, 645.0, 93.70], start="2014-06-05")
+    bars.index = pd.to_datetime(["2014-06-05", "2014-06-06", "2014-06-09"])
+    bars["volume"] = [12_000_000.0, 84_000_000.0, 84_000_000.0]   # raw, vendor, either
+    marked = pd.Series([False, True, True], index=bars.index)
+
+    adjusted = adjust_bars(
+        bars, [Split(date(2014, 6, 9), 7.0)], volume_already_adjusted=marked,
+    )
+
+    assert list(adjusted["volume"]) == pytest.approx([84_000_000.0] * 3)

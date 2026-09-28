@@ -84,16 +84,50 @@ def cumulative_factor(splits: list[Split], index: pd.DatetimeIndex) -> pd.Series
     return factor
 
 
-def adjust_bars(bars: pd.DataFrame, splits: list[Split]) -> pd.DataFrame:
+#: Sources whose stored volume is ALREADY split-adjusted to today's share
+#: count, while their prices are raw. Measured 2026-09-28 across every stored
+#: split: EODHD's share volume shows no step at a split (median log change
+#: -0.03 over 999 forward splits, where raw volume would step +0.69), Tiingo's
+#: steps as raw volume must (+0.54 forward, -1.22 reverse against +0.69 and
+#: -1.61 expected). AAPL is the easy case to check by eye: ~335M shares a day
+#: before the 2014 7-for-1 and ~300M after, at $645 and $94.
+VENDOR_ADJUSTED_VOLUME = frozenset({"eodhd"})
+
+
+def adjust_bars(
+    bars: pd.DataFrame,
+    splits: list[Split],
+    *,
+    all_splits: list[Split] | None = None,
+    volume_already_adjusted: pd.Series | bool = False,
+) -> pd.DataFrame:
     """Back-adjusted OHLCV. Prices divided by the factor, volume multiplied.
 
     Volume moves the opposite way because the same traded value is a different
     number of shares on each side of a split. Leaving volume raw would put a
     7x step into every liquidity measure on the ex-date.
 
+    BUT only raw volume. `volume_already_adjusted` marks rows (a boolean Series
+    on the bars' index, or one bool for all of them) whose vendor volume is
+    already expressed in shares after EVERY split in `all_splits` -- EODHD's,
+    see VENDOR_ADJUSTED_VOLUME. Those rows are first converted back to raw
+    shares, then adjusted like any other. Multiplying them again, as this
+    function did until 2026-09-28, overstated dollar volume by the product of
+    every later split -- and since that product includes splits after the bar,
+    whether a stock cleared a liquidity floor in 2012 depended on a split in
+    2020. A reverse splitter, typically a distressed small cap, read as
+    thinner than it was by the same factor.
+
+    `all_splits` defaults to `splits`. Pass the full list when `splits` has been
+    cut at a no-lookahead horizon: the vendor adjusted for every split it knew,
+    not only the ones the run is allowed to see.
+
     The input frame is not modified.
     """
-    if bars.empty or not splits:
+    everything = splits if all_splits is None else all_splits
+    marked = volume_already_adjusted
+    any_marked = bool(marked.any()) if isinstance(marked, pd.Series) else bool(marked)
+    if bars.empty or (not splits and not (any_marked and everything)):
         return bars
     factor = cumulative_factor(splits, bars.index)
     out = bars.copy()
@@ -101,5 +135,11 @@ def adjust_bars(bars: pd.DataFrame, splits: list[Split]) -> pd.DataFrame:
         if column in out.columns:
             out[column] = out[column] / factor
     if "volume" in out.columns:
-        out["volume"] = out["volume"] * factor
+        volume = out["volume"]
+        if any_marked and everything:
+            vendor_factor = cumulative_factor(everything, bars.index)
+            volume = volume.where(~marked, volume / vendor_factor) if isinstance(
+                marked, pd.Series
+            ) else volume / vendor_factor
+        out["volume"] = volume * factor
     return out
