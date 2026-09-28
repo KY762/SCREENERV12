@@ -8,6 +8,13 @@ operator's documented losses came from execution — missing stops, size
 escalation after losses, profit quotas — not from strategy selection. Software
 that makes those decisions mechanical is the point of the project.
 
+**The charter is outdated (operator, 2026-09-28):** "the charter is out dated
+now i guess we still have a goal". Do not cite its scope — US equities, daily
+bars, long only, no intraday, no futures, no automation — as a reason against
+new work; give the evidence instead. Nothing has replaced it yet. The split
+budgets, success criteria and pre-registration below are enforced in code and
+did not change.
+
 ## How to work here
 
 Full protocol in `docs/08-OPERATING-PROTOCOL.md`. The parts that bite:

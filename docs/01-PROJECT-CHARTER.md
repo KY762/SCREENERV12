@@ -5,6 +5,14 @@
 **Purpose:** The document to re-read when the project feels complicated, or to hand someone who asks
 what this is.
 
+> **Outdated, 2026-09-28 (operator).** "the charter is out dated now i guess we still have a goal", said in
+> a vault session after "FUCK THE CHARTER we are on new grounds now" earlier the same day. Nothing has
+> replaced it yet. Its scope (§1 and §11: US equities, daily bars, long only, no automation, no intraday, no
+> futures) and its picture of the operator's time no longer limit what gets built; the goal still stands.
+> It stays as the record of why the project was built and how it was scoped. The split budgets, success
+> criteria and pre-registration are enforced by the code and the database, not by this document, and did
+> not change. `charter.html` is a rendering of this document and is outdated with it.
+
 ---
 
 ## 1. The one-paragraph version
