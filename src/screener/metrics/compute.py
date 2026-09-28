@@ -28,8 +28,8 @@ from sqlalchemy.orm import Session
 
 from ..calc import indicators as ind
 from ..calc.relative_strength import relative_strength, relative_strength_adjusted
-from ..calc.segments import split_at_gaps
 from ..calc.splits import VENDOR_ADJUSTED_VOLUME, Split, adjust_bars
+from ..calc.validity import clean_pieces
 from ..db.models import MetricsDaily, PriceDaily, Symbol
 
 log = logging.getLogger(__name__)
@@ -247,7 +247,8 @@ def _build_one(
     # back into Sun Microsystems' 2010 prices. See calc/segments.py. The rows
     # still land under one symbol_id because no two series share a date.
     parts = []
-    for piece in split_at_gaps(bars):
+    # ...and impossible bars repaired or cut the same way (calc/validity.py).
+    for piece in clean_pieces(bars)[0]:
         part = compute_metrics_frame(piece)
         if not benchmark.empty and symbol.ticker != benchmark.attrs.get("ticker"):
             rs = compute_relative_strength_frame(piece, benchmark)

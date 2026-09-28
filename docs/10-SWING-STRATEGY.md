@@ -36,6 +36,12 @@
 > rule buys cost 43.5bp. The verdict is unchanged and now rests on a cost model
 > that was measured instead of declared.
 >
+> **Updated 2026-09-28.** The recorded rebuilt-universe run (`research/swing-v2.txt`,
+> 0.2nd percentile) does not reproduce from the committed code: the same
+> configuration gives the 4.5th. On data with impossible bars repaired
+> (`calc/validity.py`) it is the **2.3rd percentile, p = 0.977**, PF 1.17,
+> +17.0% against SPY's +81.2% (`research/swing-v3.txt`). Still rejected.
+>
 > An earlier note this day put the swing at -0.0948R. That was measured before
 > the delisting exit and compared 223 trades against 277 -- different trade
 > lists, not different costs on one list. -0.0278R is the like-for-like figure.

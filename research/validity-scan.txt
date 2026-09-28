@@ -1,0 +1,21 @@
+calc/validity.py over every stored symbol, 2026-09-28 (all dates)
+symbols scanned 11,868; touched 1,163; with a move left alone 1,046
+zero-volume bars repriced 55,168; spike bars dropped 10,055; cuts 1,486; left alone 1,364
+
+most cuts:
+ticker  repriced  dropped  cuts  kept  pieces_before  pieces_after      first       last
+ ZVZZT         0      145    18     5              2            20 2017-09-22 2026-09-24
+   ENA        71      331    15     1              1            16 2009-01-02 2018-02-22
+   ATT       135      431    13     3              2            15 2009-01-02 2020-01-24
+  SURG         8       38    12     0              1            13 2009-01-02 2026-09-24
+  FUBO         2       37    12     1              1            13 2014-05-07 2026-09-24
+  SBLX        38       25    11     0              1            12 2009-01-02 2026-07-10
+ ZJZZT         3       32    11     1              2            13 2014-09-24 2026-09-21
+   ACS      1416      346    10     2              7            17 2009-01-02 2018-08-08
+   KRI        75      391    10     0              1            11 2009-01-02 2018-12-14
+ ZWZZT         1       47    10     1              2            12 2017-09-22 2026-09-24
+ MKTSQ         0       99     9     2              1            10 2009-01-02 2015-05-29
+   NSE       318      300     9     2              3            12 2009-01-02 2021-05-26
+ WTERD         0       18     9     0              1            10 2013-05-28 2026-04-02
+  DCTH         0        8     9     0              1            10 2009-01-02 2026-09-24
+  GNCA         0       14     8     1              1             9 2014-02-10 2023-02-24

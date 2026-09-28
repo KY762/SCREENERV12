@@ -19,9 +19,10 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..calc.segments import base_ticker, segment_keys, split_at_gaps
+from ..calc.segments import base_ticker, segment_keys
 from ..calc.sizing import RiskLimits
 from ..calc.spread import spread_table
+from ..calc.validity import clean_pieces
 from ..db.models import Symbol
 from ..ingest.actions import load_splits_bulk
 from ..metrics.compute import load_bars
@@ -314,7 +315,9 @@ def load_symbol_bars(
             session, sid,
             splits=splits_by_symbol.get(sid, []), splits_until=splits_until,
         )
-        pieces = split_at_gaps(frame)
+        # Holes end a series (calc/segments.py); impossible bars are repaired
+        # or end one too (calc/validity.py).
+        pieces, _ = clean_pieces(frame)
         bars.update(zip(segment_keys(ticker, pieces), pieces, strict=True))
     return {k: v for k, v in bars.items() if not v.empty}
 

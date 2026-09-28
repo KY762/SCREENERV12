@@ -1297,6 +1297,56 @@ def diagnose_predictive(
     )
 
 
+@diag_app.command("screen")
+def diagnose_screen(
+    universe_name: str = typer.Option("swing_small_mid", "--universe"),
+    horizon: int = typer.Option(20, "--horizon"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """H8: does leaving out the pool's most lottery-like names beat drawing
+    from all of it? Development split only (docs/11)."""
+    _configure_logging(verbose)
+    import numpy as np
+
+    from .backtest.runner import load_symbol_bars, universe_filter
+    from .backtest.splits import get_split
+    from .calc.spread import spread_table
+    from .diagnostics.screen import judge, measure
+
+    chosen = get_split("development")
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, None, splits_until=chosen.end)
+        _report_quarantine()
+        _report_universe(universe_name)
+        eligible = universe_filter(session, universe_name)
+        spreads = spread_table(bars_by_symbol)
+        windows = measure(bars_by_symbol, split=chosen, eligible=eligible,
+                          spreads=spreads, horizon=horizon, stride=horizon)
+    if not windows:
+        console.print("[red]No windows measured.[/]")
+        raise typer.Exit(code=1)
+    v = judge(windows, chosen)
+    names = int(np.median([w.names for w in windows]))
+    out = np.mean([w.share_out for w in windows])
+    console.print(
+        f"{chosen.name}: {len(windows)} windows of {horizon} sessions, median {names:,} "
+        f"names, {out:.0%} left out (top fifth on vol60 or max21)"
+    )
+    console.print(
+        f"screened minus full pool, per window: net {v.mean_net:+.3%} (t {v.t_net:+.2f}, "
+        f"one-sided p {v.p_net:.3f}); gross {v.mean_gross:+.3%} (t {v.t_gross:+.2f}); "
+        f"10%-trimmed {v.mean_trimmed:+.3%}"
+    )
+    for name, (n, m) in v.by_regime.items():
+        console.print(f"  {name:<18} {n:>3} windows  net {m:+.3%}")
+    console.print(
+        f"regimes positive: {v.regimes_positive} of {v.regimes_total}. "
+        + ("[green]Clears the docs/11 development bar.[/]" if v.passes_development
+           else "[yellow]Does not clear the docs/11 development bar.[/]")
+    )
+    console.print("[dim]Development split: exploratory, proves nothing.[/]")
+
+
 @diag_app.command("survivorship")
 def diagnose_survivorship(
     split: str = typer.Option("development", "--split"),

@@ -247,6 +247,75 @@ Each was invisible to a passing test suite and surfaced only on real data.
   membership by a year: BBBY's tail is 3,328 days, AVB's was 9.
   `test_a_company_that_just_left_the_index_is_not_flagged_as_outlived` pins it.
 
+## Impossible bars, repaired on load (2026-09-28)
+
+**Found by the Obscura vault** while measuring the avoid screen (`docs/11`):
+series inside `swing_small_mid` carried bars no security can print. SCU goes
+x100 in price and /100 in volume on 2014-12-16. TRA goes from $41 to $14,797.
+NLCS has zero-volume bars near $1,100 between traded bars near $28, and the
+engine's `no_volume` exit fills at such a bar's open, so a position booked the
+fake price. On the development grid they touched 0.42% of name-dates and moved
+a random pick's mean 20-session return from +0.54% to +1.01%.
+
+**Operator approved cleaning them, 2026-09-28** ("do it all"). `calc/validity.py`
+runs on load, after the 60-day gap rule and before anything reads a price, in
+both `load_symbol_bars` and the metrics build. Prices in `price_daily` are not
+touched (non-negotiable 2):
+
+| kind | rule | whole database |
+| --- | --- | --- |
+| zero-volume bar priced >1.5x from the last traded close | OHLC set to that close; bar kept for `no_volume` | 55,168 bars |
+| move past 3x or below 1/3 that returns within 5 traded bars | excursion dropped | 10,055 bars |
+| >= 5x, <= 1/10, a power of ten, reversed within 400 days, or 3x-5x up on share volume halving | series CUT there, like a gap | 1,486 cuts |
+| 1/3 to 1/10 down, or 3x-5x up on normal volume, nothing else explaining it | **left alone** | 1,364 moves |
+
+1,163 of 11,868 symbols are touched. The left-alone row is deliberate and
+resolves ambiguity against us (non-negotiable 6): Clovis fell 70% on 2015-11-16
+and Medivation 67% on 2010-03-03, and cutting there would let a position exit
+at the prior close and escape a real loss. Intercept's x3.8 on 2014-01-09 stays
+too. Some of the 1,364 are still errors -- renamed duplicates such as SESN and
+EBIO moving together are an identity problem, not a price one.
+
+The rules look at later bars to decide earlier ones were errors. That is
+hindsight about the data, not the market, and the same kind the gap rule uses;
+a live screen meeting a garbage bar sees a one-bar series it cannot trade.
+
+Metrics for the 1,163 touched symbols were rebuilt and `swing_small_mid`
+rebuilt on them the same day.
+
+## The recorded `docs/10` run does not reproduce (2026-09-28)
+
+`research/swing-v2.txt` (research run 3787, 06:56 UTC) reports 417 trades, the
+0.2nd percentile against random on the same days, PF 0.99, -0.8%. **The same
+logged configuration, run from the committed code (a clean checkout of
+`ee419a8`) on the same database, gives 405 trades, the 4.5th percentile
+(p = 0.955), PF 1.10, +10.8%.** The candidate count matches exactly (13,573),
+and no table with a timestamp was written after 06:56 UTC except
+`research_runs`. The cause was not traced; the likeliest is uncommitted code
+or data present at 06:56 and gone by the commit. The verdict does not change --
+it loses to random either way -- but the recorded figures overstated how badly.
+
+**On clean data** (`research/swing-v3.txt`, after the cleaning and the universe
+rebuild): 12,769 candidates, 406 trades, PF 1.17, +17.0%, **2.3rd percentile
+against random on the same days, p = 0.977**, beating random in 1 of 3 regimes.
+Three of six criteria fail. SPY did +81.2%. The `docs/10` verdict stands on
+every version of the data this project has had.
+
+## H8, the avoid screen (2026-09-28) -- `docs/11`
+
+The first hypothesis that does not try to pick winners: leave out the pool's
+top fifth by 60-day volatility or by last month's largest one-day gain, and ask
+whether a random pick from the rest beats a random pick from all of it.
+Proposed from market-wide evidence (CRSP since 2005: no published buy side beats
+random, several avoid sides still lose). `screener diagnose screen`.
+
+On development, clean data: **+0.174% net per 20-session window (t 2.22, p
+0.013), positive in 3 of 3 regimes, trimmed version positive** -- it clears the
+`docs/11` bar, which was written after a development look at a near-identical
+screen, so clearing it was likely and proves nothing. Validation cannot be run
+yet: the diagnostic refuses every split but development until it keeps a budget,
+and the pre-registration registry binds only to `backtest run` options.
+
 ## Trading costs were never measured, and they were understated 2.7x (2026-09-24)
 
 `CostModel` charged a flat **5bp a side** to every symbol -- 10bp a round trip
@@ -1156,6 +1225,20 @@ screener ingest-actions             # splits; nothing works correctly without th
 - `ruff check src tests` and `pytest` both clean before committing.
 
 ## Open decisions for the operator
+
+**Decided 2026-09-28**, by Claude under the operator's instruction "do it all",
+before any H8 validation or test result existed; each can be overridden before
+the first validation run (`docs/11` section 3):
+
+- Clean the impossible bars -- done, `calc/validity.py`.
+- H8's bar -- `docs/11` section 4.
+- `docs/10`'s 1.5x tail-lift stopping rule governs the convex ranking thesis
+  only, which is rejected; it does not govern H8.
+- A pool screen is its own hypothesis with its own budget and joins Holm's
+  family; a strategy trading from the screened pool is a separate hypothesis.
+
+**Still the operator's:** signing H8's draft pre-registration (`docs/11`
+section 6), once the diagnostic keeps a budget and the registry accepts it.
 
 - **Sizing is inconsistent only below 2% ATR.** Position size as a fraction of
   equity is `0.01 / (2 × ATR_pct)`, so the 25% concentration cap binds exactly

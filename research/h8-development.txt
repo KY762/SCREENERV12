@@ -1,0 +1,11 @@
+25 quarantined symbol(s) excluded: their stored series is not the company that was in the index. 'screener universe 
+quarantine' lists them.
+universe: swing_small_mid (point-in-time membership)
+development: 78 windows of 20 sessions, median 2,343 names, 28% left out (top fifth on vol60 or max21)
+screened minus full pool, per window: net +0.174% (t +2.22, one-sided p 0.013); gross +0.111% (t +1.43); 10%-trimmed 
++0.138%
+  chop_2011           13 windows  net +0.284%
+  bull_2013_2014      26 windows  net +0.096%
+  chop_2015           13 windows  net +0.438%
+regimes positive: 3 of 3. Clears the docs/11 development bar.
+Development split: exploratory, proves nothing.
