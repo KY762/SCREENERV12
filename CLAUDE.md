@@ -8,19 +8,20 @@ operator's documented losses came from execution — missing stops, size
 escalation after losses, profit quotas — not from strategy selection. Software
 that makes those decisions mechanical is the point of the project.
 
-**The charter is outdated (operator, 2026-09-28):** "the charter is out dated
-now i guess we still have a goal". Do not cite its scope — US equities, daily
-bars, long only, no intraday, no futures, no automation — as a reason against
-new work; give the evidence instead. Nothing has replaced it yet. The split
-budgets, success criteria and pre-registration below are enforced in code and
-did not change.
+**The charter is replaced (operator, 2026-09-28).** `docs/01` is outdated. This
+project, like every trading project, now follows `../CHARTER.md` at the vault
+root: any market, timeframe or automation is in bounds; before real money, a
+pass mark written before looking, tested on data the idea was not built on,
+costs included; for live money, stop and size computed by code, no manual
+trades during work or class, no profit quotas and no upsizing after a loss,
+options only inside a tested strategy. Do not cite the old scope as a reason
+against new work; give the evidence instead. The split budgets, success
+criteria and pre-registration below are enforced in code and did not change,
+and spending validation or test budget still needs the operator's explicit go.
 
-**The $10,000 hold-back is lifted (operator, 2026-09-28).** Asked whether the
-charter's testing rules and its hold-back (`docs/02` §6: nothing invested until
-Stage E) carry over to new projects: "no we can spend to prove or search". Money
-may be spent to prove a strategy or to search for one. This did not sign any
-pre-registration; spending validation or test budget is still the operator's
-explicit act.
+**Capital (operator, 2026-09-28).** The $10,000 named in this file and in
+`docs/02` is now the operator's emergency fund and is never used. About $5,000
+is set aside to trade and experiment with, across all projects.
 
 ## How to work here
 

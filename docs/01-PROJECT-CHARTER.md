@@ -12,6 +12,9 @@ what this is.
 > It stays as the record of why the project was built and how it was scoped. The split budgets, success
 > criteria and pre-registration are enforced by the code and the database, not by this document, and did
 > not change. `charter.html` is a rendering of this document and is outdated with it.
+>
+> **Replaced the same day** by the vault's `CHARTER.md` (Obscura Capital — Charter, adopted 2026-09-28),
+> which governs every trading project, this one included.
 
 ---
 

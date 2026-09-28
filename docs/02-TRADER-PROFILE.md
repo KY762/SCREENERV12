@@ -215,6 +215,10 @@ months regardless.
 > **Lifted, 2026-09-28 (operator).** Asked whether this hold-back and the charter's testing rules carry
 > over to new projects: "no we can spend to prove or search". Money may be spent to prove a strategy or to
 > search for one. The recommendation above stays as the record of what was advised.
+>
+> **Superseded the same day (operator):** the $10,000 is now the emergency fund and is never used; about
+> $5,000 is set aside to trade and experiment with. Money and live-trading rules are in `CHARTER.md` at the
+> vault root.
 
 ## 7. Risk Profile
 
@@ -241,6 +245,10 @@ reaches live capital, and each maps to a documented failure in the journal:
 5. **A trade with no logged pre-entry thesis is a rule violation**, and gets recorded as one regardless
    of outcome. A profitable rule-break is still a rule-break — arguably worse, since it reinforces the
    behavior. The journal contains exactly one such case, described as "luckily it worked."
+
+> **2026-09-28:** these carry into the vault's `CHARTER.md` §6, which binds every trading project: rules 1–3
+> and 5 as written, rule 4 widened to work and class with bots allowed to trade, plus options only inside a
+> tested strategy (operator).
 
 **The drawdown qualifier translated:** "25% but don't prolong weak positions" implies tolerance for a
 losing *streak* but not a slow bleed in a single name. This rules out mean reversion, averaging down,
