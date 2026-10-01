@@ -331,6 +331,43 @@ screen, so clearing it was likely and proves nothing. Validation cannot be run
 yet: the diagnostic refuses every split but development until it keeps a budget,
 and the pre-registration registry binds only to `backtest run` options.
 
+## H8 fails validation (2026-10-01) -- the first evidential run in this project
+
+**Signed by the operator 2026-10-01** (`preregistrations/H8.md`, `90996ff`),
+run once, unchanged, via `screener diagnose screen --split validation
+--confirm-spend` (`research_runs` id 3832). The engineering this depended on
+(`b8ab22b`) and 815 tests pass; re-run afterward to confirm, clean.
+
+`swing_small_mid`, horizon 20, 2016-01-01 to 2019-12-31: **50 windows, net
++0.132% per window (t +1.07, one-sided p 0.143)**; gross +0.050% (t +0.40);
+10%-trimmed +0.136%. By regime: bull_2017 -0.086% (12 windows), correction_2018q4
++0.493% (2 windows), bull_2019 +0.228% (13 windows) -- **2 of 3 positive**.
+
+**Fails the `docs/11` section 4 validation bar.** `screener prereg family
+--split validation` shows H8 as the only registered test on this split (m=1,
+so Holm's first step is the plain 5% and made no difference here) and its own
+verdict line reads "H8 p=0.1433 does not pass". The regime leg alone clears
+(2 of 3), but the bar is an AND of both legs, so one failing leg fails the
+whole thing. p=0.143 is not a near miss -- it is just under 3x the 0.05 bar.
+
+**What moved from development to validation.** Net return fell about a
+quarter (0.174% to 0.132%) and the t-stat roughly halved (2.22 to 1.07) on a
+smaller, different sample (78 development windows vs 50 here). The gap
+between net and gross widened: on development the net figure was described as
+"about a third" mechanical (spread saved); here gross is +0.050% against net
++0.132%, so roughly **two-thirds of the net figure is spread saved, not
+statistical edge** -- the mechanical share grew, not shrank, out of sample.
+
+**What this does and doesn't mean.** Per H8.md §3 and the pre-registration's
+own terms, H8 is **closed as a candidate**: a failed validation does not
+proceed to the test split (2020-2026), and the two unspent validation slots
+are explicitly **not** to be used to retry a nearby configuration -- that is
+the post-hoc search the budget machinery exists to prevent. This bears only
+on the exact registered configuration (`pool=swing_small_mid, horizon=20,
+vol_window=60, max_window=21, screen_quantile=0.80`) on this exact split; it
+says nothing about a different screen, and the pre-registration forecloses
+asking that question with H8's remaining budget.
+
 ## Trading costs were never measured, and they were understated 2.7x (2026-09-24)
 
 `CostModel` charged a flat **5bp a side** to every symbol -- 10bp a round trip
