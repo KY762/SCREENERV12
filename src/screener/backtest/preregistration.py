@@ -28,6 +28,13 @@ about what was registered.
 
 Signing is the operator's act. A draft written by anyone else authorizes
 nothing until the operator changes its status and commits it.
+
+A pre-registration file may instead declare `kind = "diagnose_screen"` at the
+top level, for a hypothesis measured by `screener diagnose screen` rather than
+`screener backtest run` (H8, docs/11). Its configuration keys are
+`screen_diagnostic_config`'s own small set (pool, horizon, vol_window,
+max_window, screen_quantile), not RUN_DEFAULTS. Omitting `kind` means
+`"backtest_run"`, so every H1-H7 file is unaffected.
 """
 
 from __future__ import annotations
@@ -69,6 +76,18 @@ RUN_DEFAULTS: dict[str, Any] = {
 }
 
 EVIDENTIAL_SPLITS = ("validation", "test")
+
+# docs/11 section 2 ("The configuration") and `diagnostics/screen.py`'s own
+# constants, duplicated the same way RUN_DEFAULTS duplicates `backtest run`'s
+# CLI defaults above -- a pre-registration that omits a key gets exactly what
+# `diagnose screen` would have used.
+SCREEN_DIAGNOSTIC_DEFAULTS: dict[str, Any] = {
+    "pool": "swing_small_mid",
+    "horizon": 20,
+    "vol_window": 60,
+    "max_window": 21,
+    "screen_quantile": 0.80,
+}
 
 
 def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
@@ -143,6 +162,36 @@ def evidential_config(hypothesis: str, **options: Any) -> dict[str, Any]:
     }
 
 
+def screen_diagnostic_config(hypothesis: str, **options: Any) -> dict[str, Any]:
+    """The identity of a `diagnose screen` run (docs/11 section 2), as hashed
+    for budget and written to config_json.
+
+    A different shape from `evidential_config`: the avoid screen is a
+    diagnostic, not a `backtest run` invocation, so it has none of
+    RUN_DEFAULTS' trade-management keys (hold, stop_atr, rs_lookback, ...).
+    Its identity is the pool it draws from, the screen's own window lengths
+    and quantile threshold, and the holding horizon.
+
+    `kind` is baked into the returned dict so a diagnostic configuration can
+    never collide, by hash, with a `backtest run` configuration even though
+    `config_hash` is the same generic function for both.
+    """
+    unknown = set(options) - set(SCREEN_DIAGNOSTIC_DEFAULTS)
+    if unknown:
+        raise ValueError(f"not a diagnose screen option: {sorted(unknown)}")
+    opts = {**SCREEN_DIAGNOSTIC_DEFAULTS, **options}
+    key = hypothesis.strip().lower()
+    return {
+        "kind": "diagnose_screen",
+        "hypothesis": key,
+        "pool": opts["pool"],
+        "horizon": int(opts["horizon"]),
+        "vol_window": int(opts["vol_window"]),
+        "max_window": int(opts["max_window"]),
+        "screen_quantile": float(opts["screen_quantile"]),
+    }
+
+
 class PreregistrationError(ValueError):
     """A pre-registration file that cannot be trusted to mean what it says."""
 
@@ -160,6 +209,7 @@ class Preregistration:
     # counted in its pass/fail -- written here, not passed in, for the same
     # reason the criteria are constants.
     min_date_matched_percentile: float | None = None
+    kind: str = "backtest_run"
 
     @property
     def signed(self) -> bool:
@@ -196,6 +246,10 @@ def parse(path: Path) -> Preregistration:
             f"{path.name}: a signed pre-registration names who signed it and when"
         )
 
+    kind = str(data.get("kind", "backtest_run")).strip().lower()
+    if kind not in ("backtest_run", "diagnose_screen"):
+        raise PreregistrationError(f"{path.name}: unknown kind {kind!r}")
+
     configurations: dict[str, list[dict[str, Any]]] = {}
     for split_name in EVIDENTIAL_SPLITS:
         entries = data.get(split_name, [])
@@ -209,7 +263,10 @@ def parse(path: Path) -> Preregistration:
         for entry in entries:
             options = {k: v for k, v in entry.items() if k != "label"}
             try:
-                built.append(evidential_config(hypothesis, **options))
+                if kind == "diagnose_screen":
+                    built.append(screen_diagnostic_config(hypothesis, **options))
+                else:
+                    built.append(evidential_config(hypothesis, **options))
             except ValueError as exc:
                 raise PreregistrationError(f"{path.name}: {exc}") from exc
         configurations[split_name] = built
@@ -226,7 +283,7 @@ def parse(path: Path) -> Preregistration:
 
     return Preregistration(
         hypothesis, status, path, signed_by, signed_on, configurations,
-        None if floor is None else float(floor),
+        None if floor is None else float(floor), kind,
     )
 
 

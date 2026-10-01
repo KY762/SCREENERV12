@@ -49,6 +49,19 @@ def test_budgeted_splits_are_refused():
         measure({}, split=get_split("validation"), eligible=lambda t, d: True, spreads={})
 
 
+def test_budget_cleared_allows_a_budgeted_split_to_run():
+    """The CLI sets this only after `budget.check` has authorized the run.
+    Calling `measure` directly still refuses by default (the test above)."""
+    rng = np.random.default_rng(1)
+    bars = {}
+    for k in range(60):
+        r = rng.normal(0.0005, 0.015, 400)
+        bars[f"S{k}"] = _bars(20 * np.cumprod(1 + r), start="2016-01-04")
+    windows = measure(bars, split=get_split("validation"), eligible=lambda t, d: True,
+                      spreads={}, horizon=20, stride=20, budget_cleared=True)
+    assert windows, "budget_cleared=True must let a non-development split actually run"
+
+
 def _pool(n_calm, n_wild, seed=0):
     """Calm names drift up; wild names are volatile and drift down."""
     rng = np.random.default_rng(seed)

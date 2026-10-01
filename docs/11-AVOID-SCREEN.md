@@ -86,11 +86,11 @@ split's regime buckets.
 
 **Test** (2020–2026): the same, once.
 
-Validation and test cannot be run yet, deliberately. `diagnose screen` refuses
-every split but development, because it keeps no budget and non-negotiable 5
-says budgets are enforced against the database. Spending validation needs two
-things first: an operator-signed `preregistrations/H8.md`, and the diagnostic
-writing and checking `research_runs` the way `backtest run` does.
+Validation and test cannot be run yet. `diagnose screen` refuses both splits
+without a signed pre-registration naming the exact configuration -- the
+budget and pre-registration machinery non-negotiable 5 requires is now built
+and tested (section 6), but uncommitted, and in any case the operator has not
+signed `preregistrations/H8.md`.
 
 ## 5. Results — development only; it proves nothing
 
@@ -124,11 +124,19 @@ draw from, not a strategy.
 
 ## 6. Draft pre-registration — DRAFT, authorizes nothing
 
-Not in `preregistrations/`, deliberately. That registry binds to `backtest run`
-options and raises on anything else, so an H8 file there would stop every
-hypothesis's validation runs from loading. Moving this there needs the registry
-extended to diagnostics, and `diagnose screen` writing and checking
-`research_runs` — both engineering, neither done.
+`preregistrations/H8.md` now exists with this configuration, still
+`status = "draft"`, `signed_by = ""`, `signed_on = ""` — it authorizes
+nothing. The two prerequisites this section used to name are built and
+tested as of 2026-09-30: the registry understands a diagnostic-shaped
+configuration (`kind = "diagnose_screen"`, distinct from `backtest run`'s
+options and hashed through the same `config_hash`), and `diagnose screen`
+writes to and checks `research_runs` via `budget.check`/`budget.record`,
+refusing validation and test without a signed registration the same way
+`backtest run` does. **This is true of the working tree, not yet of the
+repository's committed history** — the change is pending review and the
+operator's decision to commit it. Committing it does not sign anything:
+`H8.md` stays a draft until the operator changes its status, which remains
+the operator's act alone.
 
 ```
 hypothesis    h8

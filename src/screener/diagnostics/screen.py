@@ -37,8 +37,10 @@ SCREEN_QUANTILE = 0.80
 #: Sessions of daily returns behind each screen variable.
 VOL_WINDOW = 60
 MAX_WINDOW = 21
-#: Development only. Validation and test are budgeted against the database
-#: (non-negotiable 5) and this diagnostic keeps no budget, so it refuses them.
+#: Development only, by default. Validation and test are budgeted against the
+#: database (non-negotiable 5); `measure` refuses them unless the caller
+#: passes `budget_cleared=True`, which only `screener diagnose screen` does,
+#: and only after `backtest.budget.check` has authorized the run.
 ALLOWED_SPLITS = ("development",)
 
 
@@ -98,9 +100,19 @@ def measure(
     spreads: dict[str, pd.Series],
     horizon: int = 20,
     stride: int = 20,
+    budget_cleared: bool = False,
 ) -> list[Window]:
-    """One Window per signal date, `stride` sessions apart."""
-    if split.name not in ALLOWED_SPLITS:
+    """One Window per signal date, `stride` sessions apart.
+
+    `budget_cleared` is set only by the `diagnose screen` CLI command, after
+    `backtest.budget.check` has confirmed a signed pre-registration names this
+    exact configuration on `split` (docs/11 section 6). Calling this function
+    directly -- from a script, a notebook, or a test -- still refuses every
+    split but development: the keyword exists so authorization lives in one
+    place (the budget module, against the database) rather than being a
+    second, independent copy of the pre-registration check here.
+    """
+    if split.name not in ALLOWED_SPLITS and not budget_cleared:
         raise ValueError(
             f"H8 is measured on {ALLOWED_SPLITS} only; {split.name} is budgeted "
             "and needs a signed pre-registration and budget accounting first (docs/11)"

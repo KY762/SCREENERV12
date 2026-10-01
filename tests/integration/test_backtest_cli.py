@@ -413,3 +413,106 @@ def test_an_explicit_hold_still_overrides_the_specification():
 
     assert swept.hold == 63
     assert swept.time_limit == 63
+
+
+def test_diagnose_screen_development_runs_unlimited(loaded, monkeypatch):
+    """Development needs no confirm-spend and no registration. `measure` is
+    replaced with a canned result because the `loaded` fixture's four
+    synthetic symbols, with no universe built, never clear this diagnostic's
+    own 50-names-per-window floor (`diagnostics/screen.py`) -- unrelated to
+    the budget wiring this test exists to check."""
+    cli, runner = loaded
+
+    import screener.diagnostics.screen as screen_mod
+
+    fake_window = screen_mod.Window(
+        day=date(2012, 2, 1), names=60, pool_gross=0.01, pool_net=0.008,
+        kept_gross=0.012, kept_net=0.010, kept_trimmed=0.009, pool_trimmed=0.007,
+        out_median=0.02, pool_median=0.01, share_out=0.2,
+    )
+    monkeypatch.setattr(screen_mod, "measure", lambda *a, **k: [fake_window])
+
+    result = runner.invoke(cli.app, ["diagnose", "screen", "--split", "development"])
+    assert result.exit_code == 0, result.output
+
+
+def test_diagnose_screen_evidential_split_requires_confirmation(loaded):
+    cli, runner = loaded
+    result = runner.invoke(cli.app, ["diagnose", "screen", "--split", "validation"])
+    assert result.exit_code == 1
+    assert "--confirm-spend" in result.output
+
+
+def test_diagnose_screen_validation_refuses_without_a_registration(loaded, tmp_path, monkeypatch):
+    cli, runner = loaded
+    monkeypatch.setenv("SCREENER_PREREGISTRATION_DIR", str(tmp_path))  # empty
+    result = runner.invoke(
+        cli.app, ["diagnose", "screen", "--split", "validation", "--confirm-spend"]
+    )
+    assert result.exit_code == 1
+    assert "no signed pre-registration" in result.output
+
+
+def test_diagnose_screen_records_an_authorized_validation_run(loaded, tmp_path, monkeypatch):
+    """Not a real measurement -- the point is the budget wiring, so `measure`
+    is replaced with a canned result and the test checks that an authorized
+    run writes to research_runs the way `backtest run` does."""
+    cli, runner = loaded
+    body = "\n".join([
+        "# H8", "", "```toml",
+        'hypothesis = "h8"', 'kind = "diagnose_screen"', 'status = "signed"',
+        'signed_by = "test"', 'signed_on = "2026-09-18"', "",
+        "[[validation]]", 'pool = "swing_small_mid"', "horizon = 20", "```", "",
+    ])
+    (tmp_path / "H8.md").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("SCREENER_PREREGISTRATION_DIR", str(tmp_path))
+
+    import screener.diagnostics.screen as screen_mod
+
+    fake_window = screen_mod.Window(
+        day=date(2016, 2, 1), names=60, pool_gross=0.01, pool_net=0.008,
+        kept_gross=0.012, kept_net=0.010, kept_trimmed=0.009, pool_trimmed=0.007,
+        out_median=0.02, pool_median=0.01, share_out=0.2,
+    )
+    monkeypatch.setattr(screen_mod, "measure", lambda *a, **k: [fake_window])
+
+    result = runner.invoke(
+        cli.app, ["diagnose", "screen", "--split", "validation", "--confirm-spend"]
+    )
+    assert result.exit_code == 0, result.output
+
+    from sqlalchemy import select
+
+    from screener.db.models import ResearchRun
+    from screener.db.session import session_scope
+
+    with session_scope() as session:
+        run = session.scalars(
+            select(ResearchRun).where(
+                ResearchRun.hypothesis == "h8", ResearchRun.split == "validation"
+            )
+        ).first()
+    assert run is not None, "an authorized diagnose-screen run must write to research_runs"
+
+
+def test_diagnose_screen_second_different_configuration_is_refused(
+    loaded, tmp_path, monkeypatch
+):
+    """Only the exact registered configuration (pool + horizon) is authorized."""
+    cli, runner = loaded
+    body = "\n".join([
+        "# H8", "", "```toml",
+        'hypothesis = "h8"', 'kind = "diagnose_screen"', 'status = "signed"',
+        'signed_by = "test"', 'signed_on = "2026-09-18"', "",
+        "[[validation]]", 'pool = "swing_small_mid"', "horizon = 20", "```", "",
+    ])
+    (tmp_path / "H8.md").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("SCREENER_PREREGISTRATION_DIR", str(tmp_path))
+
+    result = runner.invoke(
+        cli.app,
+        ["diagnose", "screen", "--split", "validation", "--confirm-spend",
+         "--horizon", "10"],
+    )
+    assert result.exit_code == 1
+    assert "no signed pre-registration" in result.output

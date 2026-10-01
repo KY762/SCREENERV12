@@ -11,14 +11,19 @@ from pathlib import Path
 
 import pytest
 
-from screener.backtest.budget import config_hash
+from screener.backtest import budget
+from screener.backtest.budget import BudgetExceeded, NotPreregistered, config_hash
 from screener.backtest.preregistration import (
+    Preregistration,
     PreregistrationError,
+    Registry,
     evidential_config,
     load,
     parse,
+    screen_diagnostic_config,
 )
 from screener.backtest.splits import VALIDATION
+from tests.unit.ingest.conftest import session  # noqa: F401
 
 
 def write(tmp: Path, body: str, name: str = "H1.md") -> Path:
@@ -37,6 +42,19 @@ signed_on = "2026-09-18"
 label = "plateau centre"
 hold = 10
 stop_atr = 2.5
+"""
+
+DIAGNOSTIC_SIGNED = """
+hypothesis = "h8"
+kind = "diagnose_screen"
+status = "signed"
+signed_by = "operator"
+signed_on = "2026-09-28"
+
+[[validation]]
+label = "docs/11 section 2 configuration, unchanged"
+pool = "swing_small_mid"
+horizon = 20
 """
 
 
@@ -166,3 +184,95 @@ def test_two_files_for_one_hypothesis_are_refused(tmp_path):
     write(tmp_path, SIGNED, name="H1-amended.md")
     with pytest.raises(PreregistrationError, match="both pre-register"):
         load(tmp_path)
+
+
+# -- diagnostic (kind = "diagnose_screen") configurations ------------------
+
+def test_a_file_without_kind_defaults_to_backtest_run(tmp_path):
+    p = parse(write(tmp_path, SIGNED))
+    assert p.kind == "backtest_run"
+
+
+def test_a_misspelt_diagnostic_option_is_refused():
+    with pytest.raises(ValueError, match="not a diagnose screen option"):
+        screen_diagnostic_config("h8", pol="swing_small_mid")
+
+
+def test_an_unknown_kind_is_refused(tmp_path):
+    body = DIAGNOSTIC_SIGNED.replace('kind = "diagnose_screen"', 'kind = "something_else"')
+    with pytest.raises(PreregistrationError, match="unknown kind"):
+        parse(write(tmp_path, body, name="H8.md"))
+
+
+def test_a_diagnostic_file_parses_with_its_own_shape(tmp_path):
+    p = parse(write(tmp_path, DIAGNOSTIC_SIGNED, name="H8.md"))
+
+    assert p.kind == "diagnose_screen"
+    assert p.hashes("validation") == {
+        config_hash(screen_diagnostic_config("h8", pool="swing_small_mid", horizon=20))
+    }
+
+
+def test_the_registry_authorizes_the_diagnostic_run_the_cli_would_build(tmp_path):
+    write(tmp_path, DIAGNOSTIC_SIGNED, name="H8.md")
+    registry = load(tmp_path)
+    run = screen_diagnostic_config("h8", pool="swing_small_mid", horizon=20)
+
+    assert registry.authorizes("h8", VALIDATION, run)
+    assert not registry.authorizes("h8", VALIDATION, screen_diagnostic_config("h8", horizon=10))
+
+
+def test_an_unsigned_diagnostic_draft_still_refuses(tmp_path):
+    body = (
+        DIAGNOSTIC_SIGNED
+        .replace('status = "signed"', 'status = "draft"')
+        .replace('signed_by = "operator"', 'signed_by = ""')
+        .replace('signed_on = "2026-09-28"', 'signed_on = ""')
+    )
+    write(tmp_path, body, name="H8.md")
+    registry = load(tmp_path)
+    run = screen_diagnostic_config("h8", pool="swing_small_mid", horizon=20)
+
+    assert not registry.authorizes("h8", VALIDATION, run)
+
+
+def test_backtest_run_shaped_registrations_are_unaffected_by_diagnostic_support(tmp_path):
+    """H1-H7's shape, parsed after the diagnostic support was added, must
+    produce exactly the same hash it always did."""
+    p = parse(write(tmp_path, SIGNED))
+    assert p.hashes("validation") == {config_hash(evidential_config("h1", hold=10, stop_atr=2.5))}
+
+
+DIAG_A = screen_diagnostic_config("h8", horizon=10)
+DIAG_B = screen_diagnostic_config("h8", horizon=20)
+DIAG_C = screen_diagnostic_config("h8", horizon=30)
+DIAG_D = screen_diagnostic_config("h8", horizon=40)
+DIAG_REGISTERED = Registry((
+    Preregistration(
+        "h8", "signed", Path("H8.md"), "test", "2026-09-18",
+        configurations={"validation": [DIAG_A, DIAG_B, DIAG_C, DIAG_D]},
+        kind="diagnose_screen",
+    ),
+))
+
+
+def test_a_signed_diagnostic_registration_authorizes_a_run(session):  # noqa: F811
+    budget.check(session, "h8", VALIDATION, DIAG_A, registry=DIAG_REGISTERED)  # must not raise
+
+
+def test_an_unsigned_diagnostic_draft_refuses_via_budget_check(session):  # noqa: F811
+    draft = Registry((Preregistration(
+        "h8", "draft", Path("H8.md"), configurations={"validation": [DIAG_A]},
+        kind="diagnose_screen",
+    ),))
+    with pytest.raises(NotPreregistered, match="draft"):
+        budget.check(session, "h8", VALIDATION, DIAG_A, registry=draft)
+
+
+def test_budget_exceeded_still_raises_for_diagnostics(session):  # noqa: F811
+    for config in (DIAG_A, DIAG_B, DIAG_C):
+        budget.check(session, "h8", VALIDATION, config, registry=DIAG_REGISTERED)
+        budget.record(session, hypothesis="h8", split=VALIDATION, config=config)
+
+    with pytest.raises(BudgetExceeded, match="already spent 3"):
+        budget.check(session, "h8", VALIDATION, DIAG_D, registry=DIAG_REGISTERED)

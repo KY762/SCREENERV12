@@ -1301,50 +1301,120 @@ def diagnose_predictive(
 def diagnose_screen(
     universe_name: str = typer.Option("swing_small_mid", "--universe"),
     horizon: int = typer.Option(20, "--horizon"),
+    split: str = typer.Option(
+        "development", "--split", help="development, validation or test."
+    ),
+    confirm: bool = typer.Option(
+        False, "--confirm-spend",
+        help="Required on validation and test: acknowledges spending budget.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """H8: does leaving out the pool's most lottery-like names beat drawing
-    from all of it? Development split only (docs/11)."""
+    from all of it? docs/11.
+
+    On validation and test splits this consumes pre-registered budget
+    (docs/03-HYPOTHESES.md 0.8) and the spend is recorded in the database,
+    exactly as `backtest run` does -- a signed pre-registration must name
+    this exact configuration, and at most 3 validation / 1 test
+    configuration per docs/11 section 4.
+    """
     _configure_logging(verbose)
     import numpy as np
 
+    from .backtest import budget
+    from .backtest.preregistration import screen_diagnostic_config
     from .backtest.runner import load_symbol_bars, universe_filter
     from .backtest.splits import get_split
     from .calc.spread import spread_table
     from .diagnostics.screen import judge, measure
 
-    chosen = get_split("development")
+    chosen = get_split(split)
+    console.print(f"[dim]{chosen.describe()}[/]")
+
+    # Built by the same function a pre-registration uses, so a registered
+    # diagnostic configuration and the run that spends it cannot hash
+    # differently -- the same reason `backtest run` builds its config through
+    # `evidential_config` rather than hashing its own options dict.
+    config = screen_diagnostic_config("h8", pool=universe_name, horizon=horizon)
+
     with session_scope() as session:
+        if chosen.carries_evidence:
+            state = budget.status(session, "h8", chosen, config)
+            if not state.already_run and not confirm:
+                console.print(
+                    f"[yellow]{state.describe()}[/]\n"
+                    f"This run would spend budget on the [bold]{chosen.name}[/] split, "
+                    "which carries evidential weight.\n"
+                    "Re-run with [bold]--confirm-spend[/] if that is intended."
+                )
+                raise typer.Exit(code=1)
+            try:
+                budget.check(session, "h8", chosen, config)
+            except budget.BudgetExceeded as exc:
+                console.print(f"[red]{exc}[/]")
+                raise typer.Exit(code=1) from exc
+
         bars_by_symbol = load_symbol_bars(session, None, splits_until=chosen.end)
         _report_quarantine()
         _report_universe(universe_name)
         eligible = universe_filter(session, universe_name)
         spreads = spread_table(bars_by_symbol)
-        windows = measure(bars_by_symbol, split=chosen, eligible=eligible,
-                          spreads=spreads, horizon=horizon, stride=horizon)
-    if not windows:
-        console.print("[red]No windows measured.[/]")
-        raise typer.Exit(code=1)
-    v = judge(windows, chosen)
-    names = int(np.median([w.names for w in windows]))
-    out = np.mean([w.share_out for w in windows])
-    console.print(
-        f"{chosen.name}: {len(windows)} windows of {horizon} sessions, median {names:,} "
-        f"names, {out:.0%} left out (top fifth on vol60 or max21)"
-    )
-    console.print(
-        f"screened minus full pool, per window: net {v.mean_net:+.3%} (t {v.t_net:+.2f}, "
-        f"one-sided p {v.p_net:.3f}); gross {v.mean_gross:+.3%} (t {v.t_gross:+.2f}); "
-        f"10%-trimmed {v.mean_trimmed:+.3%}"
-    )
-    for name, (n, m) in v.by_regime.items():
-        console.print(f"  {name:<18} {n:>3} windows  net {m:+.3%}")
-    console.print(
-        f"regimes positive: {v.regimes_positive} of {v.regimes_total}. "
-        + ("[green]Clears the docs/11 development bar.[/]" if v.passes_development
-           else "[yellow]Does not clear the docs/11 development bar.[/]")
-    )
-    console.print("[dim]Development split: exploratory, proves nothing.[/]")
+        windows = measure(
+            bars_by_symbol, split=chosen, eligible=eligible, spreads=spreads,
+            horizon=horizon, stride=horizon,
+            # Lifted only after `budget.check` above has confirmed a signed
+            # pre-registration names this configuration -- `measure` itself
+            # still refuses non-development by default (docs/11 section 6).
+            budget_cleared=chosen.carries_evidence,
+        )
+        if not windows:
+            console.print("[red]No windows measured.[/]")
+            raise typer.Exit(code=1)
+        v = judge(windows, chosen)
+        names = int(np.median([w.names for w in windows]))
+        out = np.mean([w.share_out for w in windows])
+        console.print(
+            f"{chosen.name}: {len(windows)} windows of {horizon} sessions, median {names:,} "
+            f"names, {out:.0%} left out (top fifth on vol60 or max21)"
+        )
+        console.print(
+            f"screened minus full pool, per window: net {v.mean_net:+.3%} (t {v.t_net:+.2f}, "
+            f"one-sided p {v.p_net:.3f}); gross {v.mean_gross:+.3%} (t {v.t_gross:+.2f}); "
+            f"10%-trimmed {v.mean_trimmed:+.3%}"
+        )
+        for name, (n, m) in v.by_regime.items():
+            console.print(f"  {name:<18} {n:>3} windows  net {m:+.3%}")
+
+        if chosen.name == "development":
+            console.print(
+                f"regimes positive: {v.regimes_positive} of {v.regimes_total}. "
+                + ("[green]Clears the docs/11 development bar.[/]" if v.passes_development
+                   else "[yellow]Does not clear the docs/11 development bar.[/]")
+            )
+            console.print("[dim]Development split: exploratory, proves nothing.[/]")
+        else:
+            console.print(f"regimes positive: {v.regimes_positive} of {v.regimes_total}.")
+            console.print(
+                f"[dim]{chosen.name} split: evidential. docs/11 section 4's full pass "
+                "criterion (Holm-corrected p, regime count) is not computed by this "
+                "command; read the statistic above against it by hand.[/]"
+            )
+
+        # Recorded for every split, including development -- same precedent as
+        # `backtest run` and the battery: a run that leaves no trace in
+        # research_runs is exploration nobody can audit later, even though
+        # only validation/test spend budget (ResearchRun's own docstring).
+        budget.record(
+            session, hypothesis="h8", split=chosen, config=config,
+            trades=len(windows), same_day_p=v.p_net,
+            criteria_passed=v.passes_development if chosen.name == "development" else None,
+            notes=(
+                f"diagnose screen: mean_net {v.mean_net:+.4f}, t {v.t_net:+.2f}, "
+                f"mean_trimmed {v.mean_trimmed:+.4f}, "
+                f"regimes {v.regimes_positive}/{v.regimes_total}"
+            ),
+        )
 
 
 @diag_app.command("survivorship")
