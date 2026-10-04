@@ -50,6 +50,63 @@ Full protocol in `docs/08-OPERATING-PROTOCOL.md`. The parts that bite:
 - **Audit before delivering.** State the strongest criticism of your own
   output and fix it first.
 
+## Review agents
+
+Three auditors live in `.claude/agents/`, one per cluster in the bug log below.
+All three are read-only by design: an auditor that can edit can make a result
+look correct, which is the failure they exist to catch.
+
+- `run-integrity` — does the number come from the configuration being claimed?
+  Run it before committing to `runner.py`, `engine.py`, `battery.py`,
+  `report.py`, `budget.py` or `cli.py`, before writing any result into `docs/`,
+  and before spending validation or test budget. Four of the bugs below were a
+  report describing a run that did not happen.
+- `data-integrity` — the non-negotiables and the arithmetic in the decision
+  path. Run it on any change under `calc/`, `backtest/`, `universe/`, `ingest/`
+  or `providers/`.
+- `evidence-auditor` — attacks a claim before it is believed: could the check
+  have failed, which split, how many comparisons, which way does the known bias
+  point. Run it whenever a run produces a positive number, and before any
+  hypothesis moves between splits.
+
+They do not replace `ruff check src tests` and `pytest`. Those are
+deterministic, so they are enforced by hooks in `.claude/settings.json` rather
+than by anyone's memory:
+
+- After every `Write` or `Edit` to a `.py` file under `src/` or `tests/`,
+  `.claude/hooks/check_edit.py` runs ruff on that file and the two
+  no-lookahead test files. A violation or a failure comes straight back; a
+  broken environment warns instead of blocking, and says the edit was not
+  gated, because a check that cannot run must not report a pass.
+- At session start, `.claude/hooks/session_start.py` fetches origin and refuses
+  to be quiet about a clone that is behind, then prints `screener status`. On
+  2026-09-17 a session came up six commits stale and read a superseded
+  CLAUDE.md as current, reporting the exit-isolated experiments as unrun after
+  they had been run and committed.
+
+## The noise null
+
+`backtest/noise.py` builds the data a strategy must FAIL on. It permutes each
+symbol's returns in time, carrying every bar's geometry and volume with the
+return that produced it, so the return distribution, the drift, the fat tails
+and the real calendar all survive and only the ordering dies. Each symbol gets
+its own seed -- one shared permutation would leave the cross-section intact,
+and the cross-section is what H1 and H5 rank on.
+
+Permutation removes edge that comes from the market. It cannot remove edge that
+comes from the machinery, because a rule reading a bar it should not have seen
+reads the permuted bar just as happily. **A strategy that keeps its edge on the
+null has a bug, not a finding** -- the class the zero-R target and the
+wrongly-anchored stop belonged to, both of which passed a green suite.
+
+Measured on a deliberately trending fixture: lag-1 autocorrelation +0.458 real
+against +0.020 permuted; a causal momentum rule scores 0.47x the 3-SE
+tolerance, a one-bar-lookahead rule 2.88x. The null discriminates.
+
+Not yet wired into the battery. The natural form is a `--null` arm that
+permutes the universe and reports the expectancy delta, but whether every
+battery pays that cost is a protocol decision, not a coding one.
+
 ## Non-negotiables
 
 These are not preferences. Violating any of them silently invalidates results.
@@ -140,11 +197,45 @@ delisted tickers included — plus the free point-in-time index membership
 above, which fixes the second survivorship channel that no price feed
 addresses.
 
-**Do not spend validation or test budget until delisted coverage is fixed.**
+**EODHD has been purchased** (operator, 2026-09-22). Not Polygon — an earlier
+version of this note said Polygon, which was wrong; `providers/polygon.py`
+was written speculatively and no subscription to it exists. EODHD serves the
+property that matters: end-of-day history for delisted US tickers, reached by
+listing an exchange's symbols with `delisted=1` and then calling the ordinary
+EOD endpoints with those tickers. That is a two-step workflow, unlike Tiingo.
+
+It is bought and it is not connected, and the distinction matters:
+
+- **Fact, verified in the code on 2026-09-22.** There is no EODHD provider at
+  all. `providers/` holds tiingo, alpaca, polygon, edgar, reference — none of
+  them EODHD. `screener ingest` selects between Tiingo and Alpaca only
+  (`cli.py:151` and `cli.py:999`). `config.py` reads a `polygon_api_key` that
+  is now irrelevant and no EODHD key at all. **No path exists today from the
+  subscription to the database.**
+- **Fact.** The 881,449 bars already stored came from Tiingo and still carry
+  the measured hole. Buying a provider does not repair stored history. The
+  affected symbols have to be re-ingested before anything in the database
+  changes.
+- **Unverified.** Whether coverage has been re-measured against EODHD. It
+  cannot be checked from the repository.
+
+**The budget gate is unchanged, and the condition is the measurement, not the
+purchase.** Do not spend validation or test budget until `screener universe
+coverage` has been re-run against EODHD and shows the failures present.
 Development is unlimited and the bias direction is known, so Round 2 can run
 there. Validation (3 configs) and test (1, once) are enforced against the
-database and never regenerate; spending them on knowingly biased data burns
-them permanently.
+database and never regenerate; spending them on data whose coverage has not
+been re-measured burns them permanently.
+
+To connect it: write `providers/eodhd.py` with the two-step delisted lookup
+(`exchange-symbol-list/US?delisted=1`, then the EOD endpoint per ticker); add
+`EODHD_API_KEY` to `config.py`, `.env` and `.env.example`; add the provider to
+the selection in `cli.py`; re-ingest at least the six failures the coverage
+probe names (FRC, BBBY, YELL, RAD, SIVB, SBNY) plus the wider pool; then re-run
+`screener universe coverage`. The result of that run is what lifts the gate —
+record it here. `providers/polygon.py` is now dead code: delete it or keep it
+clearly marked unused, because an unused provider next to a real one is how the
+wrong one gets wired.
 
 Universe as of 2026-08-26: 265 candidates ingested, 263 returned bars, 307
 symbols with metrics (the pool plus the earlier 51). 881,449 daily bars;
