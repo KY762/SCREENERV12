@@ -1,0 +1,60 @@
+screener diagnose raw-momentum --universe sp500_pit --split development --random-iterations 1000 --seed 0
+(run with --symbols restricted to the 614 tickers ever in sp500_pit across 2010-01-01..2015-12-31 --
+a performance-only restriction, not a methodology change: every consumer of bars_by_symbol in this
+command -- candidate selection and both benchmarks -- is already masked to sp500_pit membership by
+`universe`, so a symbol outside that set is excluded from the result either way. Loading the full
+~11,800-symbol database (the default) produces the same universe-masked result far more slowly, now
+that the database has grown past 10,000 symbols since 2026-09-24.)
+
+quarantine: 22 symbol(s) excluded from this run -- ACS, AYE, BBBY, BBT, CA, CAM, CPWR, CSRA, EMC, EP, FB,
+GENZ, GR, JAVA, KG, NFX, PBG, PCL, RX, SHLD, SII, SPLS. See data/reference/universe_quarantine.csv for the
+reason on each.
+universe: sp500_pit (point-in-time membership)
+development: 2010-01-01 to 2015-12-31, unlimited, exploratory -- proves nothing
+Sweeping 9 configuration(s) of h10 (raw momentum) over hold(21, 63, 126), top_pct(0.05, 0.1, 0.2)...
+
+        h10 (raw 12-1 momentum) parameter surface -- development split
++------+---------+--------+-------------+------+-------+--------+-------------+
+| hold | top_pct | Trades |  Expectancy |   PF | MaxDD | Return | vs random   |
+|      |         |        |             |      |       |        | (same days) |
++------+---------+--------+-------------+------+-------+--------+-------------+
+|  126 |    0.05 |     88 |  +0.342R <- |  1.43| 16.7% | +28.0% |      13.2th |
+|      |         |        |        peak |      |       |        |             |
+|  126 |     0.1 |     91 |     +0.275R | 1.37 | 23.4% | +30.2% |       8.7th |
+|  126 |     0.2 |     91 |     +0.275R | 1.37 | 23.4% | +31.2% |       8.7th |
+|   63 |     0.2 |    151 |     +0.115R | 1.16 | 17.8% | +13.2% |       5.5th |
+|   63 |     0.1 |    151 |     +0.097R | 1.13 | 17.8% | +10.2% |       4.4th |
+|   21 |     0.1 |    275 |     +0.077R | 1.19 | 19.7% | +20.2% |      10.8th |
+|   21 |     0.2 |    281 |     +0.076R | 1.19 | 19.3% | +20.9% |       6.8th |
+|   21 |    0.05 |    260 |     +0.059R | 1.14 | 20.8% | +13.8% |       7.7th |
+|   63 |    0.05 |    145 |     -0.016R | 0.94 | 23.5% |  -5.0% |       0.1th |
++------+---------+--------+-------------+------+-------+--------+-------------+
+
+NONE: no configuration of 9 was positive and beat random on the same days. Per docs/03 0.7 rule 4 this is
+evidence against the hypothesis, not an invitation to widen the search.
+9 configuration(s) tested to reach this -- the full grid, all reported, per docs/09 'Reporting only the
+experiments that found something' being rejected as a method.
+
+research_runs ids 3839-3847.
+
+--- Peak cell detail (hold=126, top_pct=0.05), against every docs/03 0.6 criterion ---
+(the surface already fails preregistrations/H10.md section 3's first condition -- NONE, not plateau or
+separated -- so this is reported for completeness, the way H8's and H9's losing legs were, not because
+the peak cell is a candidate for anything)
+
+trade_count:        69 effective (88 raw)        required >= 200 effective       FAIL
+expectancy:         +0.342R                      required > 0                    pass
+profit_factor:       1.43                         required > 1.20                 pass
+max_drawdown:        16.7%                        required < 25%                 pass
+regime_robustness:   beat random in 1 of 3, worst -9.8%   required >= 2 of 3, none < -15%   FAIL
+vs_random:           same-day p = 0.8681          required <= 0.05                FAIL
+
+  regime            trades   return   vs random (same day)   beat random
+  bull_2013_2014    26       +40.4%   99.5th                 yes
+  chop_2011         21       -8.7%     1.2th                 no
+  chop_2015         12       -9.8%    14.8th                 no
+
+All of the peak cell's edge sits in the 2013-2014 bull market; it loses to random names bought on the
+same days in both chop regimes. The same pattern this project has recorded for H1's twelve-month variant,
+H5's own scaled canonical form, and the docs/10 swing strategy: positive expectancy that is beta, not
+selection.
