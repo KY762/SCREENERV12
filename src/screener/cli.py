@@ -2447,6 +2447,89 @@ def ingest_earnings_cmd(
         console.print(f"  [yellow]{failure.ticker}[/]: {failure.error}")
 
 
+@app.command("ingest-lockups")
+def ingest_lockups_cmd(
+    start: str = typer.Option(..., "--start", help="First-bar window start (exclusive)."),
+    end: str = typer.Option(..., "--end", help="First-bar window end (inclusive)."),
+    out: str = typer.Option("data/reference/ipo_lockups.csv", "--out"),
+    limit: int | None = typer.Option(None, "--limit", help="Cap candidates, for a quick check."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Build an IPO lock-up expiry table for H9 (see ingest/lockups.py).
+
+    Candidates are symbols whose first stored bar falls in (start, end].
+    Each is searched for by TICKER in SEC EDGAR's full text index (not the
+    current ticker map -- see the module docstring for why) and, on a
+    match, confirmed against its own prospectus's cover-page ticker and
+    "Lock-Up Agreement" clause. Every candidate is written to `out` with a
+    status: `confirmed`, or the exact step it failed at. Nothing is
+    silently dropped.
+    """
+    import csv
+    from collections import Counter
+
+    _configure_logging(verbose)
+    from .ingest.lockups import EdgarCompanySearch, build_lockup_table
+    from .providers.base import ProviderError
+
+    try:
+        search = EdgarCompanySearch(get_settings())
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1) from exc
+
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end)
+
+    with session_scope() as session:
+        stmt = (
+            select(Symbol)
+            .where(
+                Symbol.asset_type == "equity",
+                Symbol.first_date > start_date,
+                Symbol.first_date <= end_date,
+            )
+            .order_by(Symbol.first_date)
+        )
+        candidates = [(s.ticker, s.name or "", s.first_date) for s in session.scalars(stmt)]
+
+    if limit:
+        candidates = candidates[:limit]
+
+    console.print(
+        f"{len(candidates)} candidate(s), first bar in ({start_date}, {end_date}]. "
+        "EDGAR is rate-limited to ~7/sec."
+    )
+
+    def _progress(i: int, total: int, ticker: str) -> None:
+        if i % 100 == 0:
+            console.print(f"  [{i}/{total}] {ticker}")
+
+    records = build_lockup_table(candidates, search, progress=_progress)
+    search.close()
+
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "ticker", "name", "first_date", "status", "cik", "accession",
+            "filing_date", "filing_href", "cover_ticker", "lockup_days",
+            "expiry_date", "detail",
+        ])
+        for r in records:
+            writer.writerow([
+                r.ticker, r.name, r.first_date.isoformat(), r.status, r.cik, r.accession,
+                r.filing_date.isoformat() if r.filing_date else "", r.filing_href,
+                r.cover_ticker or "", r.lockup_days if r.lockup_days is not None else "",
+                r.expiry_date.isoformat() if r.expiry_date else "", r.detail,
+            ])
+
+    console.print(f"[green]Wrote {out_path}[/] ({len(records)} row(s))")
+    for status, n in Counter(r.status for r in records).most_common():
+        console.print(f"  {status}: {n}")
+
+
 @universe_app.command("candidates")
 def universe_candidates(
     plain: bool = typer.Option(
