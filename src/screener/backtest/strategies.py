@@ -21,7 +21,7 @@ import pandas as pd
 
 from ..calc.compression import expansion_events
 from ..calc.indicators import atr, slope_positive, sma
-from ..calc.momentum import month_end_mask, volatility_scaled_momentum
+from ..calc.momentum import momentum_skip, month_end_mask, volatility_scaled_momentum
 from ..calc.patterns import fvg_entry_events, ifvg_entry_events, sweep_entry_events
 from ..calc.relative_strength import relative_strength_adjusted
 from .engine import Candidate
@@ -299,6 +299,7 @@ def canonical_momentum_candidates(
     trend: TrendFilter | None = None,
     universe: UniverseMask = always_in_universe,
     sectors: Mapping[str, str] | None = None,
+    scaled: bool = True,
 ) -> list[Candidate]:
     """H5 -- cross-sectional momentum in its canonical form.
 
@@ -317,9 +318,26 @@ def canonical_momentum_candidates(
     The stop stays wide by default and is expressed as a distance, because the
     strongest Round 1 finding was that a stop set inside normal noise costs
     more than it protects.
+
+    ``scaled`` (default True, H5's own specification) ranks on
+    ``volatility_scaled_momentum``. Set it False only for H10
+    (``preregistrations/H10.md``): the IC +0.033 figure docs/09 cites for "the
+    indicator H5 rests on" was measured on the RAW, unscaled variant
+    (``cli.py``'s ``diagnose predictive``, family ``ret(252) skip 21`` ==
+    ``ind.returns(close, 252).shift(21)``), while every H5 battery run --
+    including the one that scored the 0th percentile -- has only ever ranked
+    on the scaled version below. Those are two different variables; this flag
+    is what lets either one actually be tested. It must default True so this
+    change cannot silently alter H5's own meaning or any number already
+    recorded against it.
     """
     trend = trend if trend is not None else TrendFilter(enabled=False)
     sectors = sectors or {}
+    score_fn = (
+        (lambda close: volatility_scaled_momentum(close, lookback, skip, vol_window))
+        if scaled
+        else (lambda close: momentum_skip(close, lookback, skip))
+    )
 
     scores: dict[str, pd.Series] = {}
     trends: dict[str, pd.Series | None] = {}
@@ -327,9 +345,7 @@ def canonical_momentum_candidates(
     for ticker, bars in bars_by_symbol.items():
         if bars.empty or len(bars) < lookback + 5:
             continue
-        scores[ticker] = volatility_scaled_momentum(
-            bars["close"], lookback, skip, vol_window
-        )
+        scores[ticker] = score_fn(bars["close"])
         mask = trend.mask(bars)
         trends[ticker] = None if mask is None else mask.fillna(False).astype(bool)
         atrs[ticker] = atr(bars, atr_window)

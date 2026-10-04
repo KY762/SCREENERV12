@@ -1297,6 +1297,189 @@ def diagnose_predictive(
     )
 
 
+# H10's grid, pinned here rather than passed in: it is the registered
+# configuration (preregistrations/H10.md), and a pre-registered configuration
+# is a constant for the same reason the criteria in performance.py are.
+# Hold and top_pct exactly mirror `h5_momentum_canonical`
+# (src/screener/research/battery.py) -- the only change is the scoring
+# function -- and `stop_atr`/`monthly_rebalance` match that experiment's own
+# `base`. `trend_filter` and `use_stop` are left at RunConfig's defaults
+# (True, True) because that is what `h5_momentum_canonical` actually ran with:
+# its `base` never overrides either, so the battery-tested H5 specification
+# carried the trend filter on, and a fair isolation of the scoring-function
+# variable has to match that rather than quietly dropping it.
+H10_HOLD_GRID: tuple[int, ...] = (21, 63, 126)
+H10_TOP_PCT_GRID: tuple[float, ...] = (0.05, 0.10, 0.20)
+H10_STOP_ATR = 3.0
+
+
+@diag_app.command("raw-momentum")
+def diagnose_raw_momentum(
+    universe_name: str | None = typer.Option("sp500_pit", "--universe"),
+    split: str = typer.Option("development", "--split"),
+    symbols: str | None = typer.Option(None, "--symbols", "-s"),
+    random_iterations: int = typer.Option(1000, "--random-iterations"),
+    seed: int = typer.Option(0, "--seed"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """H10 -- does RAW, unscaled 12-1 momentum beat random, isolated from H5?
+
+    docs/09-REJECTED.md's case for retesting H5 rests on an IC of +0.033,
+    measured by `diagnose predictive` on `ret(252) skip 21` -- a RAW trailing
+    return. But `h5_momentum_canonical` (the battery experiment that scored
+    the 0th percentile) and every other H5 arm have only ever ranked on
+    `volatility_scaled_momentum`. Those are two different variables, flagged
+    2026-10-03 and resolved in `preregistrations/H10.md`: neither has actually
+    been tested against the other.
+
+    This sweeps `h5_momentum_canonical`'s own hold x top_pct grid with every
+    other parameter held at that experiment's own values, changing only the
+    scoring function (`canonical_momentum_candidates(..., scaled=False)`).
+    Development split only, like every other surface in this project; see
+    `preregistrations/H10.md` for the bar and `screener prereg show` for what
+    an evidential split would require.
+    """
+    _configure_logging(verbose)
+    from .backtest import budget
+    from .backtest.runner import RunConfig, evaluate, load_symbol_bars, universe_filter
+    from .backtest.splits import get_split
+    from .backtest.strategies import TrendFilter, canonical_momentum_candidates
+    from .backtest.surface import Cell, analyse
+
+    chosen = get_split(split)
+    if chosen.carries_evidence:
+        console.print(
+            f"[red]H10 is development-only.[/] No pre-registration names a "
+            f"validation or test configuration for it (preregistrations/H10.md); "
+            f"the {chosen.name} split allows {chosen.config_budget} per CHARTER "
+            "section 5, and none has been signed."
+        )
+        raise typer.Exit(code=1)
+
+    with session_scope() as session:
+        bars_by_symbol = load_symbol_bars(session, symbols, splits_until=chosen.end)
+        _report_quarantine()
+        _report_universe(universe_name)
+        if not bars_by_symbol:
+            console.print("[red]No bars stored.[/] Run 'screener ingest' first.")
+            raise typer.Exit(code=1)
+        universe = universe_filter(session, universe_name)
+        trend = TrendFilter(enabled=True)
+
+        console.print(f"[dim]{chosen.describe()}[/]")
+        console.print(
+            f"Sweeping [bold]{len(H10_HOLD_GRID) * len(H10_TOP_PCT_GRID)}[/] "
+            "configuration(s) of h10 (raw momentum) over "
+            f"hold{H10_HOLD_GRID}, top_pct{H10_TOP_PCT_GRID}..."
+        )
+
+        # Candidates depend only on top_pct among the varied parameters --
+        # hold is exit-side -- so one generation pass per top_pct covers every
+        # hold, mirroring `build_candidates`'s own entry/exit separation.
+        candidates_by_top_pct = {
+            top_pct: canonical_momentum_candidates(
+                bars_by_symbol, lookback=252, skip=21, top_pct=top_pct,
+                stop_atr=H10_STOP_ATR, monthly=True, trend=trend,
+                universe=universe, scaled=False,
+            )
+            for top_pct in H10_TOP_PCT_GRID
+        }
+
+        cells: list[Cell] = []
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            BarColumn(), TaskProgressColumn(), console=console,
+        ) as progress:
+            task = progress.add_task(
+                "sweeping", total=len(H10_HOLD_GRID) * len(H10_TOP_PCT_GRID)
+            )
+            for top_pct in H10_TOP_PCT_GRID:
+                for hold in H10_HOLD_GRID:
+                    config = RunConfig(
+                        hypothesis="h10", hold=hold, time_limit=hold,
+                        top_pct=top_pct, stop_atr=H10_STOP_ATR,
+                        mom_lookback=252, mom_skip=21, monthly_rebalance=True,
+                    )
+                    outcome = evaluate(
+                        candidates_by_top_pct[top_pct], bars_by_symbol, config,
+                        chosen, random_iterations=random_iterations, seed=seed,
+                        universe=universe if universe_name else None,
+                    )
+                    cells.append(Cell(params={"hold": hold, "top_pct": top_pct}, outcome=outcome))
+                    budget.record(
+                        session, hypothesis="h10", split=chosen,
+                        config={
+                            "hypothesis": "h10", "scaled": False, "hold": hold,
+                            "top_pct": top_pct, "stop_atr": H10_STOP_ATR,
+                            "mom_lookback": 252, "mom_skip": 21,
+                            "monthly_rebalance": True, "trend_filter": True,
+                            "universe": universe_name,
+                        },
+                        trades=outcome.stats.trades,
+                        expectancy_r=outcome.stats.expectancy_r,
+                        profit_factor=outcome.stats.profit_factor,
+                        max_drawdown_pct=outcome.stats.max_drawdown_pct,
+                        total_return_pct=outcome.stats.total_return_pct,
+                        random_percentile=outcome.random_percentile,
+                        same_day_p=outcome.same_day_p,
+                        criteria_passed=outcome.passed,
+                        notes="H10 raw-momentum surface, mirrors h5_momentum_canonical's grid",
+                    )
+                    progress.advance(task)
+
+    varied = {"hold": list(H10_HOLD_GRID), "top_pct": list(H10_TOP_PCT_GRID)}
+    verdict = analyse(cells, varied)
+
+    table = Table(title=f"h10 (raw 12-1 momentum) parameter surface -- {chosen.name} split")
+    for name in sorted(varied):
+        table.add_column(name, justify="right")
+    for col in ("Trades", "Expectancy", "PF", "MaxDD", "Return", "vs random (same days)"):
+        table.add_column(col, justify="right")
+
+    for cell in sorted(cells, key=lambda c: -c.expectancy):
+        stats = cell.outcome.stats
+        marker = ""
+        if verdict.recommended is not None and cell.key == verdict.recommended.key:
+            marker = " [green]<- selected[/]"
+        elif verdict.best is not None and cell.key == verdict.best.key:
+            marker = " [dim]<- peak[/]"
+        pct = cell.outcome.date_matched_percentile
+        table.add_row(
+            *[str(cell.params[name]) for name in sorted(varied)],
+            str(stats.trades),
+            f"{stats.expectancy_r:+.3f}R{marker}",
+            f"{stats.profit_factor:.2f}" if stats.profit_factor != float("inf") else "inf",
+            f"{stats.max_drawdown_pct:.1%}",
+            f"{stats.total_return_pct:+.1%}",
+            f"{pct:.1f}th" if pct is not None else "-",
+        )
+    console.print(table)
+
+    colour = _SHAPE_COLOUR.get(verdict.shape, "white")
+    console.print(f"[{colour} bold]{verdict.describe()}[/]")
+    console.print(
+        f"[dim]{verdict.total_cells} configuration(s) tested to reach this -- "
+        "the full grid, all reported, per docs/09 'Reporting only the "
+        "experiments that found something' being rejected as a method.[/]"
+    )
+    if verdict.recommended is not None:
+        best = verdict.recommended.outcome
+        criteria_table = Table(title="h10 selected cell vs preregistrations/H10.md section 3")
+        criteria_table.add_column("Criterion")
+        criteria_table.add_column("Observed", justify="right")
+        criteria_table.add_column("Required", justify="right")
+        criteria_table.add_column("")
+        for c in best.criteria:
+            criteria_table.add_row(
+                c.name, c.observed, c.required,
+                "[green]pass[/]" if c.passed else "[red]fail[/]",
+            )
+        console.print(criteria_table)
+        console.print(
+            "[bold]ALL CRITERIA MET[/]" if best.passed else "[yellow]criteria not met[/]"
+        )
+
+
 @diag_app.command("screen")
 def diagnose_screen(
     universe_name: str = typer.Option("swing_small_mid", "--universe"),
