@@ -222,7 +222,112 @@ excuse for either a pass or a fail.
 
 ## 6. Results
 
-*Filled in after `screener ingest-lockups` and the development measurement
-have both run -- see `preregistrations/H9.md` and the project log for the
-dated result. Nothing in this section existed when sections 0-5 were
-committed.*
+**Run 2026-10-04**, from the code committed alongside the pre-registration
+(`preregistrations/H9.md`, commit `f279bfa`), against `data/reference/
+ipo_lockups.csv` as it already stood (built 2026-10-03/04, not re-ingested
+for this run -- EDGAR was not called again). `diagnostics/lockup_screen.
+measure`/`judge` are not wired into any CLI command (section 2 above), so
+this was run from a one-off script calling them directly against
+`backtest.runner.load_symbol_bars`'s full stored-bar universe (quarantine,
+gap-segmentation and impossible-bar cleaning all applied, exactly as every
+other hypothesis gets them) and `calc.spread.spread_table` for costs.
+Recorded as `research_runs` id 3833 (development; unbudgeted, non-negotiable
+5).
+
+**Sample.** 155 confirmed events (`status=confirmed` rows in the CSV).
+**127 of 155 (82%) resolved to a measured outcome.** The 28 that did not:
+
+- **27** because the ticker's *own* later trading history contains a
+  60+-day gap (`calc/segments.py`) that postdates the lock-up event by
+  years -- AVEO, STNG, ALIM, EXPR, SMT, AMRS, SHP, SQNS, GRPN, PACD, ANGI,
+  CEMP, CLIR, FWM, QIWI, HTBX, CCCR, IPWR, AMDA, MDWD, TWOU, TEDU, CMCM,
+  JMEI, MDLY, FGEN, KMPH. `load_symbol_bars` keys the series' *latest*
+  segment under the plain ticker (CLAUDE.md, "A hole in trading ends a
+  series"); for each of these the lock-up-era bars sit under an earlier,
+  dated key (e.g. `AVEO@...`), which this measurement never looks up --
+  `lockup_screen.measure` resolves events by the plain ticker only. **This
+  is a coverage gap in the measurement code, not a wrong number**: no event
+  is mismeasured, some are silently absent, and the module's own docstring
+  (`measure`'s own note that a ticker "not in bars_by_symbol" goes missing)
+  undersold this failure mode -- every one of these 27 tickers *is* a key in
+  `bars_by_symbol`, just the wrong segment of it. Not fixed as part of this
+  run: patching the lookup and re-running after seeing a failing result
+  would be exactly the "look again until it passes" CHARTER section 7
+  forbids. A segment-aware fix is a legitimate thing for a future, freshly
+  pre-registered look to include, not a reason to redo this one.
+- **1** (OMTH) because its last stored bar (2013-07-17) predates its own
+  lock-up expiry (2013-10-12) -- it had already stopped trading before the
+  event this hypothesis measures.
+
+**Primary, N=3 (pre-registered):**
+
+| statistic | value |
+| --- | --- |
+| events measured | 127 |
+| mean net gap / event | −0.4519% (t = −0.66) |
+| one-sided p (negative) | **0.2558** |
+| mean gross gap / event | −0.2073% (t = −0.30) |
+| 10%-trimmed net gap | −0.9633% |
+
+By regime: `chop_2011` −2.2659% (16 events), `bull_2013_2014` +0.6793% (57
+events), `chop_2015` +1.3531% (22 events) -- **negative in 1 of 3**. The
+other 32 measured events (25%) fall in 2010 (before `chop_2011` starts
+2011-01-01) or in 2012 (the gap between `chop_2011` and `bull_2013_2014`),
+which the project's `REGIMES` tuple does not bucket into any of the three
+named windows -- the same structural gap H8 inherits from the same tuple,
+not specific to H9. Those 32 count toward the overall statistic above but
+not toward the regime leg below.
+
+**Against the section 5 bar, checked exactly as written:**
+
+| leg | required | observed | |
+| --- | --- | --- | --- |
+| 1. one-sided p (negative) | ≤ 0.05 | 0.2558 | **fail** |
+| 2. regimes negative | ≥ 2 of 3 | 1 of 3 | **fail** |
+| 3. 10%-trimmed gap | negative | −0.9633% | pass |
+
+**H9 fails its development bar.** Two of three legs fail, and leg 1 fails by
+about 5x the threshold, not narrowly. Per CHARTER section 7, "a fail stays a
+fail": this result stands as measured, and per H9.md sections 3 and 5
+clearing this bar was always the precondition for even proposing a
+validation configuration -- that precondition is not met, so nothing here
+reaches the operator's validation decision at all.
+
+**Secondary, N=20 (context only -- section 4's non-pre-registered reading,
+does not count toward the bar above):**
+
+| statistic | value |
+| --- | --- |
+| mean net gap / event | **+1.1455%** (t = +0.80) |
+| one-sided p (negative) | 0.7889 |
+| mean gross gap / event | +1.3901% (t = +0.98) |
+| 10%-trimmed net gap | −0.1331% |
+
+By regime: `chop_2011` −0.6366%, `bull_2013_2014` +1.6470%, `chop_2015`
++5.4656% -- negative in 1 of 3. The point estimate at 20 sessions is
+*positive*, the opposite sign from the hypothesis; there is no sign here of
+the 3-day effect persisting or strengthening over a longer window.
+
+**Power.** 127 measured events is "in the low hundreds," exactly the range
+H9.md section 5 flagged in advance as giving materially less power than
+H8's 78 non-overlapping windows drawn from a multi-thousand-name pool each.
+t = −0.66 at n = 127 means this test could not have reliably told a small
+true effect from noise -- the fail on leg 1 is decisive relative to the
+0.05 bar (not a near miss), but should be read as "no evidence of the
+hypothesized effect at this power," not as a precise measurement that rules
+a small effect out. No clustering adjustment was applied to the t-statistics
+above (events are not literally independent -- lock-up expiries bunch in
+hot-IPO calendar periods); an adjustment would widen the standard errors
+and could only move leg 1 further from significance, not closer, so it does
+not change the verdict.
+
+**What would change this reading.** (1) The 27-event segment-lookup gap
+above, if a segment-aware version of `measure` recovered them -- plausible
+in magnitude (+21% more events) but very unlikely by itself to close a 5x
+gap to significance. (2) A `REGIMES` definition that covered 2010 and 2012,
+which would change which events count toward leg 2 (currently 95 of 127
+measured events, 75%). (3) The booster-shot extension (section 2) not
+modelled here, which biases the measured expiry date early and so dilutes
+rather than manufactures any true effect -- correcting it could only make a
+real effect look stronger, not weaker, so it is not a candidate explanation
+for the fail.
