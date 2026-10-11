@@ -10,14 +10,17 @@ that makes those decisions mechanical is the point of the project.
 
 **The charter is replaced (operator, 2026-09-28).** `docs/01` is outdated. This
 project, like every trading project, now follows `../CHARTER.md` at the vault
-root: any market, timeframe or automation is in bounds; before real money, a
-pass mark written before looking, tested on data the idea was not built on,
-costs included; for live money, stop and size computed by code, no manual
+root: any market, timeframe or automation is in bounds; before real money, one
+Confirm test on never-used data with a pass mark written first, costs included
+and exploration attempts counted (CHARTER section 5); exploring needs no
+approval; for live money, stop and size computed by code, no manual
 trades during work or class, no profit quotas and no upsizing after a loss,
 options only inside a tested strategy. Do not cite the old scope as a reason
 against new work; give the evidence instead. The split budgets, success
 criteria and pre-registration below are enforced in code and did not change,
-and spending validation or test budget still needs the operator's explicit go.
+and spending validation or test budget is the Confirm step (CHARTER section 5):
+agents may run it without a per-run go once the pass mark is committed; the
+signed H8 pre-registration still binds on its own terms.
 
 **Capital (operator, 2026-09-28).** The $10,000 named in this file and in
 `docs/02` is now the operator's emergency fund and is never used. About $5,000
