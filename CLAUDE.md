@@ -9,21 +9,19 @@ The operator's documented losses came from execution — missing stops, size
 escalation after losses, profit quotas — not from strategy selection. Software
 that makes those decisions mechanical is the point of the project.
 
-**Both charters are retired.** `docs/01` was declared outdated on 2026-09-28
-and replaced by `../CHARTER.md` at the vault root. That charter was retired in
-turn on 2026-10-12 on the operator's instruction and no longer binds this
-project, its money and live-trading rules included. Obscura is now the umbrella
-over every project; new rules are pending from Kyler. Do not cite either
-charter as a reason against new work; give the evidence instead. The split
-budgets, success criteria and pre-registration below are enforced in code and
-did not change. Kyler confirmed on 2026-10-12 that all pre-registrations stay
-in force on their own terms, the signed H8 pre-registration included.
+**The Obscura Charter governs.** `docs/01` was declared outdated on 2026-09-28
+and replaced by `../CHARTER.md`, which was retired on 2026-10-12. The project
+now follows the [Obscura Charter](../Obscura%20Charter.md) at the vault root
+(adopted 2026-10-14). Do not cite either retired charter as a reason against
+new work; give the evidence instead. The split budgets, success criteria and
+pre-registration below are enforced in code and did not change. Pre-registrations
+already written stay binding on their own terms, the signed H8 included
+(charter §1; Kyler confirmed on 2026-10-12): H8 has run and failed, and that
+verdict stands.
 
-**Capital (operator, 2026-09-28).** The $10,000 named in this file and in
-`docs/02` is now the operator's emergency fund and is never used. About $5,000
-is set aside to trade and experiment with, across all projects. *These were
-charter money rules; retired with the charter on 2026-10-12, new money rules
-pending from Kyler.*
+**Capital.** The $10,000 named in this file and in `docs/02` is the operator's
+emergency fund and is never used. Money rules are the Obscura Charter's (§3);
+the old ~$5,000 pot was scrapped with the retired charter.
 
 ## How to work here
 
